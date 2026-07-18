@@ -1,0 +1,235 @@
+<UserControl x:Class="JtdxAutoResume.V3.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer Margin="0,12,0,0" VerticalScrollBarVisibility="Auto">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Style="{StaticResource PanelBorder}" Margin="0,0,12,0">
+                <StackPanel>
+                    <TextBlock Text="Automation Coordinates" FontWeight="SemiBold" Margin="0,0,0,12" />
+                    <UniformGrid Columns="2">
+                        <TextBlock Text="Enable TX X" />
+                        <TextBox Text="{Binding Settings.Settings.EnableTxX, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Enable TX Y" />
+                        <TextBox Text="{Binding Settings.Settings.EnableTxY, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="CQ/TX6 X" />
+                        <TextBox Text="{Binding Settings.Settings.CqTx6X, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="CQ/TX6 Y" />
+                        <TextBox Text="{Binding Settings.Settings.CqTx6Y, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="RX gate X" />
+                        <TextBox Text="{Binding Settings.Settings.RxX, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="RX gate Y" />
+                        <TextBox Text="{Binding Settings.Settings.RxY, UpdateSourceTrigger=PropertyChanged}" />
+                    </UniformGrid>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,18">
+                        <Button Content="Pick Enable TX" Command="{Binding PickEnableCommand}" />
+                        <Button Content="Pick CQ/TX6" Command="{Binding PickCqCommand}" />
+                        <Button Content="Pick RX Gate" Command="{Binding PickRxCommand}" />
+                    </StackPanel>
+
+                    <TextBlock Text="Pixel Detection" FontWeight="SemiBold" Margin="0,0,0,12" />
+                    <UniformGrid Columns="2">
+                        <TextBlock Text="Enable TX off RGB" />
+                        <TextBox Text="{Binding Settings.EnableTxOffRgbText, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Enable TX on RGB" />
+                        <TextBox Text="{Binding Settings.Settings.EnableTxOnRgb, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="RX green RGB" />
+                        <TextBox Text="{Binding Settings.RxGreenRgbText, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Box radius" />
+                        <TextBox Text="{Binding Settings.Settings.BoxRadius, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Tolerance" />
+                        <TextBox Text="{Binding Settings.Settings.Tolerance, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="RX tolerance" />
+                        <TextBox Text="{Binding Settings.Settings.RxTolerance, UpdateSourceTrigger=PropertyChanged}" />
+                    </UniformGrid>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="Pick TX Grey" Command="{Binding PickEnableColorCommand}" />
+                        <Button Content="Pick RX Green" Command="{Binding PickRxColorCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="1" Style="{StaticResource PanelBorder}">
+                <StackPanel>
+                    <TextBlock Text="Runtime" FontWeight="SemiBold" Margin="0,0,0,12" />
+                    <UniformGrid Columns="2">
+                        <TextBlock Text="Auto hunt enabled" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.AutoHuntEnabled, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Poll interval ms" />
+                        <TextBox Text="{Binding Settings.Settings.IntervalMs, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Cooldown ms" />
+                        <TextBox Text="{Binding Settings.Settings.CooldownMs, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Min grey percent" />
+                        <TextBox Text="{Binding Settings.Settings.MinGreyPercent, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Max red percent" />
+                        <TextBox Text="{Binding Settings.Settings.MaxRedPercent, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Min RX green percent" />
+                        <TextBox Text="{Binding Settings.Settings.MinGreenPercent, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Max call attempts" />
+                        <TextBox Text="{Binding Settings.Settings.MaxCallAttempts, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Max report attempts" />
+                        <TextBox Text="{Binding Settings.Settings.MaxReportAttempts, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Max TX mismatch cycles" />
+                        <TextBox Text="{Binding Settings.Settings.MaxTransmitMismatchCycles, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Completion grace cycles" />
+                        <TextBox Text="{Binding Settings.Settings.CompletionGraceCycles, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Suppress failed min" />
+                        <TextBox Text="{Binding Settings.Settings.SuppressFailedTargetMinutes, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Reply retry sec" />
+                        <TextBox Text="{Binding Settings.Settings.ReplyRetrySeconds, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Reply confirm sec" />
+                        <TextBox Text="{Binding Settings.Settings.ReplyConfirmSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                    </UniformGrid>
+
+                    <TextBlock Text="JTDX UDP" FontWeight="SemiBold" Margin="0,18,0,12" />
+                    <UniformGrid Columns="2">
+                        <TextBlock Text="Listen port" />
+                        <TextBox Text="{Binding Settings.Settings.UdpListenPort, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Reply fallback port" />
+                        <TextBox Text="{Binding Settings.Settings.UdpReplyFallbackPort, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="UDP app id" />
+                        <TextBox Text="{Binding Settings.Settings.UdpAppId, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="My callsign" />
+                        <TextBox Text="{Binding Settings.Settings.MyCallsign, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Home grid" />
+                        <TextBox Text="{Binding Settings.Settings.HomeGrid, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Forward enabled" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.UdpForwardEnabled, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Forward host" />
+                        <TextBox Text="{Binding Settings.Settings.UdpForwardHost, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Forward port" />
+                        <TextBox Text="{Binding Settings.Settings.UdpForwardPort, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Country file path" />
+                        <TextBox Text="{Binding Settings.Settings.CountryFilePath, UpdateSourceTrigger=PropertyChanged}" />
+                    </UniformGrid>
+
+                    <TextBlock Text="ADIF Logs" FontWeight="SemiBold" Margin="0,18,0,12" />
+                    <UniformGrid Columns="2">
+                        <TextBlock Text="Full ADIF path" />
+                        <TextBox Text="{Binding Settings.Settings.FullAdifPath, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Auto-load full ADIF" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.AutoLoadFullAdifOnStartup, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Live JTDX ADIF path" />
+                        <TextBox Text="{Binding Settings.Settings.LiveJtdxAdifPath, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Watch live JTDX ADIF" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.WatchLiveJtdxAdif, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="DXCC confirmation mode" />
+                        <TextBox Text="{Binding Settings.Settings.DxccConfirmationMode, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Grid confirmation mode" />
+                        <TextBox Text="{Binding Settings.Settings.GridConfirmationMode, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="State confirmation mode" />
+                        <TextBox Text="{Binding Settings.Settings.StateConfirmationMode, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="IOTA confirmation mode" />
+                        <TextBox Text="{Binding Settings.Settings.IotaConfirmationMode, UpdateSourceTrigger=PropertyChanged}" />
+                    </UniformGrid>
+                    <TextBlock Text="{Binding AdifDiagnostics}" TextWrapping="Wrap" Foreground="#263645" Margin="0,10,0,0" />
+
+                    <TextBlock Text="DX Hunter Ranking" FontWeight="SemiBold" Margin="0,18,0,12" />
+                    <UniformGrid Columns="2">
+                        <TextBlock Text="Hunting mode" />
+                        <TextBox Text="{Binding Settings.Settings.HuntingMode, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Allow unconfirmed DXCC override" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.AllowUnconfirmedDxccOverride, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Accept incoming calls" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.AcceptIncomingCalls, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Accept incoming mode" />
+                        <TextBox Text="{Binding Settings.Settings.AcceptIncomingCallsMode, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Candidate max age seconds" />
+                        <TextBox Text="{Binding Settings.Settings.CandidateMaxAgeSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Global rarity weight" />
+                        <TextBox Text="{Binding Settings.Settings.GlobalRarityWeight, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="UK desirability weight" />
+                        <TextBox Text="{Binding Settings.Settings.UkDesirabilityWeight, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Distance weight" />
+                        <TextBox Text="{Binding Settings.Settings.DistanceWeight, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Chase rare confirmed DXCC" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.ChaseRareConfirmedDxcc, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Rare confirmed rank threshold" />
+                        <TextBox Text="{Binding Settings.Settings.RareDxccRankThreshold, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Max acquisition cycles" />
+                        <TextBox Text="{Binding Settings.Settings.MaxTargetAcquisitionCycles, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Max UDP reply nudges" />
+                        <TextBox Text="{Binding Settings.Settings.MaxUdpReplyNudgesBeforeConfirmed, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Max wrong-target no-progress cycles" />
+                        <TextBox Text="{Binding Settings.Settings.MaxWrongTargetNoProgressCycles, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Wrong-target active QSO policy" />
+                        <TextBox Text="{Binding Settings.Settings.WrongTargetActiveQsoPolicy, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="DXCC rarity CSV path" />
+                        <TextBox Text="{Binding Settings.Settings.DxccRarityFilePath, UpdateSourceTrigger=PropertyChanged}" />
+                    </UniformGrid>
+                    <TextBlock Text="{Binding RarityDiagnostics}" TextWrapping="Wrap" Foreground="#263645" Margin="0,10,0,0" />
+
+                    <TextBlock Text="JTDX Band Activity GUI Selection" FontWeight="SemiBold" Margin="0,18,0,12" />
+                    <UniformGrid Columns="2">
+                        <TextBlock Text="GUI selection enabled" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.JtdxGuiSelectionEnabled, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="JTDX window title contains" />
+                        <TextBox Text="{Binding Settings.Settings.JtdxWindowTitleMatch, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Max GUI row age seconds" />
+                        <TextBox Text="{Binding Settings.Settings.JtdxGuiMaxRowAgeSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Band left X rel" />
+                        <TextBox Text="{Binding Settings.Settings.JtdxBandActivityLeft, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Band top Y rel" />
+                        <TextBox Text="{Binding Settings.Settings.JtdxBandActivityTop, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Band right X rel" />
+                        <TextBox Text="{Binding Settings.Settings.JtdxBandActivityRight, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Band bottom Y rel" />
+                        <TextBox Text="{Binding Settings.Settings.JtdxBandActivityBottom, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="First full row centre Y rel" />
+                        <TextBox Text="{Binding Settings.Settings.JtdxBandFirstRowCenterY, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Row height" />
+                        <TextBox Text="{Binding Settings.Settings.JtdxBandRowHeight, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Message click X rel" />
+                        <TextBox Text="{Binding Settings.Settings.JtdxBandMessageClickX, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Newest rows at bottom" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.JtdxBandNewestRowsAtBottom, UpdateSourceTrigger=PropertyChanged}" />
+                    </UniformGrid>
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button Content="Capture JTDX Window" Command="{Binding CaptureJtdxWindowCommand}" />
+                        <Button Content="Set Band Top Left" Command="{Binding PickBandActivityTopLeftCommand}" />
+                        <Button Content="Set Band Bottom Right" Command="{Binding PickBandActivityBottomRightCommand}" />
+                        <Button Content="Show 52-Row Grid" Command="{Binding ShowBandActivityGridOverlayCommand}" />
+                    </WrapPanel>
+                    <TextBox Text="{Binding DxAssist.GuiSelectionStatus, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MinHeight="52" Margin="0,8,0,0" />
+                    <TextBlock Text="Calibrate the 52 full safe Band Activity rows. AutoResume uses UDP decodes as truth and screen geometry only for row position; OCR is not used for automatic selection." TextWrapping="Wrap" Foreground="#9A3412" Margin="0,8,0,0" />
+
+                    <TextBlock Text="Session History" FontWeight="SemiBold" Margin="0,18,0,12" />
+                    <UniformGrid Columns="2">
+                        <TextBlock Text="Enable session DX history" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.EnableSessionDxHistory, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Rare DXCC rank threshold" />
+                        <TextBox Text="{Binding Settings.Settings.RareDxccRankThreshold, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Session history expiry minutes" />
+                        <TextBox Text="{Binding Settings.Settings.SessionHistoryExpiryMinutes, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Session history group mode" />
+                        <TextBox Text="{Binding Settings.Settings.SessionHistoryGroupMode, UpdateSourceTrigger=PropertyChanged}" />
+                    </UniformGrid>
+
+                    <TextBlock Text="DXCC Resolver Diagnostics" FontWeight="SemiBold" Margin="0,18,0,12" />
+                    <TextBlock Text="{Binding ResolverDiagnostics}" TextWrapping="Wrap" Foreground="#263645" />
+
+                    <TextBlock Text="Worked Status Lookup" FontWeight="SemiBold" Margin="0,18,0,12" />
+                    <UniformGrid Columns="2">
+                        <TextBlock Text="Callsign" />
+                        <TextBox Text="{Binding DiagnosticCallsign, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Grid" />
+                        <TextBox Text="{Binding DiagnosticGrid, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="State" />
+                        <TextBox Text="{Binding DiagnosticState, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="IOTA" />
+                        <TextBox Text="{Binding DiagnosticIota, UpdateSourceTrigger=PropertyChanged}" />
+                    </UniformGrid>
+                    <Button Content="Run Lookup" Command="{Binding RunDiagnosticLookupCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
+                    <TextBox Text="{Binding DiagnosticLookupResult}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="170" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" />
+
+                    <Button Content="Save Settings" Command="{Binding SaveSettingsCommand}" HorizontalAlignment="Left" Margin="0,12,0,0" />
+                    <TextBlock Text="UDP Reply depends on JTDX/WSJT-X accepting UDP requests; Enable TX recovery remains mouse/pixel based." TextWrapping="Wrap" Foreground="#526577" Margin="0,18,0,0" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

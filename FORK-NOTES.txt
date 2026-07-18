@@ -1,0 +1,6 @@
+Working fork created 2026-07-10 00:23:36 from the WantedCounterStatusGateFix stable snapshot.
+
+Use this folder for future changes so the stable snapshot remains untouched.
+
+Starting good executable:
+bin\WantedCounterStatusGateFix\AutoResume.V3-2E0CCD.exe

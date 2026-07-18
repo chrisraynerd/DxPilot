@@ -1,0 +1,29 @@
+<UserControl x:Class="JtdxAutoResume.V3.Views.SchedulerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel Margin="0,12,0,0">
+        <Border DockPanel.Dock="Top" Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Add Row" Command="{Binding AddScheduleCommand}" />
+                <Button Content="Remove Row" Command="{Binding RemoveScheduleCommand}" />
+                <Button Content="Test Click Row" Command="{Binding TestScheduleClickCommand}" />
+                <Button Content="Save Schedule" Command="{Binding SaveSettingsCommand}" />
+            </StackPanel>
+        </Border>
+        <Border Style="{StaticResource PanelBorder}">
+            <DataGrid ItemsSource="{Binding Scheduler.ScheduleItems}"
+                      SelectedItem="{Binding SelectedScheduleItem, Mode=TwoWay}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False">
+                <DataGrid.Columns>
+                    <DataGridCheckBoxColumn Header="On" Binding="{Binding Enabled}" Width="55" />
+                    <DataGridTextColumn Header="Label" Binding="{Binding Label, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                    <DataGridTextColumn Header="Hour" Binding="{Binding Hour, UpdateSourceTrigger=PropertyChanged}" Width="80" />
+                    <DataGridTextColumn Header="Minute" Binding="{Binding Minute, UpdateSourceTrigger=PropertyChanged}" Width="80" />
+                    <DataGridTextColumn Header="Button X" Binding="{Binding X, UpdateSourceTrigger=PropertyChanged}" Width="110" />
+                    <DataGridTextColumn Header="Button Y" Binding="{Binding Y, UpdateSourceTrigger=PropertyChanged}" Width="110" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+    </DockPanel>
+</UserControl>

@@ -1,0 +1,341 @@
+ClubLogRank,Entity,UKDesirability,DesirabilityBand,UKRegionBand,Notes
+1,DPRK (NORTH KOREA),100,Extreme,Extreme rare Asia,Top-tier rare/difficult entity
+2,JOHNSTON ISLAND,99,Extreme,Pacific rare,Very rare Pacific entity
+3,KURE ISLAND,99,Extreme,Pacific rare,Very rare Pacific entity
+4,SAN FELIX ISLANDS,99,Extreme,Pacific/South America rare,Rare remote island entity
+5,KERGUELEN ISLAND,99,Extreme,Island/remote,"Island entity; starter score, review manually"
+6,SCARBOROUGH REEF,99,Extreme,Asia/Pacific rare,Very rare/restricted entity
+7,PETER 1 ISLAND,99,Extreme,Island/remote,"Island entity; starter score, review manually"
+8,AVES ISLAND,99,Extreme,Caribbean rare,Rare Caribbean island entity
+9,PRATAS ISLAND,99,Extreme,Asia/Pacific rare,Remote/rare entity
+10,MIDWAY ISLAND,99,Extreme,Pacific rare,Very rare Pacific entity
+11,MACQUARIE ISLAND,98,Extreme,Oceania rare,Very remote/rare entity
+12,TURKMENISTAN,97,Extreme,Central Asia rare,Very low-activity/rare entity
+13,SAINT PETER AND PAUL ROCKS,97,Extreme,Atlantic rare,Rare remote Atlantic entity
+14,SOUTH SANDWICH ISLANDS,97,Extreme,South Atlantic rare,Remote expedition-type entity
+15,SYRIA,97,Extreme,Middle East difficult,Difficult/low activity entity
+16,NEW ZEALAND SUBANTARCTIC ISLANDS,98,Extreme,Oceania rare,Very remote/rare entity
+17,TROMELIN ISLAND,97,Extreme,Indian Ocean rare,Rare remote entity
+18,HEARD ISLAND,97,Extreme,Island/remote,"Island entity; starter score, review manually"
+19,BAKER HOWLAND ISLANDS,98,Extreme,Pacific rare,Very rare Pacific entity
+20,CHESTERFIELD ISLANDS,98,Extreme,Pacific rare,Very rare remote entity
+21,REVILLAGIGEDO,97,Extreme,Pacific/Mexico remote,Remote island entity
+22,KERMADEC ISLAND,97,Extreme,Island/remote,"Island entity; starter score, review manually"
+23,SOUTH GEORGIA ISLAND,97,Extreme,South Atlantic rare,Remote expedition-type entity
+24,PRINCE EDWARD & MARION ISLANDS,97,Extreme,Island/remote,"Island entity; starter score, review manually"
+25,CROZET ISLAND,97,Extreme,Island/remote,"Island entity; starter score, review manually"
+26,MELLISH REEF,98,Extreme,Pacific rare,Very rare remote entity
+27,"JUAN DE NOVA, EUROPA",94,Very High,Indian Ocean rare,Rare remote entity
+28,NAVASSA ISLAND,96,Extreme,Caribbean rare,Very rare Caribbean entity
+29,TRINDADE & MARTIM VAZ ISLANDS,94,Very High,Atlantic rare,Rare remote Atlantic entity
+30,MINAMI TORISHIMA,94,Very High,Pacific/Japan rare,Rare remote island entity
+31,MALPELO ISLAND,96,Extreme,Pacific/South America rare,Rare remote island entity
+32,MOUNT ATHOS,94,Very High,Unclassified,Starter score from Club Log rank band; manually review
+33,COCOS ISLAND,94,Very High,Pacific/Central America remote,Remote island entity
+34,WAKE ISLAND,96,Extreme,Pacific rare,Remote Pacific entity
+35,AMSTERDAM & ST PAUL ISLANDS,94,Very High,Island/remote,"Island entity; starter score, review manually"
+36,WILLIS ISLAND,96,Extreme,Pacific rare,Rare remote entity
+37,GLORIOSO ISLAND,94,Very High,Indian Ocean rare,Rare remote entity
+38,BOUVET ISLAND,99,Extreme,Extreme remote,Top-tier remote entity
+39,SOUTH ORKNEY ISLANDS,94,Very High,Antarctic/remote,Remote polar entity
+40,TOKELAU ISLANDS,96,Extreme,Oceania rare,Remote Pacific entity
+41,MYANMAR,94,Very High,SE Asia less common,Less active/difficult SE Asia
+42,ANNOBON,94,Very High,African island,Island DXCC; less common
+43,DESECHEO ISLAND,94,Very High,Caribbean rare,Rare Caribbean island entity
+44,FRANZ JOSEF LAND,94,Very High,Arctic rare,Remote/high-value Arctic entity
+45,SPRATLY ISLANDS,96,Extreme,Asia/Pacific rare,Remote/rare entity
+46,PALMYRA & JARVIS ISLANDS,96,Extreme,Pacific rare,Remote Pacific entity
+47,BANABA ISLAND,96,Extreme,Pacific rare,Remote Pacific entity
+48,ERITREA,94,Very High,East Africa difficult,Less common/difficult African DX
+49,TEMOTU PROVINCE,94,Very High,Pacific remote,Remote Pacific entity
+50,CHAGOS ISLANDS,94,Very High,Indian Ocean rare,Remote/restricted island entity
+51,SWAINS ISLAND,96,Extreme,Pacific rare,Remote Pacific entity
+52,JAN MAYEN,88,Very High,Arctic rare,Remote Arctic entity
+53,CLIPPERTON ISLAND,96,Extreme,Pacific rare,Remote Pacific entity
+54,TRISTAN DA CUNHA & GOUGH ISLANDS,95,Extreme,Atlantic rare island,Very remote South Atlantic entity
+55,DUCIE ISLAND,98,Extreme,Pacific rare,Very rare Pacific entity
+56,CONWAY REEF,96,Extreme,Pacific rare,Rare remote entity
+57,SOMALIA,88,Very High,East Africa difficult,Less active/difficult African DX
+58,AGALEGA & ST BRANDON ISLANDS,92,Very High,Indian Ocean rare,Remote island entity
+59,YEMEN,88,Very High,Middle East difficult,Less active/difficult entity
+60,JUAN FERNANDEZ ISLANDS,92,Very High,Pacific/South America remote,Remote island entity
+61,LORD HOWE ISLAND,92,Very High,Oceania remote,Remote Australia-area entity
+62,ANDAMAN & NICOBAR ISLANDS,88,Very High,Indian Ocean/India,Remote island entity
+63,CENTRAL KIRIBATI,96,Extreme,Pacific rare,Remote Pacific entity
+64,LAKSHADWEEP ISLANDS,88,Very High,Indian Ocean/India,Remote island entity
+65,SAINT PAUL ISLAND,88,Very High,Island/remote,"Island entity; starter score, review manually"
+66,NIGER,88,Very High,West Africa/Sahel,Less common African DX
+67,MARQUESAS ISLANDS,92,Very High,Pacific remote,Remote Pacific entity
+68,PITCAIRN ISLAND,96,Extreme,Pacific rare,Remote Pacific entity
+69,SOV MILITARY ORDER OF MALTA,88,Very High,Small Europe rare,Very unusual DXCC; high despite being close
+70,LIBYA,88,Very High,North Africa difficult,Less active/difficult North Africa
+71,NORTH COOK ISLANDS,96,Extreme,Oceania rare,Remote Pacific entity
+72,SABLE ISLAND,88,Very High,North Atlantic rare,Small/less common North Atlantic entity
+73,SOUTH SHETLAND ISLANDS,88,Very High,Antarctic/remote,Remote polar entity
+74,VATICAN CITY,88,Very High,Small Europe rare,Tiny DXCC; globally rare despite being close
+75,REPUBLIC OF SOUTH SUDAN,88,Very High,East Africa difficult,Rare/newer African DXCC
+76,CHRISTMAS ISLAND,90,Very High,Indian Ocean/Oceania,Remote Australia-area entity
+77,AMERICAN SAMOA,92,Very High,Oceania,Far Pacific entity
+78,GUANTANAMO BAY,82,High,Caribbean special,Distinct/special entity
+79,SOLOMON ISLANDS,90,Very High,Oceania,Far Pacific entity
+80,TUVALU,94,Very High,Oceania remote,Far Pacific island entity
+81,COCOS (KEELING) ISLAND,90,Very High,Indian Ocean/Oceania,Remote Australia-area entity
+82,GUINEA,82,High,West Africa,Good African DX
+83,ROTUMA,94,Very High,Oceania remote,Far Pacific island entity
+84,AUSTRAL ISLANDS,94,Very High,Pacific remote,Remote Pacific entity
+85,DEM. REP. OF THE CONGO,84,High,Central Africa,Less common African DX
+86,MACAO,82,High,East Asia,Smaller/less common entity
+87,DJIBOUTI,82,High,East Africa,Less common African DX
+88,CHATHAM ISLAND,94,Very High,Oceania remote,Remote New Zealand-area entity
+89,BHUTAN,88,Very High,South Asia rare,Less active/rare entity
+90,UNITED NATIONS HQ,82,High,Special entity,Special entity; not distance-driven
+91,WALLIS & FUTUNA ISLANDS,94,Very High,Oceania remote,Far Pacific island entity
+92,ITU HQ,82,High,Special entity,Special entity; not distance-driven
+93,ETHIOPIA,82,High,East Africa,Good African DX
+94,MICRONESIA,92,Very High,Pacific remote,Remote Pacific entity
+95,SUDAN,82,High,North/East Africa,Less common African DX
+96,REPUBLIC OF THE CONGO,82,High,Central Africa,Less common African DX
+97,TONGA,92,Very High,Oceania,Far Pacific entity
+98,ASCENSION ISLAND,82,High,Atlantic island,Remote South Atlantic path
+99,COTE D'IVOIRE,82,High,West Africa,Good African DX
+100,PALESTINE,82,High,Middle East,Distinct/less common entity
+101,MOZAMBIQUE,80,High,Southern/East Africa,Good African DX
+102,SIERRA LEONE,80,High,West Africa,Good African DX
+103,MAYOTTE,82,High,Indian Ocean,Island entity; good path
+104,BURUNDI,83,High,Central/East Africa,Less common African DX
+105,COMOROS,84,High,Indian Ocean,Less common island path
+106,BANGLADESH,78,High,South Asia,Less common South Asia
+107,WESTERN KIRIBATI,94,Very High,Pacific remote,Remote Pacific entity
+108,PAPUA NEW GUINEA,88,Very High,Oceania,Far and desirable from UK
+109,MARSHALL ISLANDS,92,Very High,Pacific remote,Remote Pacific entity
+110,CHAD,83,High,Central Africa,Less common African DX
+111,NIUE,94,Very High,Oceania remote,Far Pacific island entity
+112,VANUATU,90,Very High,Oceania,Far Pacific entity
+113,LESOTHO,82,High,Southern Africa,Smaller/less common southern Africa entity
+114,AFGHANISTAN,88,Very High,Central/South Asia difficult,Less active/difficult entity
+115,SAO TOME & PRINCIPE,82,High,African island,Island DXCC; good path
+116,EQUATORIAL GUINEA,84,High,Central Africa,Less common African DX
+117,EASTER ISLAND,92,Very High,Pacific/South America,Remote island entity
+118,SAINT PIERRE & MIQUELON,76,High,North Atlantic,Less common North Atlantic entity
+119,IRAQ,80,High,Middle East difficult,Less routine Middle East
+120,ZIMBABWE,78,High,Southern Africa,Good southern Africa DX
+121,OGASAWARA,86,Very High,Pacific/Japan remote,Remote island entity
+122,NAURU,94,Very High,Pacific remote,Remote Pacific entity
+123,EASTERN KIRIBATI,96,Extreme,Pacific rare,Remote Pacific entity
+124,CENTRAL AFRICAN REPUBLIC,85,Very High,Central Africa,Less common African DX
+125,TIMOR-LESTE,84,High,SE Asia/Oceania edge,Less common far entity
+126,GUYANA,76,High,South America,Less common South America
+127,UK BASES ON CYPRUS,76,High,Eastern Mediterranean,Distinct entity; less common than Cyprus
+128,BURKINA FASO,80,High,West Africa,Good African DX
+129,TOGO,78,High,West Africa,Good African DX
+130,SAINT BARTHELEMY,76,High,Caribbean,Less common Caribbean entity
+131,CAMEROON,78,High,West/Central Africa,Good African DX
+132,PALAU,92,Very High,Pacific remote,Remote Pacific entity
+133,GUINEA-BISSAU,82,High,West Africa,Less common African DX
+134,FERNANDO DE NORONHA,82,High,Atlantic/South America,Remote Brazilian island entity
+135,UGANDA,78,High,East Africa,Good African DX
+136,MALI,78,High,West Africa,Good African DX
+137,CAMBODIA,80,High,SE Asia,Less common SE Asia
+138,BRITISH VIRGIN ISLANDS,76,High,Caribbean,Good Caribbean DX
+139,NIGERIA,76,High,West Africa,"Good African DX, more active than many"
+140,SAN ANDRES ISLAND,78,High,Caribbean/South America,Island entity; good desirability
+141,BOTSWANA,78,High,Southern Africa,Good southern Africa DX
+142,GALAPAGOS ISLANDS,88,Very High,South America/Pacific,Remote island entity
+143,BRUNEI,80,High,SE Asia,Less common entity
+144,LIBERIA,78,High,West Africa,Good African DX
+145,MARKET REEF,76,High,Northern Europe rare,Small/rare entity despite proximity
+146,NEPAL,80,High,South Asia,Mountain/less common entity
+147,KINGDOM OF ESWATINI,82,High,Southern Africa,Smaller/less common southern Africa entity
+148,SOUTH COOK ISLANDS,92,Very High,Oceania,Far Pacific entity
+149,RWANDA,80,High,Central/East Africa,Less common African DX
+150,LAOS,84,High,SE Asia less common,Less active SE Asia
+151,IRAN,72,High,Middle East/Asia,Good DX path
+152,SINT MAARTEN,68,Medium,Caribbean,Good Caribbean DX
+153,TUNISIA,68,Medium,North Africa,North Africa path
+154,FRENCH POLYNESIA,88,Very High,Pacific,Far Pacific entity
+155,TANZANIA,78,High,East Africa,Good African DX
+156,MALDIVES,82,High,Indian Ocean/Asia,Island DX; good path
+157,NORFOLK ISLAND,92,Very High,Oceania remote,Remote Australia-area entity
+158,GRENADA,68,Medium,Caribbean,Good Caribbean DX
+159,SENEGAL,72,High,West Africa,Good African DX
+160,MARIANA ISLANDS,90,Very High,Pacific remote,Remote Pacific entity
+161,SABA & ST EUSTATIUS,68,Medium,Caribbean,Less common Caribbean entity
+162,REPUBLIC OF KOSOVO,68,Medium,Balkans,Newer/less common European DXCC
+163,MADAGASCAR,84,High,Indian Ocean/Africa,Farther island path
+164,THE GAMBIA,74,High,West Africa,Good African DX
+165,NICARAGUA,70,High,Central America,Good DX from UK
+166,SAINT MARTIN,68,Medium,Caribbean,Good Caribbean DX
+167,EGYPT,68,Medium,North Africa/Middle East,Moderate path from UK
+168,MONTSERRAT,68,Medium,Caribbean,Less common Caribbean entity
+169,RODRIGUEZ ISLAND,86,Very High,Indian Ocean,Remote island path
+170,BERMUDA,68,Medium,North Atlantic,Good Atlantic path
+171,SEYCHELLES ISLANDS,82,High,Indian Ocean,Indian Ocean island path
+172,MONACO,68,Medium,Small Europe,Small DXCC; moderate desirability
+173,BENIN,78,High,West Africa,Good African DX
+174,ZAMBIA,78,High,Southern Africa,Good southern Africa DX
+175,EL SALVADOR,70,High,Central America,Good DX from UK
+176,WESTERN SAHARA,68,Medium,North/West Africa,Less common entity
+177,TURKS & CAICOS ISLANDS,68,Medium,Caribbean,Good Caribbean DX
+178,MAURITANIA,70,High,West Africa/North Africa,Good African DX
+179,GHANA,72,High,West Africa,"Good African DX, more active than many"
+180,GABON,78,High,West/Central Africa,Good African DX
+181,PAKISTAN,74,High,South Asia,Good DX path
+182,SVALBARD,68,Medium,Arctic,Arctic path and less routine
+183,HAITI,68,Medium,Caribbean,Less routine Caribbean DX
+184,TAJIKISTAN,78,High,Central Asia,Less common Central Asia
+185,BAHAMAS,68,Medium,Caribbean,Good Atlantic/Caribbean DX
+186,BOLIVIA,76,High,South America,Good South America DX
+187,SAINT VINCENT,68,Medium,Caribbean,Good Caribbean DX
+188,ANTIGUA & BARBUDA,68,Medium,Caribbean,Good Caribbean DX
+189,SAMOA,92,Very High,Oceania,Far Pacific entity
+190,GUATEMALA,70,High,Central America,Good DX from UK
+191,SAINT KITTS & NEVIS,68,Medium,Caribbean,Good Caribbean DX
+192,SINGAPORE,70,High,SE Asia,Far but active
+193,SRI LANKA,74,High,South Asia,Good DX path
+194,MAURITIUS ISLAND,82,High,Indian Ocean,Indian Ocean island path
+195,GUAM,88,Very High,Pacific,Far Pacific entity
+196,EAST MALAYSIA,78,High,SE Asia island,Good DX path; less common
+197,FALKLAND ISLANDS,78,High,South Atlantic,Good South Atlantic DX from UK
+198,ANTARCTICA,85,Very High,Antarctic,High path/desirability despite occasional activity
+199,ANGUILLA,68,Medium,Caribbean,Good Caribbean DX
+200,HONDURAS,70,High,Central America,Good DX from UK
+201,FRENCH GUIANA,76,High,South America,Good South America DX
+202,VIET NAM,76,High,SE Asia,Good DX path
+203,DOMINICA,65,Medium,Caribbean,Good Caribbean DX
+204,JAMAICA,62,Medium,Caribbean,Good Atlantic/Caribbean DX
+205,SAINT HELENA,82,High,Atlantic island,Remote South Atlantic path
+206,FAROE ISLANDS,58,Medium,North Atlantic,"Useful northern path, moderate desirability"
+207,BAHRAIN,62,Medium,Middle East,Moderate Gulf path
+208,JORDAN,62,Medium,Middle East,Moderate Middle East
+209,GREENLAND,58,Medium,North Atlantic/Arctic,Moderate-good northern path
+210,CAPE VERDE,62,Medium,Atlantic Africa,Island/Atlantic path
+211,MALAWI,80,High,East/Southern Africa,Good African DX
+212,FIJI ISLANDS,88,Very High,Oceania,Far Pacific entity
+213,GIBRALTAR,58,Medium,Unclassified,Starter score from Club Log rank band; manually review
+214,ALBANIA,58,Medium,Balkans,Less common Europe
+215,ANGOLA,78,High,Southern/West Africa,Good African DX
+216,ANDORRA,58,Medium,Small Europe,Small DXCC; moderate desirability
+217,LIECHTENSTEIN,58,Medium,Small Europe,Small DXCC; moderate desirability
+218,MONGOLIA,78,High,East/Central Asia,Good long-path DX from UK
+219,SAN MARINO,58,Medium,Small Europe,Small DXCC; moderate desirability
+220,WEST MALAYSIA,72,High,SE Asia,Good DX path
+221,UZBEKISTAN,70,High,Central Asia,Less common Central Asia
+222,KYRGYZSTAN,72,High,Central Asia,Less common Central Asia
+223,REUNION ISLAND,82,High,Indian Ocean,Indian Ocean island path
+224,PERU,76,High,South America,Good South America DX
+225,CAYMAN ISLANDS,62,Medium,Caribbean,Good Atlantic/Caribbean DX
+226,AZERBAIJAN,58,Medium,Caucasus,Moderate path from UK
+227,NAMIBIA,78,High,Southern Africa,Good southern Africa DX
+228,BONAIRE,65,Medium,Caribbean,Good Caribbean DX
+229,SURINAME,76,High,South America,Less common South America
+230,ARMENIA,58,Medium,Caucasus,Moderate path from UK
+231,KENYA,76,High,East Africa,Good African DX
+232,SAINT LUCIA,65,Medium,Caribbean,Good Caribbean DX
+233,PARAGUAY,74,High,South America,Good South America DX
+234,ALAND ISLANDS,58,Medium,Northern Europe island,Moderate island DXCC
+235,NEW CALEDONIA,90,Very High,Oceania,Far Pacific entity
+236,ALGERIA,58,Medium,North Africa,North Africa path
+237,MARTINIQUE,58,Medium,Unclassified,Starter score from Club Log rank band; manually review
+238,GUADELOUPE,58,Medium,Unclassified,Starter score from Club Log rank band; manually review
+239,CURACAO,65,Medium,Caribbean,Good Caribbean DX
+240,GUERNSEY,12,Low,Near UK island,Nearby island; low general DX desirability
+241,HONG KONG,70,High,East Asia,Good DX path
+242,PHILIPPINES,76,High,SE Asia/Pacific edge,Good DX path
+243,TAIWAN,74,High,East Asia,Good DX path
+244,ARUBA,65,Medium,Caribbean,Good Caribbean DX
+245,BARBADOS,65,Medium,Caribbean,Good Caribbean DX
+246,QATAR,60,Medium,Middle East,Commoner Gulf path
+247,MONTENEGRO,58,Medium,Balkans,Less common Europe
+248,PANAMA,68,Medium,Central America,Good DX from UK
+249,TRINIDAD & TOBAGO,65,Medium,Caribbean,Good Caribbean DX
+250,ISLE OF MAN,12,Low,Near UK island,Nearby island; low general DX desirability
+251,CORSICA,45,Low-Medium,Mediterranean island,Island DXCC; moderate desirability
+252,JERSEY,12,Low,Near UK island,Nearby island; low general DX desirability
+253,BELIZE,70,High,Central America,Good DX from UK
+254,DODECANESE,45,Low-Medium,SE Europe island,Island DXCC; more interesting than mainland Greece
+255,GEORGIA,55,Medium,Caucasus,Moderate path from UK
+256,LEBANON,62,Medium,Middle East,Moderate Middle East
+257,MALTA,45,Low-Medium,Mediterranean,Island DXCC; moderate desirability
+258,COSTA RICA,68,Medium,Central America,Good DX from UK
+259,US VIRGIN ISLANDS,62,Medium,Caribbean,Good Caribbean DX
+260,INDIA,68,Medium,South Asia,Good DX path and activity
+261,OMAN,68,Medium,Middle East,Good DX path
+262,MOROCCO,45,Low-Medium,North Africa,Good but relatively common DX path
+263,SAUDI ARABIA,66,Medium,Middle East,Good DX path
+264,HAWAII,88,Very High,Pacific/USA,Very desirable from UK; far Pacific path
+265,CEUTA & MELILLA,45,Low-Medium,North Africa,North Africa edge entity
+266,ECUADOR,76,High,South America,Good South America DX
+267,THAILAND,72,High,SE Asia,Good DX path
+268,UNITED ARAB EMIRATES,62,Medium,Middle East,Commoner Gulf path
+269,KUWAIT,62,Medium,Middle East,Moderate Gulf path
+270,ALASKA,72,High,North America remote,Longer polar path and less routine than mainland USA
+271,DOMINICAN REPUBLIC,62,Medium,Caribbean,Good Atlantic/Caribbean DX
+272,ICELAND,45,Low-Medium,North Atlantic,Good northern path from UK
+273,CRETE,45,Low-Medium,SE Europe island,Island DXCC; more interesting than mainland Greece
+274,REPUBLIC OF KOREA,70,High,East Asia,Good DX path
+275,MEXICO,64,Medium,North America,Good DX path from UK
+276,COLOMBIA,72,High,South America,Good South America DX
+277,KALININGRAD,45,Low-Medium,Baltic/Russia,Distinct entity; moderate
+278,NORTH MACEDONIA,45,Low-Medium,Balkans,Less common Europe
+279,MOLDOVA,45,Low-Medium,Eastern Europe,Less common eastern Europe
+280,URUGUAY,72,High,South America,Good South America DX
+281,CHILE,76,High,South America,Long path and desirable
+282,VENEZUELA,72,High,South America,Good South America DX
+283,CUBA,62,Medium,Caribbean,Good Atlantic/Caribbean DX
+284,NEW ZEALAND,92,Very High,Oceania,Very desirable long-path/far DX from UK
+285,CYPRUS,45,Low-Medium,Eastern Mediterranean,Good path from UK
+286,CHINA,68,Medium,East Asia,Good DX path; active but still valuable
+287,REPUBLIC OF SOUTH AFRICA,75,High,Southern Africa,Strong DX path from UK
+288,LUXEMBOURG,45,Low-Medium,Near Europe,Nearby but slightly less common DXCC
+289,AZORES,48,Low-Medium,Atlantic island,"Atlantic island path, useful from UK"
+290,MADEIRA ISLANDS,48,Low-Medium,Atlantic island,"Atlantic island path, useful from UK"
+291,TURKEY,45,Low-Medium,Europe/Asia edge,Good path from UK; more interesting than western Europe
+292,BALEARIC ISLANDS,45,Low-Medium,Mediterranean island,Common holiday-island DXCC
+293,INDONESIA,76,High,SE Asia/Oceania edge,Large/far DX from UK
+294,SARDINIA,45,Low-Medium,Mediterranean island,Island DXCC; moderate desirability
+295,KAZAKHSTAN,58,Medium,Central Asia,Longer east path
+296,PUERTO RICO,60,Medium,Caribbean,Good but relatively active Caribbean DX
+297,LATVIA,45,Low-Medium,Baltic,Common but slightly further east
+298,NORTHERN IRELAND,12,Low,Local UK,Nearby UK entity; low general DX desirability
+299,ISRAEL,55,Medium,Middle East,Commoner Middle East path
+300,ARGENTINA,74,High,South America,Good South America DX
+301,WALES,5,Very Low,Local UK,Very local from IO83; low desirability unless needed for award slot
+302,AUSTRALIA,88,Very High,Oceania,Far and desirable from UK despite global activity
+303,ESTONIA,24,Low,Baltic,Common but slightly further east
+304,IRELAND,15,Low,Near UK,Very common/nearby from UK
+305,BOSNIA-HERZEGOVINA,28,Low-Medium,Balkans,Moderate Europe
+306,BELARUS,28,Low-Medium,Eastern Europe,Less routine eastern Europe
+307,SCOTLAND,8,Very Low,Local UK,Local UK entity; useful if specifically needed only
+308,CANARY ISLANDS,48,Low-Medium,Atlantic/Africa edge,Common but good DX path from UK
+309,NORWAY,18,Low,Northern Europe,Common northern Europe
+310,PORTUGAL,25,Low-Medium,Europe edge,Common but better path than near Europe
+311,LITHUANIA,24,Low,Baltic,Common but slightly further east
+312,SERBIA,25,Low-Medium,Balkans,Moderate Europe
+313,DENMARK,12,Low,Near Europe,Common short-path Europe from UK
+314,SLOVAK REPUBLIC,20,Low,Europe,Common Europe from UK
+315,BRAZIL,72,High,South America,Good South America DX
+316,GREECE,28,Low-Medium,SE Europe,Common but good path from UK
+317,ROMANIA,25,Low-Medium,Eastern Europe,Common but more interesting than near Europe
+318,SWITZERLAND,18,Low,Europe,Common Europe from UK
+319,JAPAN,72,High,East Asia,"Far, active, consistently desirable from UK"
+320,BULGARIA,26,Low-Medium,Eastern Europe,Common but more interesting than near Europe
+321,SWEDEN,18,Low,Northern Europe,Common northern Europe
+322,AUSTRIA,18,Low,Europe,Common Europe from UK
+323,ASIATIC RUSSIA,55,Medium,North Asia,Large area; useful but activity varies
+324,FINLAND,20,Low,Northern Europe,Common northern Europe
+325,CROATIA,22,Low,Europe,Common Europe from UK
+326,CANADA,55,Medium,North America,Good regular DX from UK
+327,CZECH REPUBLIC,18,Low,Europe,Common Europe from UK
+328,NETHERLANDS,8,Very Low,Near Europe,Very common short-path from UK
+329,SLOVENIA,20,Low,Europe,Common Europe from UK
+330,BELGIUM,8,Very Low,Near Europe,Very common short-path from UK
+331,HUNGARY,20,Low,Europe,Common Europe from UK
+332,UKRAINE,25,Low-Medium,Eastern Europe,Further east and currently less routine than near Europe
+333,ENGLAND,0,Very Low,Home entity,Home DXCC; normally ignore unless specifically needed
+334,POLAND,18,Low,Europe,Common Europe from UK
+335,SPAIN,22,Low,Europe,Common Europe from UK
+336,FRANCE,10,Low,Near Europe,Very common short-path from UK
+337,EUROPEAN RUSSIA,24,Low,Europe edge,Large/common but further east than near Europe
+338,FEDERAL REPUBLIC OF GERMANY,10,Low,Near Europe,Very common short-path from UK
+339,ITALY,22,Low,Europe,Common Europe from UK
+340,UNITED STATES OF AMERICA,58,Medium,North America,Good DX from UK despite being globally common
