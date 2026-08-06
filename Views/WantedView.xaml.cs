@@ -20,4 +20,9 @@ public partial class WantedView : System.Windows.Controls.UserControl
         if (viewModel.Wanted.CallWantedCommand?.CanExecute(item) == true)
             viewModel.Wanted.CallWantedCommand.Execute(item);
     }
+
+    private void StationGrid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        DataGridContextMenuHelper.SelectRightClickedRow(sender, e);
+    }
 }

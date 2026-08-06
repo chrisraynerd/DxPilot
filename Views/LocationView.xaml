@@ -1,0 +1,123 @@
+<UserControl x:Class="JtdxAutoResume.V3.Views.LocationView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="0,12,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,10">
+            <StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Location" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="Select one or more hunt areas. Their candidates are combined and ranked together; a contactable New DXCC anywhere still has absolute priority." Foreground="#526577" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Location.Status}" Margin="0,5,0,0" FontWeight="SemiBold" TextWrapping="Wrap" />
+                </StackPanel>
+                <DockPanel Margin="0,10,0,0">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0">
+                        <Button Content="All areas"
+                                Command="{Binding Location.SelectAllAreasCommand}"
+                                MinWidth="70"
+                                Padding="8,4" />
+                        <Button Content="None"
+                                Command="{Binding Location.ClearAllAreasCommand}"
+                                MinWidth="55"
+                                Padding="8,4"
+                                Margin="0" />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding Location.Areas}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding Title}"
+                                          IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          Margin="0,0,14,2"
+                                          FontWeight="SemiBold" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DockPanel>
+                <TextBlock Text="{Binding Location.SelectedAreasDisplay, StringFormat=Active hunt areas: {0}}"
+                           Foreground="#526577"
+                           Margin="0,4,0,0"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Location.Panels}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel IsItemsHost="True" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource PanelBorder}" Width="545" Height="285" Margin="0,0,10,10">
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,7">
+                                    <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Summary}" Foreground="#526577" />
+                                </StackPanel>
+                                <DataGrid ItemsSource="{Binding Candidates}"
+                                          Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                          RowStyle="{StaticResource SemanticStationRowStyle}"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          CanUserAddRows="False"
+                                          MouseDoubleClick="LocationGrid_MouseDoubleClick"
+                                          PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
+                                    <DataGrid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="CALL NOW"
+                                                      Command="{Binding PlacementTarget.Tag.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                            <MenuItem Header="Suppress indefinitely"
+                                                      Command="{Binding PlacementTarget.Tag.PermanentlySuppressCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                            <MenuItem Header="Release suppression"
+                                                      Command="{Binding PlacementTarget.Tag.ReleaseSuppressionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                            <Separator />
+                                            <MenuItem Header="Copy callsign"
+                                                      Command="{Binding PlacementTarget.Tag.Location.CopyCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        </ContextMenu>
+                                    </DataGrid.ContextMenu>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Rank" Binding="{Binding RankText}" Width="45" />
+                                        <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignCallTemplate}" SortMemberPath="Call" Width="82" />
+                                        <DataGridTextColumn Header="Country" Binding="{Binding Country}" Width="112" />
+                                        <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="55" />
+                                        <DataGridTemplateColumn Width="58">
+                                            <DataGridTemplateColumn.HeaderTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding DataContext.LocationDetailHeader, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.HeaderTemplate>
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding LocationDetail}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="Age" Binding="{Binding Age}" Width="52" />
+                                        <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="44" />
+                                        <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="68" />
+                                        <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedReason}" Width="175" />
+                                        <DataGridTextColumn Header="Status" Binding="{Binding TargetStatus}" Width="100" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </DockPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

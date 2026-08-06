@@ -29,7 +29,7 @@ public sealed class JtdxVisibleRowModel
         Version++;
         _rows.Clear();
 
-        var safeRowCount = calibration.SafeVisibleFullRowCount <= 0 ? JtdxBandActivityGridCalibration.SafeFullRowCount : calibration.SafeVisibleFullRowCount;
+        var safeRowCount = JtdxBandActivityGridCalibration.NormalizeRowCount(calibration.SafeVisibleFullRowCount);
         var indexedDecodes = decodeHistory
             .Select((decode, index) => new { Decode = decode, Index = index })
             .ToList();

@@ -4,6 +4,32 @@
              StartupUri="MainWindow.xaml"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
+        <SolidColorBrush x:Key="SemanticNeutralBackground" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="SemanticNeutralForeground" Color="#111827" />
+        <SolidColorBrush x:Key="SemanticNewDxccBackground" Color="#E9D5FF" />
+        <SolidColorBrush x:Key="SemanticNewDxccForeground" Color="#581C87" />
+        <SolidColorBrush x:Key="SemanticUnconfirmedDxccBackground" Color="#F3E8FF" />
+        <SolidColorBrush x:Key="SemanticUnconfirmedDxccForeground" Color="#6B21A8" />
+        <SolidColorBrush x:Key="SemanticNewGridBackground" Color="#DBEAFE" />
+        <SolidColorBrush x:Key="SemanticNewGridForeground" Color="#1E3A8A" />
+        <SolidColorBrush x:Key="SemanticNewStateBackground" Color="#CCFBF1" />
+        <SolidColorBrush x:Key="SemanticNewStateForeground" Color="#134E4A" />
+        <SolidColorBrush x:Key="SemanticRareDxccBackground" Color="#FEF3C7" />
+        <SolidColorBrush x:Key="SemanticRareDxccForeground" Color="#78350F" />
+        <SolidColorBrush x:Key="SemanticBandModeBackground" Color="#FFEDD5" />
+        <SolidColorBrush x:Key="SemanticBandModeForeground" Color="#7C2D12" />
+        <SolidColorBrush x:Key="SemanticMutedBackground" Color="#E2E8F0" />
+        <SolidColorBrush x:Key="SemanticMutedForeground" Color="#475569" />
+        <SolidColorBrush x:Key="SemanticNotContactableBackground" Color="#475569" />
+        <SolidColorBrush x:Key="SemanticSuppressedBackground" Color="#334155" />
+        <SolidColorBrush x:Key="SemanticPermanentSuppressedBackground" Color="#111827" />
+        <SolidColorBrush x:Key="SemanticDarkForeground" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="SemanticFailedBackground" Color="#FEE2E2" />
+        <SolidColorBrush x:Key="SemanticFailedForeground" Color="#7F1D1D" />
+        <SolidColorBrush x:Key="SemanticFailedBorder" Color="#DC2626" />
+        <SolidColorBrush x:Key="SemanticCallingBorder" Color="#F59E0B" />
+        <SolidColorBrush x:Key="SemanticInProgressBorder" Color="#16A34A" />
+
         <Style TargetType="Button">
             <Setter Property="Padding" Value="12,7" />
             <Setter Property="Margin" Value="0,0,8,0" />
@@ -23,6 +49,100 @@
             <Setter Property="CornerRadius" Value="6" />
             <Setter Property="Padding" Value="12" />
             <Setter Property="Background" Value="#FFFFFF" />
+        </Style>
+        <Style x:Key="WorkedCallsignTextStyle" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="ToolTipService.ShowDuration" Value="20000" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding WasCallWorkedBefore}" Value="True">
+                    <Setter Property="TextDecorations" Value="Strikethrough" />
+                    <Setter Property="ToolTip" Value="{Binding WorkedCallToolTip}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <DataTemplate x:Key="WorkedCallsignCallTemplate">
+            <TextBlock Text="{Binding Call}" Style="{StaticResource WorkedCallsignTextStyle}" />
+        </DataTemplate>
+        <DataTemplate x:Key="WorkedCallsignContactableCallTemplate">
+            <TextBlock Text="{Binding ContactableCall}" Style="{StaticResource WorkedCallsignTextStyle}" />
+        </DataTemplate>
+        <Style x:Key="SemanticStationRowStyle" TargetType="DataGridRow">
+            <Setter Property="Background" Value="{StaticResource SemanticNeutralBackground}" />
+            <Setter Property="Foreground" Value="{StaticResource SemanticNeutralForeground}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding OpportunityClass}" Value="NewDxcc">
+                    <Setter Property="Background" Value="{StaticResource SemanticNewDxccBackground}" />
+                    <Setter Property="Foreground" Value="{StaticResource SemanticNewDxccForeground}" />
+                    <Setter Property="FontWeight" Value="SemiBold" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding OpportunityClass}" Value="UnconfirmedDxcc">
+                    <Setter Property="Background" Value="{StaticResource SemanticUnconfirmedDxccBackground}" />
+                    <Setter Property="Foreground" Value="{StaticResource SemanticUnconfirmedDxccForeground}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding OpportunityClass}" Value="NewGrid">
+                    <Setter Property="Background" Value="{StaticResource SemanticNewGridBackground}" />
+                    <Setter Property="Foreground" Value="{StaticResource SemanticNewGridForeground}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding OpportunityClass}" Value="NewState">
+                    <Setter Property="Background" Value="{StaticResource SemanticNewStateBackground}" />
+                    <Setter Property="Foreground" Value="{StaticResource SemanticNewStateForeground}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding OpportunityClass}" Value="RareDxcc">
+                    <Setter Property="Background" Value="{StaticResource SemanticRareDxccBackground}" />
+                    <Setter Property="Foreground" Value="{StaticResource SemanticRareDxccForeground}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding OpportunityClass}" Value="BandMode">
+                    <Setter Property="Background" Value="{StaticResource SemanticBandModeBackground}" />
+                    <Setter Property="Foreground" Value="{StaticResource SemanticBandModeForeground}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ActionStateClass}" Value="Muted">
+                    <Setter Property="Background" Value="{StaticResource SemanticMutedBackground}" />
+                    <Setter Property="Foreground" Value="{StaticResource SemanticMutedForeground}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ActionStateClass}" Value="NotContactable">
+                    <Setter Property="Background" Value="{StaticResource SemanticNotContactableBackground}" />
+                    <Setter Property="Foreground" Value="{StaticResource SemanticDarkForeground}" />
+                    <Setter Property="FontStyle" Value="Italic" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ActionStateClass}" Value="Suppressed">
+                    <Setter Property="Background" Value="{StaticResource SemanticSuppressedBackground}" />
+                    <Setter Property="Foreground" Value="{StaticResource SemanticDarkForeground}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ActionStateClass}" Value="PermanentlySuppressed">
+                    <Setter Property="Background" Value="{StaticResource SemanticPermanentSuppressedBackground}" />
+                    <Setter Property="Foreground" Value="{StaticResource SemanticDarkForeground}" />
+                    <Setter Property="FontWeight" Value="SemiBold" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ActionStateClass}" Value="Failed">
+                    <Setter Property="Background" Value="{StaticResource SemanticFailedBackground}" />
+                    <Setter Property="Foreground" Value="{StaticResource SemanticFailedForeground}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource SemanticFailedBorder}" />
+                    <Setter Property="BorderThickness" Value="4,0,0,0" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ActionStateClass}" Value="Calling">
+                    <Setter Property="BorderBrush" Value="{StaticResource SemanticCallingBorder}" />
+                    <Setter Property="BorderThickness" Value="4,0,0,0" />
+                    <Setter Property="FontWeight" Value="SemiBold" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ActionStateClass}" Value="InProgress">
+                    <Setter Property="BorderBrush" Value="{StaticResource SemanticInProgressBorder}" />
+                    <Setter Property="BorderThickness" Value="4,0,0,0" />
+                    <Setter Property="FontWeight" Value="SemiBold" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ActionStateClass}" Value="Worked">
+                    <Setter Property="BorderBrush" Value="{StaticResource SemanticInProgressBorder}" />
+                    <Setter Property="BorderThickness" Value="4,0,0,0" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="SemanticLegendSwatch" TargetType="Border">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="CornerRadius" Value="2" />
+            <Setter Property="BorderBrush" Value="#94A3B8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Margin" Value="0,0,5,0" />
         </Style>
     </Application.Resources>
 </Application>

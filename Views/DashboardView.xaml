@@ -21,7 +21,7 @@
                         <ColumnDefinition Width="1.2*" />
                     </Grid.ColumnDefinitions>
                     <StackPanel>
-                        <TextBlock Text="Mode" FontWeight="SemiBold" />
+                        <TextBlock Text="Hunter Mode" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding CurrentTargetStatus.OperatingMode}" FontSize="18" FontWeight="SemiBold" Margin="0,4,0,0" />
                         <TextBlock Text="{Binding CurrentTargetStatus.TargetSource}" Foreground="#526577" TextWrapping="Wrap" />
                     </StackPanel>
@@ -98,33 +98,30 @@
         <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource PanelBorder}">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="Live Decode Feed" FontWeight="SemiBold" Margin="0,0,0,8" />
-                <DataGrid ItemsSource="{Binding DxAssist.RecentDecodes}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" MaxHeight="520">
+                <DataGrid ItemsSource="{Binding DxAssist.RecentDecodes}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" MaxHeight="520" PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
+                    <DataGrid.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="CALL NOW" Command="{Binding PlacementTarget.DataContext.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="Suppress indefinitely" Command="{Binding PlacementTarget.DataContext.PermanentlySuppressCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="Release suppression" Command="{Binding PlacementTarget.DataContext.ReleaseSuppressionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
                     <DataGrid.RowStyle>
-                        <Style TargetType="DataGridRow">
+                        <Style TargetType="DataGridRow" BasedOn="{StaticResource SemanticStationRowStyle}">
                             <Setter Property="ToolTip" Value="{Binding ParserInterpretation}" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding PriorityClass}" Value="NewDxcc">
-                                    <Setter Property="Background" Value="#F5C6F7" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding PriorityClass}" Value="NewState">
-                                    <Setter Property="Background" Value="#FFF2A8" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding PriorityClass}" Value="NewGrid">
-                                    <Setter Property="Background" Value="#CFE8FF" />
-                                </DataTrigger>
-                            </Style.Triggers>
                         </Style>
                     </DataGrid.RowStyle>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Time" Binding="{Binding DisplayTime}" Width="90" />
-                        <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="60" />
-                        <DataGridTextColumn Header="DT" Binding="{Binding Dt}" Width="70" />
-                        <DataGridTextColumn Header="Offset" Binding="{Binding AudioOffset}" Width="75" />
-                        <DataGridTextColumn Header="Message" Binding="{Binding RawText}" Width="220" />
-                        <DataGridTextColumn Header="Type" Binding="{Binding MessageTypeText}" Width="120" />
-                        <DataGridTextColumn Header="Call" Binding="{Binding ContactableCall}" Width="95" />
-                        <DataGridTextColumn Header="Country" Binding="{Binding PrimaryDisplayEntity}" Width="140" />
-                        <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="80" />
+                        <DataGridTextColumn Header="Rank" Binding="{Binding RankText}" Width="48" />
+                        <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignContactableCallTemplate}" SortMemberPath="ContactableCall" Width="88" />
+                        <DataGridTextColumn Header="Country" Binding="{Binding CountryDisplay}" Width="135" />
+                        <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="62" />
+                        <DataGridTextColumn Header="State" Binding="{Binding State}" Width="52" />
+                        <DataGridTextColumn Header="Age" Binding="{Binding AgeText}" Width="54" />
+                        <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="46" />
+                        <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="70" />
+                        <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedReasonDisplay}" Width="170" />
+                        <DataGridTextColumn Header="Status" Binding="{Binding StationStatusDisplay}" Width="110" />
                     </DataGrid.Columns>
                 </DataGrid>
             </DockPanel>

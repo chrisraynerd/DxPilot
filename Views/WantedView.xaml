@@ -40,24 +40,36 @@
                     </Grid>
                 </Border>
                 <WrapPanel>
-                    <TextBlock Text="Wanted Sniper" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <ComboBox Width="95" SelectedValue="{Binding Settings.Settings.WantedSniperMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedValuePath="Content" Margin="0,0,18,0">
-                        <ComboBoxItem Content="Off" />
-                        <ComboBoxItem Content="Watch" />
-                        <ComboBoxItem Content="Armed" />
-                    </ComboBox>
+                    <TextBlock Text="Wanted scopes: Overall always" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
+                    <CheckBox Content="Include current band"
+                              IsChecked="{Binding IncludeBandWanted, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              Margin="0,0,12,0"
+                              VerticalAlignment="Center"
+                              ToolTip="Also treat an entity, grid or state as wanted when it has not been worked on the current band." />
+                    <CheckBox Content="Include current mode"
+                              IsChecked="{Binding IncludeModeWanted, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              Margin="0,0,12,0"
+                              VerticalAlignment="Center"
+                              ToolTip="Also treat an entity, grid or state as wanted when it has not been worked using the current digital mode." />
+                    <CheckBox Content="Include band + mode"
+                              IsChecked="{Binding IncludeBandModeWanted, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              Margin="0,0,18,0"
+                              VerticalAlignment="Center"
+                              ToolTip="Also hunt combinations such as an entity never worked on 20m FT4, even if the band and mode have each been worked separately." />
 
-                    <TextBlock Text="Scope" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <ComboBox Width="155" SelectedValue="{Binding Settings.Settings.WantedScope, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedValuePath="Content" Margin="0,0,18,0">
-                        <ComboBoxItem Content="Overall" />
-                        <ComboBoxItem Content="CurrentBand" />
-                        <ComboBoxItem Content="CurrentMode" />
-                        <ComboBoxItem Content="CurrentBandMode" />
-                    </ComboBox>
-
-                    <CheckBox Content="DXCC" IsChecked="{Binding Settings.Settings.EnableWantedDxcc, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" VerticalAlignment="Center" />
-                    <CheckBox Content="Grids" IsChecked="{Binding Settings.Settings.EnableWantedGrids, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" VerticalAlignment="Center" />
-                    <CheckBox Content="USA States" IsChecked="{Binding Settings.Settings.EnableWantedStates, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" VerticalAlignment="Center" />
+                    <TextBlock Text="Sniper targets:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <CheckBox Content="DXCC" IsChecked="{Binding SniperTargetsDxcc, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" VerticalAlignment="Center"
+                              ToolTip="Controls whether Wanted Sniper selects DXCC rows. The Wanted DXCC table always updates." />
+                    <CheckBox Content="Grids" IsChecked="{Binding SniperTargetsGrids, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" VerticalAlignment="Center"
+                              ToolTip="Controls whether Wanted Sniper selects grid rows. The Wanted Grids table always updates." />
+                    <CheckBox Content="USA States" IsChecked="{Binding SniperTargetsStates, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" VerticalAlignment="Center"
+                              ToolTip="Controls whether Wanted Sniper selects state rows. The Wanted USA States table always updates." />
+                    <CheckBox Content="New/unconfirmed DXCC: keep calling until stale (all modes)"
+                              IsChecked="{Binding KeepCallingNewDxccUntilStale, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              FontWeight="SemiBold"
+                              Margin="10,0,0,0"
+                              VerticalAlignment="Center"
+                              ToolTip="When enabled, an active never-worked or worked-but-unconfirmed DXCC ignores normal call-attempt and no-progress limits and remains locked until it replies, is logged, or goes stale. Wrong-target and QSO-stage safety limits still apply." />
                 </WrapPanel>
             </DockPanel>
         </Border>
@@ -70,30 +82,29 @@
             <Border Style="{StaticResource PanelBorder}" Margin="0,0,8,8">
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Text="Wanted DXCC" FontWeight="SemiBold" Margin="0,0,0,8" />
-                    <DataGrid ItemsSource="{Binding Wanted.WantedDxcc}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" MouseDoubleClick="WantedGrid_MouseDoubleClick">
+                    <DataGrid ItemsSource="{Binding Wanted.WantedDxcc}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" RowStyle="{StaticResource SemanticStationRowStyle}" MouseDoubleClick="WantedGrid_MouseDoubleClick" PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
                         <DataGrid.ContextMenu>
                             <ContextMenu>
-                                <MenuItem Header="Call this station" Command="{Binding DataContext.Wanted.CallWantedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="CALL NOW" Command="{Binding PlacementTarget.DataContext.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                 <MenuItem Header="Watch only" Command="{Binding DataContext.Wanted.WatchOnlyCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="Suppress for 5 minutes" Command="{Binding DataContext.Wanted.SuppressWantedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Suppress indefinitely" Command="{Binding PlacementTarget.DataContext.PermanentlySuppressCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Release suppression" Command="{Binding PlacementTarget.DataContext.ReleaseSuppressionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                 <Separator />
                                 <MenuItem Header="Copy callsign" Command="{Binding DataContext.Wanted.CopyCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                 <MenuItem Header="Copy raw message" Command="{Binding DataContext.Wanted.CopyRawMessageCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="70" />
-                            <DataGridTextColumn Header="Call" Binding="{Binding ContactableCall}" Width="90" />
-                            <DataGridTextColumn Header="Entity" Binding="{Binding Entity}" Width="130" />
-                            <DataGridTextColumn Header="Need" Binding="{Binding NeedStatusText}" Width="95" />
-                            <DataGridTextColumn Header="Scope" Binding="{Binding WantedScopeText}" Width="115" />
-                            <DataGridTextColumn Header="Band" Binding="{Binding Band}" Width="55" />
-                            <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="60" />
-                            <DataGridTextColumn Header="Actionable" Binding="{Binding ActionabilityText}" Width="145" />
-                            <DataGridTextColumn Header="Method" Binding="{Binding SelectionMethod}" Width="100" />
-                            <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedDetail}" Width="*" />
-                            <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="55" />
-                            <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="50" />
+                            <DataGridTextColumn Header="Rank" Binding="{Binding RankText}" Width="45" />
+                            <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignContactableCallTemplate}" SortMemberPath="ContactableCall" Width="82" />
+                            <DataGridTextColumn Header="Country" Binding="{Binding Entity}" Width="112" />
+                            <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="55" />
+                            <DataGridTextColumn Header="State" Binding="{Binding State}" Width="48" />
+                            <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="52" />
+                            <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="44" />
+                            <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="68" />
+                            <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedReasonDisplay}" Width="175" />
+                            <DataGridTextColumn Header="Status" Binding="{Binding StationStatusDisplay}" Width="110" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -102,30 +113,29 @@
             <Border Grid.Column="1" Style="{StaticResource PanelBorder}" Margin="8,0,0,8">
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Text="Wanted Grids" FontWeight="SemiBold" Margin="0,0,0,8" />
-                    <DataGrid ItemsSource="{Binding Wanted.WantedGrids}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" MouseDoubleClick="WantedGrid_MouseDoubleClick">
+                    <DataGrid ItemsSource="{Binding Wanted.WantedGrids}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" RowStyle="{StaticResource SemanticStationRowStyle}" MouseDoubleClick="WantedGrid_MouseDoubleClick" PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
                         <DataGrid.ContextMenu>
                             <ContextMenu>
-                                <MenuItem Header="Call this station" Command="{Binding DataContext.Wanted.CallWantedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="CALL NOW" Command="{Binding PlacementTarget.DataContext.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                 <MenuItem Header="Watch only" Command="{Binding DataContext.Wanted.WatchOnlyCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="Suppress for 5 minutes" Command="{Binding DataContext.Wanted.SuppressWantedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Suppress indefinitely" Command="{Binding PlacementTarget.DataContext.PermanentlySuppressCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="Release suppression" Command="{Binding PlacementTarget.DataContext.ReleaseSuppressionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                 <Separator />
                                 <MenuItem Header="Copy callsign" Command="{Binding DataContext.Wanted.CopyCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                 <MenuItem Header="Copy raw message" Command="{Binding DataContext.Wanted.CopyRawMessageCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="70" />
-                            <DataGridTextColumn Header="Call" Binding="{Binding ContactableCall}" Width="90" />
-                            <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="70" />
-                            <DataGridTextColumn Header="Source" Binding="{Binding GridSource}" Width="80" />
-                            <DataGridTextColumn Header="Need" Binding="{Binding NeedStatusText}" Width="95" />
-                            <DataGridTextColumn Header="Scope" Binding="{Binding WantedScopeText}" Width="115" />
-                            <DataGridTextColumn Header="Band" Binding="{Binding Band}" Width="55" />
-                            <DataGridTextColumn Header="Actionable" Binding="{Binding ActionabilityText}" Width="145" />
-                            <DataGridTextColumn Header="Method" Binding="{Binding SelectionMethod}" Width="100" />
-                            <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedDetail}" Width="*" />
-                            <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="55" />
-                            <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="50" />
+                            <DataGridTextColumn Header="Rank" Binding="{Binding RankText}" Width="45" />
+                            <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignContactableCallTemplate}" SortMemberPath="ContactableCall" Width="82" />
+                            <DataGridTextColumn Header="Country" Binding="{Binding Entity}" Width="112" />
+                            <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="55" />
+                            <DataGridTextColumn Header="State" Binding="{Binding State}" Width="48" />
+                            <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="52" />
+                            <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="44" />
+                            <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="68" />
+                            <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedReasonDisplay}" Width="175" />
+                            <DataGridTextColumn Header="Status" Binding="{Binding StationStatusDisplay}" Width="110" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -141,31 +151,29 @@
                         <ListBox ItemsSource="{Binding WantedRecentActions}" BorderThickness="0" />
                     </DockPanel>
                 </Border>
-                <DataGrid ItemsSource="{Binding Wanted.WantedStates}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" MouseDoubleClick="WantedGrid_MouseDoubleClick">
+                <DataGrid ItemsSource="{Binding Wanted.WantedStates}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" RowStyle="{StaticResource SemanticStationRowStyle}" MouseDoubleClick="WantedGrid_MouseDoubleClick" PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
                     <DataGrid.ContextMenu>
                         <ContextMenu>
-                            <MenuItem Header="Call this station" Command="{Binding DataContext.Wanted.CallWantedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="CALL NOW" Command="{Binding PlacementTarget.DataContext.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                             <MenuItem Header="Watch only" Command="{Binding DataContext.Wanted.WatchOnlyCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                            <MenuItem Header="Suppress for 5 minutes" Command="{Binding DataContext.Wanted.SuppressWantedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="Suppress indefinitely" Command="{Binding PlacementTarget.DataContext.PermanentlySuppressCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="Release suppression" Command="{Binding PlacementTarget.DataContext.ReleaseSuppressionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                             <Separator />
                             <MenuItem Header="Copy callsign" Command="{Binding DataContext.Wanted.CopyCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                             <MenuItem Header="Copy raw message" Command="{Binding DataContext.Wanted.CopyRawMessageCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                         </ContextMenu>
                     </DataGrid.ContextMenu>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="70" />
-                        <DataGridTextColumn Header="Call" Binding="{Binding ContactableCall}" Width="90" />
-                        <DataGridTextColumn Header="State" Binding="{Binding State}" Width="65" />
-                        <DataGridTextColumn Header="Entity" Binding="{Binding Entity}" Width="130" />
-                        <DataGridTextColumn Header="Need" Binding="{Binding NeedStatusText}" Width="95" />
-                        <DataGridTextColumn Header="Scope" Binding="{Binding WantedScopeText}" Width="115" />
-                        <DataGridTextColumn Header="Band" Binding="{Binding Band}" Width="55" />
-                        <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="60" />
-                        <DataGridTextColumn Header="Actionable" Binding="{Binding ActionabilityText}" Width="145" />
-                        <DataGridTextColumn Header="Method" Binding="{Binding SelectionMethod}" Width="100" />
-                        <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedDetail}" Width="*" />
-                        <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="55" />
-                        <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="50" />
+                        <DataGridTextColumn Header="Rank" Binding="{Binding RankText}" Width="45" />
+                        <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignContactableCallTemplate}" SortMemberPath="ContactableCall" Width="82" />
+                        <DataGridTextColumn Header="Country" Binding="{Binding Entity}" Width="112" />
+                        <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="55" />
+                        <DataGridTextColumn Header="State" Binding="{Binding State}" Width="48" />
+                        <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="52" />
+                        <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="44" />
+                        <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="68" />
+                        <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedReasonDisplay}" Width="175" />
+                        <DataGridTextColumn Header="Status" Binding="{Binding StationStatusDisplay}" Width="110" />
                     </DataGrid.Columns>
                 </DataGrid>
             </DockPanel>

@@ -117,23 +117,15 @@ public sealed class AutoResumeService
                 return;
             }
 
-            var usedCqReset = InvokeOnUiThread(ShouldUseCqReset) ?? true;
-            if (usedCqReset)
-            {
-                _clicker.MoveClickRestore(settings.CqTx6X, settings.CqTx6Y);
-                Thread.Sleep(120);
-            }
-            else
-            {
-                LogBlocked("CQ/TX6 reset blocked: target or QSO state active.");
-            }
-
-            var shouldClickEnable = usedCqReset || (InvokeOnUiThread(ShouldClickEnableTx) ?? true);
+            // AutoResume never deliberately selects CQ/TX6. It may only re-enable
+            // TX after the target gate confirms a locked station.
+            _ = InvokeOnUiThread(ShouldUseCqReset);
+            var shouldClickEnable = InvokeOnUiThread(ShouldClickEnableTx) ?? false;
             if (!shouldClickEnable)
             {
                 _lastFire = Environment.TickCount64;
                 _lastWasGrey = false;
-                LogBlocked("Enable TX click blocked until JTDX confirms the selected target.");
+                LogBlocked("CQ/TX6 is disabled; Enable TX remains blocked until JTDX confirms a selected target.");
                 StatusChanged?.Invoke("AutoResume waiting for JTDX to accept selected target before enabling TX.");
                 return;
             }
@@ -145,8 +137,7 @@ public sealed class AutoResumeService
             ResumeCount++;
             LastResumeAt = DateTime.Now;
 
-            var recovery = usedCqReset ? "Idle Recovery: CQ/TX6 then Enable TX" : "Locked Target Recovery: Enable TX only";
-            var message = $"Resumed at {LastResumeAt.Value:HH:mm:ss} using {recovery} click recovery.";
+            var message = $"Resumed at {LastResumeAt.Value:HH:mm:ss} using Locked Target Recovery: Enable TX only.";
             StatusChanged?.Invoke(message);
             ActionLogged?.Invoke(message);
             Resumed?.Invoke();

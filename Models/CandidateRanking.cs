@@ -18,6 +18,8 @@ public sealed class CandidateRanking
     public string Iota { get; set; } = "";
     public string Band { get; set; } = "";
     public string Mode { get; set; } = "";
+    public WantedScope WantedScope { get; set; } = WantedScope.Overall;
+    public NeedStatus NeedStatus { get; set; } = NeedStatus.Unknown;
     public int PriorityTier { get; set; } = 99;
     public string PriorityTierName { get; set; } = "Diagnostic";
     public string PrimaryWantedReason { get; set; } = "";

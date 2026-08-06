@@ -117,6 +117,10 @@
                         <TextBox Text="{Binding Settings.Settings.LiveJtdxAdifPath, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Watch live JTDX ADIF" />
                         <CheckBox IsChecked="{Binding Settings.Settings.WatchLiveJtdxAdif, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="JTDX ALL.TXT path" />
+                        <TextBox Text="{Binding Settings.Settings.JtdxAllTxtPath, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Watch outgoing messages" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.WatchJtdxAllTxt, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="DXCC confirmation mode" />
                         <TextBox Text="{Binding Settings.Settings.DxccConfirmationMode, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Grid confirmation mode" />
@@ -126,7 +130,9 @@
                         <TextBlock Text="IOTA confirmation mode" />
                         <TextBox Text="{Binding Settings.Settings.IotaConfirmationMode, UpdateSourceTrigger=PropertyChanged}" />
                     </UniformGrid>
+                    <Button Content="Browse JTDX ALL.TXT" Command="{Binding BrowseAllTxtCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
                     <TextBlock Text="{Binding AdifDiagnostics}" TextWrapping="Wrap" Foreground="#263645" Margin="0,10,0,0" />
+                    <TextBlock Text="{Binding AllTxtDiagnostics}" TextWrapping="Wrap" Foreground="#263645" Margin="0,6,0,0" />
 
                     <TextBlock Text="DX Hunter Ranking" FontWeight="SemiBold" Margin="0,18,0,12" />
                     <UniformGrid Columns="2">
@@ -138,8 +144,10 @@
                         <CheckBox IsChecked="{Binding Settings.Settings.AcceptIncomingCalls, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Accept incoming mode" />
                         <TextBox Text="{Binding Settings.Settings.AcceptIncomingCallsMode, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Candidate max age seconds" />
+                        <TextBlock Text="Universal stale seconds" />
                         <TextBox Text="{Binding Settings.Settings.CandidateMaxAgeSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="New DXCC stale seconds" />
+                        <TextBox Text="{Binding Settings.Settings.NewDxccStaleSeconds, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Global rarity weight" />
                         <TextBox Text="{Binding Settings.Settings.GlobalRarityWeight, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="UK desirability weight" />
@@ -163,14 +171,53 @@
                     </UniformGrid>
                     <TextBlock Text="{Binding RarityDiagnostics}" TextWrapping="Wrap" Foreground="#263645" Margin="0,10,0,0" />
 
+                    <TextBlock Text="QRZ Callsign Lookup" FontWeight="SemiBold" Margin="0,18,0,12" />
+                    <UniformGrid Columns="2">
+                        <TextBlock Text="Enable QRZ lookup" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.EnableQrzCallsignLookup, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="QRZ username" />
+                        <TextBox Text="{Binding Settings.Settings.QrzUsername, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="QRZ password" />
+                        <TextBox Text="{Binding Settings.Settings.QrzPassword, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Test callsign" />
+                        <TextBox Text="{Binding Settings.Settings.QrzTestCallsign, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Lookup timeout sec" />
+                        <TextBox Text="{Binding Settings.Settings.QrzLookupTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Success cache days" />
+                        <TextBox Text="{Binding Settings.Settings.QrzSuccessCacheDays, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Not-found cache days" />
+                        <TextBox Text="{Binding Settings.Settings.QrzNotFoundCacheDays, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Wanted Sniper targets USA states" />
+                        <CheckBox IsChecked="{Binding SniperTargetsStates, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Prioritise new states" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.PrioritizeNewUsStates, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Prioritise unconfirmed states" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.PrioritizeUnconfirmedUsStates, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Include District of Columbia" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.IncludeDistrictOfColumbia, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Enable QRZ grid enrichment" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.EnableQrzGridEnrichment, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Use QRZ for new grids" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.UseQrzGridsForNewGridTargeting, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Use QRZ for unconfirmed grids" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.UseQrzGridsForUnconfirmedGridTargeting, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Ignore QRZ targeting for portable calls" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.IgnoreQrzTargetingForPotentiallyPortableCalls, UpdateSourceTrigger=PropertyChanged}" />
+                    </UniformGrid>
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button Content="Test QRZ Connection" Command="{Binding TestQrzConnectionCommand}" />
+                        <Button Content="Clear QRZ Cache" Command="{Binding ClearQrzCacheCommand}" />
+                    </WrapPanel>
+                    <TextBox Text="{Binding QrzStatus}" IsReadOnly="True" TextWrapping="Wrap" MinHeight="52" Margin="0,8,0,0" />
+
                     <TextBlock Text="JTDX Band Activity GUI Selection" FontWeight="SemiBold" Margin="0,18,0,12" />
                     <UniformGrid Columns="2">
                         <TextBlock Text="GUI selection enabled" />
                         <CheckBox IsChecked="{Binding Settings.Settings.JtdxGuiSelectionEnabled, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="JTDX window title contains" />
                         <TextBox Text="{Binding Settings.Settings.JtdxWindowTitleMatch, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Max GUI row age seconds" />
-                        <TextBox Text="{Binding Settings.Settings.JtdxGuiMaxRowAgeSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Visible full rows in JTDX" />
+                        <TextBox Text="{Binding JtdxVisibleRowCount, UpdateSourceTrigger=LostFocus}" ToolTip="Count only the complete safe rows covered by the movable grid." />
                         <TextBlock Text="Band left X rel" />
                         <TextBox Text="{Binding Settings.Settings.JtdxBandActivityLeft, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Band top Y rel" />
@@ -190,12 +237,12 @@
                     </UniformGrid>
                     <WrapPanel Margin="0,8,0,0">
                         <Button Content="Capture JTDX Window" Command="{Binding CaptureJtdxWindowCommand}" />
-                        <Button Content="Set Band Top Left" Command="{Binding PickBandActivityTopLeftCommand}" />
-                        <Button Content="Set Band Bottom Right" Command="{Binding PickBandActivityBottomRightCommand}" />
-                        <Button Content="Show 52-Row Grid" Command="{Binding ShowBandActivityGridOverlayCommand}" />
+                        <Button Content="{Binding GridOverlayButtonText}" Command="{Binding ShowBandActivityGridOverlayCommand}" />
                     </WrapPanel>
                     <TextBox Text="{Binding DxAssist.GuiSelectionStatus, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MinHeight="52" Margin="0,8,0,0" />
-                    <TextBlock Text="Calibrate the 52 full safe Band Activity rows. AutoResume uses UDP decodes as truth and screen geometry only for row position; OCR is not used for automatic selection." TextWrapping="Wrap" Foreground="#9A3412" Margin="0,8,0,0" />
+                    <TextBlock TextWrapping="Wrap" Foreground="#9A3412" Margin="0,8,0,0">
+                        <Run Text="Enter the number of complete safe Band Activity rows, then manually align the movable grid. The same row count is used for every displayed JTDX row and double-click calculation. Do not resize JTDX afterwards." />
+                    </TextBlock>
 
                     <TextBlock Text="Session History" FontWeight="SemiBold" Margin="0,18,0,12" />
                     <UniformGrid Columns="2">
@@ -226,7 +273,14 @@
                     <Button Content="Run Lookup" Command="{Binding RunDiagnosticLookupCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
                     <TextBox Text="{Binding DiagnosticLookupResult}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="170" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" />
 
-                    <Button Content="Save Settings" Command="{Binding SaveSettingsCommand}" HorizontalAlignment="Left" Margin="0,12,0,0" />
+                    <TextBlock Text="Settings Backup and Transfer" FontWeight="SemiBold" Margin="0,18,0,8" />
+                    <WrapPanel>
+                        <Button Content="Save Settings" Command="{Binding SaveSettingsCommand}" />
+                        <Button Content="Export Settings" Command="{Binding ExportSettingsCommand}" />
+                        <Button Content="Import Settings" Command="{Binding ImportSettingsCommand}" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding SettingsTransferStatus}" TextWrapping="Wrap" Foreground="#526577" Margin="0,8,0,0" />
+                    <TextBlock Text="Exports include the complete AutoResume configuration and scheduler, but deliberately exclude the QRZ password. Import validates the file and backs up the current configuration before replacement." TextWrapping="Wrap" Foreground="#526577" Margin="0,6,0,0" />
                     <TextBlock Text="UDP Reply depends on JTDX/WSJT-X accepting UDP requests; Enable TX recovery remains mouse/pixel based." TextWrapping="Wrap" Foreground="#526577" Margin="0,18,0,0" />
                 </StackPanel>
             </Border>

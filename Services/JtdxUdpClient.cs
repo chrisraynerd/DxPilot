@@ -49,7 +49,13 @@ public sealed class JtdxUdpClient
         WriteInt32(stream, decode.Snr);
         WriteDouble(stream, decode.Dt);
         WriteUInt32(stream, (uint)Math.Max(0, decode.AudioOffset ?? 0));
-        WriteString(stream, decode.Mode, stringEncoding);
+        // Reply must echo the exact mode field from the Decode packet. JTDX uses
+        // protocol markers such as "~" for FT8 and "+" for FT4; the normalized
+        // FT8/FT4 value is retained separately for AutoResume's own logic/UI.
+        WriteString(
+            stream,
+            string.IsNullOrWhiteSpace(decode.ProtocolMode) ? decode.Mode : decode.ProtocolMode,
+            stringEncoding);
         WriteString(stream, decode.RawText, stringEncoding);
         WriteBool(stream, decode.LowConfidence);
         WriteByte(stream, 0); // keyboard modifiers

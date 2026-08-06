@@ -87,6 +87,25 @@ public sealed class DxccResolver
             return resolved;
         }
 
+        // KG4 is shared by Guantanamo Bay and ordinary US amateur calls. The
+        // Guantanamo allocation is KG4 plus two letters (KG4AA-KG4ZZ); standard
+        // FCC-issued KG4 calls with one or three suffix letters belong to the
+        // United States. CTY exact-call exceptions above remain authoritative.
+        if (IsStandardUnitedStatesKg4(normalized)
+            && TryFindRule("291", "K", out var unitedStatesRule))
+        {
+            resolved = ToEntity(
+                unitedStatesRule,
+                original,
+                normalized,
+                "KG4",
+                "KG4 allocation rule",
+                "High",
+                "Standard US KG4 callsign (KG4 plus one or three letters)");
+            _cache[original] = resolved;
+            return resolved;
+        }
+
         if (TryPrefix(normalized, out var rule, out var matched))
         {
             var source = normalized.Equals(original, StringComparison.OrdinalIgnoreCase) ? "CTY prefix" : "Suffix stripped + CTY prefix";
@@ -120,7 +139,12 @@ public sealed class DxccResolver
             ["BY6SX"] = "China",
             ["M8KKH"] = "England",
             ["EI7LK"] = "Ireland",
-            ["MI0OBC"] = "Northern Ireland"
+            ["MI0OBC"] = "Northern Ireland",
+            ["KG4A"] = "United States",
+            ["KG4ABC"] = "United States",
+            ["KG4AC"] = "Guantanamo Bay",
+            ["KG4AA"] = "Guantanamo Bay",
+            ["KG44WW"] = "Guantanamo Bay"
         };
 
         var failures = new List<string>();
@@ -200,6 +224,26 @@ public sealed class DxccResolver
         rule = default!;
         matchedPrefix = "";
         return false;
+    }
+
+    private bool TryFindRule(string dxcc, string preferredPrefix, out CountryRule rule)
+    {
+        rule = _rules.FirstOrDefault(candidate =>
+            candidate.Dxcc.Equals(dxcc, StringComparison.OrdinalIgnoreCase)
+            && candidate.Prefix.Equals(preferredPrefix, StringComparison.OrdinalIgnoreCase))!;
+        return rule != null;
+    }
+
+    private static bool IsStandardUnitedStatesKg4(string callsign)
+    {
+        if (!callsign.StartsWith("KG4", StringComparison.OrdinalIgnoreCase)
+            || callsign.Length is not (4 or 6))
+        {
+            return false;
+        }
+
+        return callsign.AsSpan(3).ToArray()
+            .All(character => character is >= 'A' and <= 'Z');
     }
 
     private void Load()

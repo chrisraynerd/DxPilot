@@ -5,6 +5,7 @@ namespace JtdxAutoResume.V3.Controls.JtdxSelection;
 
 public sealed class JtdxGuiGridSelector
 {
+    private static readonly TimeSpan RowSettleDelay = TimeSpan.FromMilliseconds(150);
     private readonly ScreenClicker _clicker;
     private readonly JtdxWindowLocator _windowLocator;
     private readonly Func<long> _getCurrentModelVersion;
@@ -16,13 +17,14 @@ public sealed class JtdxGuiGridSelector
         _getCurrentModelVersion = getCurrentModelVersion;
     }
 
-    public SelectionResult Select(
+    public async Task<SelectionResult> SelectAsync(
         DecodeMessage target,
         string expectedCall,
         AppSettings settings,
         JtdxVisibleRowModel visibleRows,
         JtdxBandActivityGridCalibration calibration,
-        string dxCallBefore)
+        string dxCallBefore,
+        Func<TimeSpan, Task> delayAsync)
     {
         var result = new SelectionResult
         {
@@ -39,63 +41,70 @@ public sealed class JtdxGuiGridSelector
             return Fail(result, SelectionFailureReason.CalibrationMissing, "GUI selection is disabled.");
 
         if (!calibration.IsUsable)
-            return Fail(result, SelectionFailureReason.CalibrationMissing, "52-row Band Activity calibration is incomplete.");
+            return Fail(result, SelectionFailureReason.CalibrationMissing, $"{calibration.SafeVisibleFullRowCount}-row Band Activity calibration is incomplete.");
 
-        var window = _windowLocator.FindMainWindow(settings.JtdxWindowTitleMatch);
-        if (window == null)
-            return Fail(result, SelectionFailureReason.JtdxWindowNotFound, $"No JTDX window matched '{settings.JtdxWindowTitleMatch}'.");
-
-        if (!WindowMatchesCalibration(window, calibration))
-            return Fail(result, SelectionFailureReason.JtdxWindowNotFullScreen, $"Current JTDX window {window.Width}x{window.Height} does not match calibrated {calibration.JtdxWindowWidth}x{calibration.JtdxWindowHeight}.");
-
-        if (visibleRows.Rows.Count < calibration.SafeVisibleFullRowCount)
-            return Fail(result, SelectionFailureReason.NotCurrentVisibleRow, $"JTDX grid model is still filling ({visibleRows.Rows.Count}/{calibration.SafeVisibleFullRowCount} rows). Wait until the Band Activity pane has filled before grid-clicking.");
-
-        var row = visibleRows.FindDecode(target);
-        if (row == null)
-            return Fail(result, SelectionFailureReason.NotCurrentVisibleRow, "Target DecodeMessage object is not in the current visible row model.");
-
-        if (row.Kind == JtdxVisibleRowKind.MarkerRow)
-            return Fail(result, SelectionFailureReason.RowIsMarker, "Marker rows are not clickable.");
-
-        if (row.Kind == JtdxVisibleRowKind.IgnoredPartialRow)
-            return Fail(result, SelectionFailureReason.RowIsPartialIgnoredRow, "Ignored partial top row is not clickable.");
-
-        if (row.ScreenRowIndex < 0 || row.ScreenRowIndex >= calibration.SafeVisibleFullRowCount)
-            return Fail(result, SelectionFailureReason.RowOutsideSafeGrid, $"Row {row.ScreenRowIndex} is outside 0-{calibration.SafeVisibleFullRowCount - 1}.");
-
-        var maxAge = Math.Max(15, settings.JtdxGuiMaxRowAgeSeconds);
-        if (DateTime.Now - target.ReceivedAt > TimeSpan.FromSeconds(maxAge))
-            return Fail(result, SelectionFailureReason.NotCurrentVisibleRow, $"Target decode is older than {maxAge}s.");
-
-        if (_getCurrentModelVersion() != visibleRows.Version)
-            return Fail(result, SelectionFailureReason.DecodeBatchChangedBeforeClick, "A newer UDP decode batch arrived before the click.");
-
-        var clickX = window.Left + calibration.MessageClickXRelative;
-        var clickY = (int)Math.Round(window.Top + calibration.FirstFullRowCentreYRelative + row.ScreenRowIndex * calibration.RowHeight);
-        result.ScreenRowIndex = row.ScreenRowIndex;
-        result.ClickX = clickX;
-        result.ClickY = clickY;
-
+        var modelVersionBeforeSettle = visibleRows.Version;
+        var rowBeforeSettle = visibleRows.FindDecode(target)?.ScreenRowIndex;
+        var hiddenOverlays = JtdxBandActivityOverlay.HideAllForClick();
         try
         {
-            var hiddenOverlays = JtdxBandActivityOverlay.HideAllForClick();
-            Thread.Sleep(150);
+            // Let the remainder of the current UDP decode batch update the live row model,
+            // then calculate the physical row immediately before the double-click.
+            await delayAsync(RowSettleDelay);
+            result.VisibleRowModelVersion = visibleRows.Version;
+
+            var window = _windowLocator.FindMainWindow(settings.JtdxWindowTitleMatch);
+            if (window == null)
+                return Fail(result, SelectionFailureReason.JtdxWindowNotFound, $"No JTDX window matched '{settings.JtdxWindowTitleMatch}'.");
+
+            if (window.IsMinimized)
+                return Fail(result, SelectionFailureReason.JtdxWindowMinimized, "JTDX is minimised. Restore it before GUI row selection.");
+
+            if (!WindowMatchesCalibration(window, calibration))
+                return Fail(result, SelectionFailureReason.JtdxWindowNotFullScreen, $"JTDX was resized: current {window.Width}x{window.Height}, calibrated {calibration.JtdxWindowWidth}x{calibration.JtdxWindowHeight}. Realign the {calibration.SafeVisibleFullRowCount}-row grid before GUI selection.");
+
+            if (visibleRows.Rows.Count < calibration.SafeVisibleFullRowCount)
+                return Fail(result, SelectionFailureReason.NotCurrentVisibleRow, $"JTDX grid model is still filling ({visibleRows.Rows.Count}/{calibration.SafeVisibleFullRowCount} rows). Wait until the Band Activity pane has filled before grid-clicking.");
+
+            var settledModelVersion = visibleRows.Version;
+            var row = visibleRows.FindDecode(target);
+            if (row == null)
+                return Fail(result, SelectionFailureReason.NotCurrentVisibleRow, "Target DecodeMessage object is not in the current visible row model after the 150 ms settling period.");
+
+            if (row.Kind == JtdxVisibleRowKind.MarkerRow)
+                return Fail(result, SelectionFailureReason.RowIsMarker, "Marker rows are not clickable.");
+
+            if (row.Kind == JtdxVisibleRowKind.IgnoredPartialRow)
+                return Fail(result, SelectionFailureReason.RowIsPartialIgnoredRow, "Ignored partial top row is not clickable.");
+
+            if (row.ScreenRowIndex < 0 || row.ScreenRowIndex >= calibration.SafeVisibleFullRowCount)
+                return Fail(result, SelectionFailureReason.RowOutsideSafeGrid, $"Row {row.ScreenRowIndex} is outside 0-{calibration.SafeVisibleFullRowCount - 1}.");
+
+            if (_getCurrentModelVersion() != settledModelVersion || visibleRows.Version != settledModelVersion)
+                return Fail(result, SelectionFailureReason.DecodeBatchChangedBeforeClick, "A newer UDP decode changed the row model during final selection.");
+
+            var clickX = window.Left + calibration.MessageClickXRelative;
+            var clickY = (int)Math.Round(window.Top + calibration.FirstFullRowCentreYRelative + row.ScreenRowIndex * calibration.RowHeight);
+            result.ScreenRowIndex = row.ScreenRowIndex;
+            result.ClickX = clickX;
+            result.ClickY = clickY;
+
             try
             {
                 _clicker.MoveDoubleClickRestore(clickX, clickY);
+                result.SelectionActionAt = DateTime.Now;
             }
-            finally
+            catch (Exception ex)
             {
-                JtdxBandActivityOverlay.RestoreHiddenAfterClick(hiddenOverlays);
+                return Fail(result, SelectionFailureReason.GuiClickFailed, ex.GetBaseException().Message);
             }
 
-            result.Details = $"GUI grid double-click row {row.ScreenRowIndex} at {clickX},{clickY}.";
+            result.Details = $"GUI grid settled 150 ms; model v{modelVersionBeforeSettle} row {rowBeforeSettle?.ToString() ?? "not visible"} became v{settledModelVersion} row {row.ScreenRowIndex}; double-clicked at {clickX},{clickY}.";
             return result;
         }
-        catch (Exception ex)
+        finally
         {
-            return Fail(result, SelectionFailureReason.GuiClickFailed, ex.GetBaseException().Message);
+            JtdxBandActivityOverlay.RestoreHiddenAfterClick(hiddenOverlays);
         }
     }
 

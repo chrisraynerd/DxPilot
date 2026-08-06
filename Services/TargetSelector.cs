@@ -24,9 +24,8 @@ public sealed class TargetSelector
 
     public IReadOnlyList<DxTarget> SelectDxSeenRanked(IEnumerable<DecodeMessage> decodes, IReadOnlyCollection<AdifQso> logbook, WorkedStatusIndexes indexes, AppSettings settings, int count)
     {
-        var maxAge = Math.Max(30, settings.CandidateMaxAgeSeconds);
         var recent = decodes
-            .Where(d => d.ReceivedAt > DateTime.Now.AddSeconds(-maxAge))
+            .Where(d => IsWithinStaleWindow(d, indexes, settings))
             .ToList();
 
         return OrderAndGroup(recent
@@ -39,11 +38,24 @@ public sealed class TargetSelector
             .ToList();
     }
 
+    public IReadOnlyList<DxTarget> SelectLocationRanked(IEnumerable<DecodeMessage> decodes, IReadOnlyCollection<AdifQso> logbook, WorkedStatusIndexes indexes, AppSettings settings, int count)
+    {
+        var recent = decodes
+            .Where(d => IsWithinStaleWindow(d, indexes, settings))
+            .ToList();
+
+        return OrderAndGroup(recent
+                .Where(d => !string.IsNullOrWhiteSpace(d.Callsign))
+                .Where(d => d.ParseConfidence != ParseConfidence.Low)
+                .Select(d => MarkSelectability(_scorer.Score(d, logbook, indexes, recent, settings), d)))
+            .Take(Math.Max(1, count))
+            .ToList();
+    }
+
     public IReadOnlyList<DxTarget> SelectRanked(IEnumerable<DecodeMessage> decodes, IReadOnlyCollection<AdifQso> logbook, WorkedStatusIndexes indexes, AppSettings settings, int count, bool includeActiveQso = true)
     {
-        var maxAge = Math.Max(30, settings.CandidateMaxAgeSeconds);
         var recent = decodes
-            .Where(d => d.ReceivedAt > DateTime.Now.AddSeconds(-maxAge))
+            .Where(d => IsWithinStaleWindow(d, indexes, settings))
             .ToList();
 
         var incomingMode = string.IsNullOrWhiteSpace(settings.AcceptIncomingCallsMode)
@@ -99,6 +111,20 @@ public sealed class TargetSelector
             .ThenByDescending(t => t.Ranking.FreshnessScore)
             .ThenByDescending(t => t.Ranking.SignalScore)
             .ThenBy(t => t.Ranking.PenaltyScore);
+    }
+
+    private static bool IsWithinStaleWindow(DecodeMessage decode, WorkedStatusIndexes indexes, AppSettings settings)
+    {
+        var maxAge = IsNewDxcc(decode, indexes)
+            ? Math.Max(Math.Max(30, settings.CandidateMaxAgeSeconds), settings.NewDxccStaleSeconds)
+            : Math.Max(30, settings.CandidateMaxAgeSeconds);
+        return decode.ReceivedAt > DateTime.Now.AddSeconds(-maxAge);
+    }
+
+    private static bool IsNewDxcc(DecodeMessage decode, WorkedStatusIndexes indexes)
+    {
+        return !string.IsNullOrWhiteSpace(decode.Dxcc)
+            && (!indexes.Dxcc.TryGetValue(decode.Dxcc, out var status) || !status.WorkedAny);
     }
 
     private static DxTarget MarkSelectability(DxTarget target, DecodeMessage decode)
@@ -191,6 +217,7 @@ public sealed class TargetSelector
             Dt = decode.Dt,
             AudioOffset = decode.AudioOffset,
             Mode = decode.Mode,
+            ProtocolMode = decode.ProtocolMode,
             RawText = decode.RawText,
             SourceAppId = decode.SourceAppId,
             MessageType = decode.MessageType,
@@ -228,6 +255,8 @@ public sealed class TargetSelector
             Grid = decode.Grid,
             Dxcc = decode.Dxcc,
             EntityName = decode.EntityName,
+            Continent = decode.Continent,
+            Iota = decode.Iota,
             State = decode.State,
             Band = decode.Band,
             DistanceKm = decode.DistanceKm,

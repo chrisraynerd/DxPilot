@@ -31,7 +31,15 @@ public sealed class JtdxWindowLocator
             if (score > bestScore)
             {
                 bestScore = score;
-                best = new JtdxWindowInfo(hwnd, title, processId, rect.Left, rect.Top, rect.Right, rect.Bottom);
+                best = new JtdxWindowInfo(
+                    hwnd,
+                    title,
+                    processId,
+                    rect.Left,
+                    rect.Top,
+                    rect.Right,
+                    rect.Bottom,
+                    IsIconic(hwnd));
             }
 
             return true;
@@ -104,6 +112,9 @@ public sealed class JtdxWindowLocator
     [DllImport("user32.dll")]
     private static extern bool IsWindowVisible(IntPtr hWnd);
 
+    [DllImport("user32.dll")]
+    private static extern bool IsIconic(IntPtr hWnd);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
 
@@ -131,7 +142,15 @@ public sealed class JtdxWindowLocator
     }
 }
 
-public sealed record JtdxWindowInfo(IntPtr Handle, string Title, uint ProcessId, int Left, int Top, int Right, int Bottom)
+public sealed record JtdxWindowInfo(
+    IntPtr Handle,
+    string Title,
+    uint ProcessId,
+    int Left,
+    int Top,
+    int Right,
+    int Bottom,
+    bool IsMinimized = false)
 {
     public int Width => Right - Left;
     public int Height => Bottom - Top;

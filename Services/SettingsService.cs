@@ -1,4 +1,6 @@
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using JtdxAutoResume.V3.Models;
 
@@ -17,7 +19,11 @@ public sealed class SettingsService
         "LoTWOrPaper",
         "LoTWOrPaperOrEqsl"
     };
-    private readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
+    private readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true
+    };
 
     public string AppFolder { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -32,20 +38,22 @@ public sealed class SettingsService
         {
             Directory.CreateDirectory(AppFolder);
             if (!File.Exists(SettingsFile))
-                return new AppSettings();
+            {
+                var defaults = new AppSettings();
+                NormalizeLocationHuntAreas(defaults);
+                return defaults;
+            }
 
-            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsFile)) ?? new AppSettings();
-            NormalizeCoordinateDefaults(settings);
-            NormalizeUdpBridgeDefaults(settings);
-            NormalizeTimingDefaults(settings);
-            NormalizeAdifDefaults(settings);
-            NormalizeLayoutDefaults(settings);
-            NormalizeJtdxGuiSelectionDefaults(settings);
+            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsFile), _jsonOptions) ?? new AppSettings();
+            NormalizeSettings(settings);
+            settings.QrzPassword = UnprotectSecret(settings.QrzPasswordProtected);
             return settings;
         }
         catch
         {
-            return new AppSettings();
+            var defaults = new AppSettings();
+            NormalizeLocationHuntAreas(defaults);
+            return defaults;
         }
     }
 
@@ -54,11 +62,273 @@ public sealed class SettingsService
         try
         {
             Directory.CreateDirectory(AppFolder);
+            if (!string.IsNullOrWhiteSpace(settings.QrzPassword))
+                settings.QrzPasswordProtected = ProtectSecret(settings.QrzPassword);
             File.WriteAllText(SettingsFile, JsonSerializer.Serialize(settings, _jsonOptions));
         }
         catch
         {
         }
+    }
+
+    public void ExportPortableSettings(
+        string filePath,
+        AppSettings settings,
+        IEnumerable<BandScheduleItem> schedule)
+    {
+        var portableSettings = CloneSettings(settings);
+        portableSettings.QrzPassword = "";
+        portableSettings.QrzPasswordProtected = "";
+
+        var package = new SettingsTransferPackage
+        {
+            ExportedAtUtc = DateTime.UtcNow,
+            QrzPasswordExcluded = true,
+            Settings = portableSettings,
+            Schedule = schedule.Select(CloneScheduleItem).ToList()
+        };
+
+        var directory = Path.GetDirectoryName(filePath);
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
+        File.WriteAllText(filePath, JsonSerializer.Serialize(package, _jsonOptions), Encoding.UTF8);
+    }
+
+    public bool TryReadSettingsImport(
+        string filePath,
+        out SettingsImportPayload payload,
+        out string error)
+    {
+        payload = new SettingsImportPayload();
+        error = "";
+
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(filePath));
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                error = "The selected file does not contain a settings object.";
+                return false;
+            }
+
+            var root = document.RootElement;
+            if (TryGetProperty(root, "Format", out var formatElement))
+            {
+                var format = formatElement.GetString() ?? "";
+                if (!format.Equals(SettingsTransferPackage.ExpectedFormat, StringComparison.Ordinal))
+                {
+                    error = $"Unsupported settings export format '{format}'.";
+                    return false;
+                }
+
+                var package = JsonSerializer.Deserialize<SettingsTransferPackage>(root.GetRawText(), _jsonOptions);
+                if (package == null
+                    || package.FormatVersion is < 1 or > SettingsTransferPackage.CurrentFormatVersion
+                    || package.Settings == null)
+                {
+                    error = "The settings export version is missing or unsupported.";
+                    return false;
+                }
+
+                payload = new SettingsImportPayload
+                {
+                    Settings = package.Settings,
+                    Schedule = package.Schedule?.Select(CloneScheduleItem).ToList(),
+                    ExportedAtUtc = package.ExportedAtUtc,
+                    QrzPasswordExcluded = package.QrzPasswordExcluded
+                };
+            }
+            else
+            {
+                var looksLikeLegacySettings = new[]
+                {
+                    "JtdxBandVisibleRowCount",
+                    "UdpListenPort",
+                    "MyCallsign",
+                    "EnableTxX"
+                }.Any(name => TryGetProperty(root, name, out _));
+
+                if (!looksLikeLegacySettings)
+                {
+                    error = "The selected JSON file is not an AutoResume settings export.";
+                    return false;
+                }
+
+                var legacy = JsonSerializer.Deserialize<AppSettings>(root.GetRawText(), _jsonOptions);
+                if (legacy == null)
+                {
+                    error = "The legacy settings file could not be read.";
+                    return false;
+                }
+
+                payload = new SettingsImportPayload
+                {
+                    Settings = legacy,
+                    Schedule = null,
+                    IsLegacySettingsFile = true,
+                    QrzPasswordExcluded = string.IsNullOrWhiteSpace(legacy.QrzPasswordProtected)
+                };
+            }
+
+            if (payload.Settings.JtdxBandVisibleRowCount != 0
+                && payload.Settings.JtdxBandVisibleRowCount is < 5 or > 200)
+            {
+                error = "The visible JTDX row count must be between 5 and 200.";
+                return false;
+            }
+
+            NormalizeSettings(payload.Settings);
+            if (!ValidateImportedSettings(payload.Settings, payload.Schedule, out error))
+                return false;
+
+            payload.Settings.QrzPassword = UnprotectSecret(payload.Settings.QrzPasswordProtected);
+            return true;
+        }
+        catch (JsonException ex)
+        {
+            error = $"The selected file is not valid JSON: {ex.Message}";
+            return false;
+        }
+        catch (Exception ex)
+        {
+            error = $"The selected settings file could not be read: {ex.GetBaseException().Message}";
+            return false;
+        }
+    }
+
+    public string BackupCurrentConfiguration()
+    {
+        Directory.CreateDirectory(AppFolder);
+        var backupFolder = Path.Combine(
+            AppFolder,
+            "Settings Backups",
+            $"PreImport-{DateTime.Now:yyyyMMdd-HHmmss-fff}");
+        Directory.CreateDirectory(backupFolder);
+
+        if (File.Exists(SettingsFile))
+            File.Copy(SettingsFile, Path.Combine(backupFolder, Path.GetFileName(SettingsFile)));
+        if (File.Exists(ScheduleFile))
+            File.Copy(ScheduleFile, Path.Combine(backupFolder, Path.GetFileName(ScheduleFile)));
+
+        return backupFolder;
+    }
+
+    public void ApplyImportedConfiguration(SettingsImportPayload payload)
+    {
+        var importedSettings = CloneSettings(payload.Settings);
+        if (!string.IsNullOrWhiteSpace(importedSettings.QrzPassword))
+            importedSettings.QrzPasswordProtected = ProtectSecret(importedSettings.QrzPassword);
+        WriteTextAtomic(SettingsFile, JsonSerializer.Serialize(importedSettings, _jsonOptions));
+
+        if (payload.Schedule != null)
+        {
+            var schedule = payload.Schedule.Select(CloneScheduleItem).ToList();
+            WriteTextAtomic(ScheduleFile, JsonSerializer.Serialize(schedule, _jsonOptions));
+        }
+    }
+
+    private static bool ValidateImportedSettings(
+        AppSettings settings,
+        IReadOnlyCollection<BandScheduleItem>? schedule,
+        out string error)
+    {
+        error = "";
+        if (settings.UdpListenPort is < 1 or > 65535
+            || settings.UdpReplyFallbackPort is < 1 or > 65535
+            || settings.UdpForwardPort is < 1 or > 65535)
+        {
+            error = "The settings file contains an invalid UDP port.";
+            return false;
+        }
+
+        if (settings.JtdxBandVisibleRowCount != 0
+            && settings.JtdxBandVisibleRowCount is < 5 or > 200)
+        {
+            error = "The visible JTDX row count must be between 5 and 200.";
+            return false;
+        }
+
+        if (settings.IntervalMs is < 50 or > 60_000
+            || settings.CandidateMaxAgeSeconds is < 0 or > 86_400
+            || settings.NewDxccStaleSeconds is < 0 or > 86_400)
+        {
+            error = "The settings file contains an invalid timing value.";
+            return false;
+        }
+
+        if (schedule != null
+            && schedule.Any(item => item.Hour is < 0 or > 23 || item.Minute is < 0 or > 59))
+        {
+            error = "The settings file contains an invalid scheduler time.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private void WriteTextAtomic(string destination, string content)
+    {
+        Directory.CreateDirectory(AppFolder);
+        var temporary = destination + ".import-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            File.WriteAllText(temporary, content, Encoding.UTF8);
+            File.Move(temporary, destination, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporary))
+                File.Delete(temporary);
+        }
+    }
+
+    private AppSettings CloneSettings(AppSettings settings)
+    {
+        return JsonSerializer.Deserialize<AppSettings>(
+            JsonSerializer.Serialize(settings, _jsonOptions),
+            _jsonOptions) ?? new AppSettings();
+    }
+
+    private static BandScheduleItem CloneScheduleItem(BandScheduleItem item)
+    {
+        return new BandScheduleItem
+        {
+            Enabled = item.Enabled,
+            Label = item.Label,
+            Hour = item.Hour,
+            Minute = item.Minute,
+            X = item.X,
+            Y = item.Y
+        };
+    }
+
+    private static bool TryGetProperty(JsonElement element, string name, out JsonElement value)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (property.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static void NormalizeSettings(AppSettings settings)
+    {
+        NormalizeCoordinateDefaults(settings);
+        NormalizeUdpBridgeDefaults(settings);
+        NormalizeTimingDefaults(settings);
+        NormalizeAdifDefaults(settings);
+        NormalizeWantedDefaults(settings);
+        NormalizeLayoutDefaults(settings);
+        NormalizeJtdxGuiSelectionDefaults(settings);
+        NormalizeQrzDefaults(settings);
+        NormalizePermanentSuppressions(settings);
+        NormalizeLocationHuntAreas(settings);
     }
 
     private static void NormalizeUdpBridgeDefaults(AppSettings settings)
@@ -126,17 +396,35 @@ public sealed class SettingsService
         if (string.IsNullOrWhiteSpace(settings.WrongTargetActiveQsoPolicy))
             settings.WrongTargetActiveQsoPolicy = "AdoptAndMonitor";
 
+        if (settings.CandidateMaxAgeSeconds <= 0 || settings.CandidateMaxAgeSeconds == 60)
+            settings.CandidateMaxAgeSeconds = 90;
+
+        if (settings.NewDxccStaleSeconds <= 0)
+            settings.NewDxccStaleSeconds = 240;
+
         if (settings.WantedItemExpirySeconds <= 0)
-            settings.WantedItemExpirySeconds = 180;
+            settings.WantedItemExpirySeconds = settings.CandidateMaxAgeSeconds;
 
         if (settings.ManualWantedMaxAgeSeconds <= 0)
-            settings.ManualWantedMaxAgeSeconds = 90;
+            settings.ManualWantedMaxAgeSeconds = settings.CandidateMaxAgeSeconds;
+
+        if (settings.QrzLookupTimeoutSeconds <= 0)
+            settings.QrzLookupTimeoutSeconds = 3;
+
+        if (settings.QrzSuccessCacheDays <= 0)
+            settings.QrzSuccessCacheDays = 180;
+
+        if (settings.QrzNotFoundCacheDays <= 0)
+            settings.QrzNotFoundCacheDays = 14;
+
+        if (settings.QrzDelayBetweenLookupsMs <= 0)
+            settings.QrzDelayBetweenLookupsMs = 200;
+
+        if (settings.QrzLookupQueueLimit <= 0)
+            settings.QrzLookupQueueLimit = 2000;
 
         if (!Enum.TryParse<JtdxAutoResume.V3.Models.WantedScope>(settings.WantedScope, ignoreCase: true, out _))
             settings.WantedScope = JtdxAutoResume.V3.Models.WantedScope.Overall.ToString();
-
-        if (!Enum.TryParse<JtdxAutoResume.V3.Models.WantedSniperMode>(settings.WantedSniperMode, ignoreCase: true, out _))
-            settings.WantedSniperMode = JtdxAutoResume.V3.Models.WantedSniperMode.Off.ToString();
 
         if (settings.CompletionGraceCycles <= 0)
             settings.CompletionGraceCycles = 2;
@@ -167,9 +455,6 @@ public sealed class SettingsService
         if (string.IsNullOrWhiteSpace(settings.SessionHistoryGroupMode))
             settings.SessionHistoryGroupMode = "ByCall";
 
-        if (settings.CandidateMaxAgeSeconds <= 0)
-            settings.CandidateMaxAgeSeconds = 90;
-
         if (string.IsNullOrWhiteSpace(settings.HuntingMode))
             settings.HuntingMode = "DXCC Hunter";
 
@@ -177,6 +462,88 @@ public sealed class SettingsService
             || settings.DxccRarityFilePath.EndsWith("DXCC-Rankings.csv", StringComparison.OrdinalIgnoreCase))
         {
             settings.DxccRarityFilePath = Path.Combine(AppContext.BaseDirectory, "Data", "DXCC-UK-Desirability-G1CEC.csv");
+        }
+    }
+
+    private static void NormalizeQrzDefaults(AppSettings settings)
+    {
+        if (settings.QrzCircuitBreakerFailureCount <= 0)
+            settings.QrzCircuitBreakerFailureCount = 5;
+
+        if (settings.QrzCircuitBreakerMinutes <= 0)
+            settings.QrzCircuitBreakerMinutes = 5;
+
+        if (string.IsNullOrWhiteSpace(settings.QrzTestCallsign))
+            settings.QrzTestCallsign = settings.MyCallsign;
+    }
+
+    private static void NormalizePermanentSuppressions(AppSettings settings)
+    {
+        settings.PermanentlySuppressedCallsigns = (settings.PermanentlySuppressedCallsigns ?? new List<string>())
+            .Select(CallsignNormalizer.Normalize)
+            .Where(CallsignNormalizer.IsValidLookupCallsign)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(call => call, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static void NormalizeLocationHuntAreas(AppSettings settings)
+    {
+        var validKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "USA", "AF", "AS", "EU", "NA", "SA", "OC", "IOTA", "OTHER"
+        };
+
+        if (settings.LocationHuntAreas == null)
+        {
+            settings.LocationHuntAreas = settings.LocationProfile switch
+            {
+                "USA" => new List<string> { "USA" },
+                "Africa" => new List<string> { "AF" },
+                "Asia" => new List<string> { "AS" },
+                "Europe" => new List<string> { "EU" },
+                "Americas" => new List<string> { "USA", "NA", "SA" },
+                "Oceania" => new List<string> { "OC" },
+                "USA + Africa" => new List<string> { "USA", "AF" },
+                "Africa + Asia" => new List<string> { "AF", "AS" },
+                "IOTA" => new List<string> { "IOTA" },
+                _ => validKeys.ToList()
+            };
+        }
+
+        settings.LocationHuntAreas = settings.LocationHuntAreas
+            .Where(validKeys.Contains)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static string ProtectSecret(string secret)
+    {
+        try
+        {
+            var bytes = Encoding.UTF8.GetBytes(secret);
+            var protectedBytes = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
+            return Convert.ToBase64String(protectedBytes);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static string UnprotectSecret(string protectedSecret)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(protectedSecret))
+                return "";
+
+            var bytes = Convert.FromBase64String(protectedSecret);
+            return Encoding.UTF8.GetString(ProtectedData.Unprotect(bytes, null, DataProtectionScope.CurrentUser));
+        }
+        catch
+        {
+            return "";
         }
     }
 
@@ -200,6 +567,8 @@ public sealed class SettingsService
 
         settings.AdifFilePath = settings.LiveJtdxAdifPath;
 
+        settings.JtdxAllTxtPath = JtdxAllTxtMonitor.ResolveCurrentPath(settings.JtdxAllTxtPath);
+
         if (!ConfirmationModes.Contains(settings.DxccConfirmationMode))
             settings.DxccConfirmationMode = "LoTWOnly";
         if (!ConfirmationModes.Contains(settings.GridConfirmationMode))
@@ -218,6 +587,20 @@ public sealed class SettingsService
             900);
     }
 
+    private static void NormalizeWantedDefaults(AppSettings settings)
+    {
+        if (string.Equals(settings.WantedScope, "CurrentBand", StringComparison.OrdinalIgnoreCase))
+            settings.IncludeBandWanted = true;
+        else if (string.Equals(settings.WantedScope, "CurrentMode", StringComparison.OrdinalIgnoreCase))
+            settings.IncludeModeWanted = true;
+        else if (string.Equals(settings.WantedScope, "CurrentBandMode", StringComparison.OrdinalIgnoreCase))
+            settings.IncludeBandModeWanted = true;
+
+        // Overall awards are now always evaluated. These independent optional
+        // scopes replace the old mutually-exclusive scope selector.
+        settings.WantedScope = "Overall";
+    }
+
     private static void NormalizeJtdxGuiSelectionDefaults(AppSettings settings)
     {
         if (string.IsNullOrWhiteSpace(settings.JtdxWindowTitleMatch))
@@ -226,10 +609,9 @@ public sealed class SettingsService
         if (settings.JtdxBandDpiScale <= 0)
             settings.JtdxBandDpiScale = 1.0;
 
-        if (settings.JtdxGuiMaxRowAgeSeconds <= 0)
-            settings.JtdxGuiMaxRowAgeSeconds = 45;
-
-        settings.JtdxBandVisibleRowCount = JtdxAutoResume.V3.Controls.JtdxSelection.JtdxBandActivityGridCalibration.SafeFullRowCount;
+        settings.JtdxBandVisibleRowCount =
+            JtdxAutoResume.V3.Controls.JtdxSelection.JtdxBandActivityGridCalibration.NormalizeRowCount(
+                settings.JtdxBandVisibleRowCount);
         settings.JtdxBandIgnoredPartialTopRow = true;
 
         if (settings.JtdxBandActivityRight <= settings.JtdxBandActivityLeft

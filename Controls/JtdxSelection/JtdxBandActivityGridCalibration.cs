@@ -5,7 +5,9 @@ namespace JtdxAutoResume.V3.Controls.JtdxSelection;
 
 public sealed class JtdxBandActivityGridCalibration
 {
-    public const int SafeFullRowCount = 52;
+    public const int DefaultVisibleRowCount = 52;
+    public const int MinimumVisibleRowCount = 5;
+    public const int MaximumVisibleRowCount = 200;
     public const int DefaultBandActivityLeft = 12;
     public const int DefaultBandActivityTop = 73;
     public const int DefaultBandActivityRight = 763;
@@ -27,15 +29,19 @@ public sealed class JtdxBandActivityGridCalibration
     public int BandActivityHeight { get; set; }
     public int FirstFullRowCentreYRelative { get; set; }
     public double RowHeight { get; set; }
-    public int SafeVisibleFullRowCount { get; set; } = SafeFullRowCount;
+    public int SafeVisibleFullRowCount { get; set; } = DefaultVisibleRowCount;
     public bool IgnoredPartialTopRow { get; set; } = true;
     public int MessageClickXRelative { get; set; }
     public bool NewestRowsAtBottom { get; set; } = true;
     public string Version { get; set; } = "grid-v1";
     public DateTime CalibrationDate { get; set; } = DateTime.Now;
 
-    public static JtdxBandActivityGridCalibration CreateDefault(JtdxWindowInfo window)
+    public static JtdxBandActivityGridCalibration CreateDefault(
+        JtdxWindowInfo window,
+        int visibleRowCount = DefaultVisibleRowCount)
     {
+        visibleRowCount = NormalizeRowCount(visibleRowCount);
+        var rowHeight = (DefaultBandActivityBottom - DefaultBandActivityTop) / (visibleRowCount + 0.5);
         return new JtdxBandActivityGridCalibration
         {
             MonitorId = $"{window.Left},{window.Top}",
@@ -49,9 +55,9 @@ public sealed class JtdxBandActivityGridCalibration
             BandActivityTopRelative = DefaultBandActivityTop,
             BandActivityWidth = DefaultBandActivityRight - DefaultBandActivityLeft,
             BandActivityHeight = DefaultBandActivityBottom - DefaultBandActivityTop,
-            FirstFullRowCentreYRelative = DefaultFirstFullRowCentreY,
-            RowHeight = DefaultRowHeight,
-            SafeVisibleFullRowCount = SafeFullRowCount,
+            FirstFullRowCentreYRelative = (int)Math.Round(DefaultBandActivityTop + rowHeight),
+            RowHeight = rowHeight,
+            SafeVisibleFullRowCount = visibleRowCount,
             IgnoredPartialTopRow = true,
             MessageClickXRelative = DefaultMessageClickX,
             NewestRowsAtBottom = true,
@@ -62,7 +68,7 @@ public sealed class JtdxBandActivityGridCalibration
 
     public static JtdxBandActivityGridCalibration FromSettings(AppSettings settings)
     {
-        var rowCount = settings.JtdxBandVisibleRowCount <= 0 ? SafeFullRowCount : settings.JtdxBandVisibleRowCount;
+        var rowCount = NormalizeRowCount(settings.JtdxBandVisibleRowCount);
         return new JtdxBandActivityGridCalibration
         {
             MonitorId = settings.JtdxBandMonitorId,
@@ -102,7 +108,7 @@ public sealed class JtdxBandActivityGridCalibration
         settings.JtdxBandActivityBottom = BandActivityTopRelative + BandActivityHeight;
         settings.JtdxBandFirstRowCenterY = FirstFullRowCentreYRelative;
         settings.JtdxBandRowHeight = RowHeight;
-        settings.JtdxBandVisibleRowCount = SafeVisibleFullRowCount;
+        settings.JtdxBandVisibleRowCount = NormalizeRowCount(SafeVisibleFullRowCount);
         settings.JtdxBandIgnoredPartialTopRow = IgnoredPartialTopRow;
         settings.JtdxBandMessageClickX = MessageClickXRelative;
         settings.JtdxBandNewestRowsAtBottom = NewestRowsAtBottom;
@@ -115,5 +121,13 @@ public sealed class JtdxBandActivityGridCalibration
         && FirstFullRowCentreYRelative > 0
         && RowHeight > 0
         && MessageClickXRelative > 0
-        && SafeVisibleFullRowCount == SafeFullRowCount;
+        && SafeVisibleFullRowCount is >= MinimumVisibleRowCount and <= MaximumVisibleRowCount;
+
+    public static int NormalizeRowCount(int rowCount)
+    {
+        if (rowCount <= 0)
+            return DefaultVisibleRowCount;
+
+        return Math.Clamp(rowCount, MinimumVisibleRowCount, MaximumVisibleRowCount);
+    }
 }

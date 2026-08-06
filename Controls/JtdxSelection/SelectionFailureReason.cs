@@ -9,6 +9,7 @@ public enum SelectionFailureReason
     RowOutsideSafeGrid,
     CalibrationMissing,
     JtdxWindowNotFound,
+    JtdxWindowMinimized,
     JtdxWindowNotFullScreen,
     DecodeBatchChangedBeforeClick,
     ConfirmationTimedOut,

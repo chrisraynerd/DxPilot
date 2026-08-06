@@ -121,8 +121,11 @@ public sealed class AdifWorkedStatusBuilder
                     AddSimple(indexes.Grids, normalized.Grid4, qso, settings.GridConfirmationMode);
             }
 
-            if (!string.IsNullOrWhiteSpace(qso.State))
-                AddSimple(indexes.States, qso.State, qso, settings.StateConfirmationMode);
+            var wasState = WasStateEligibility.NormalizeState(
+                qso,
+                settings.IncludeDistrictOfColumbia);
+            if (!string.IsNullOrWhiteSpace(wasState))
+                AddSimple(indexes.States, wasState, qso, settings.StateConfirmationMode);
 
             if (!string.IsNullOrWhiteSpace(qso.Iota))
                 AddSimple(indexes.Iotas, qso.Iota, qso, settings.IotaConfirmationMode);

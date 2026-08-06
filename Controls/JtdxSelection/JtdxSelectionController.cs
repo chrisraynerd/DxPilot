@@ -9,6 +9,7 @@ public sealed class JtdxSelectionController
     private readonly JtdxGuiGridSelector _guiGridSelector;
     private readonly JtdxVisibleRowModel _visibleRowModel;
     private readonly Func<string> _getCurrentDxCall;
+    private readonly Func<JtdxStatusMessage?> _getCurrentStatus;
     private readonly Func<TimeSpan, Task> _delayAsync;
 
     public JtdxSelectionController(
@@ -16,12 +17,14 @@ public sealed class JtdxSelectionController
         JtdxGuiGridSelector guiGridSelector,
         JtdxVisibleRowModel visibleRowModel,
         Func<string> getCurrentDxCall,
+        Func<JtdxStatusMessage?> getCurrentStatus,
         Func<TimeSpan, Task>? delayAsync = null)
     {
         _udpReplySelector = udpReplySelector;
         _guiGridSelector = guiGridSelector;
         _visibleRowModel = visibleRowModel;
         _getCurrentDxCall = getCurrentDxCall;
+        _getCurrentStatus = getCurrentStatus;
         _delayAsync = delayAsync ?? (delay => Task.Delay(delay));
     }
 
@@ -32,26 +35,43 @@ public sealed class JtdxSelectionController
         IPEndPoint fallbackEndpoint,
         string appId,
         bool sendFallback,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        TimeSpan? confirmationTimeout = null,
+        Action<SelectionResult>? selectionActionObserver = null,
+        bool forceGuiGridClick = false)
     {
         var expectedCall = target.Callsign;
         var before = _getCurrentDxCall();
         var calibration = JtdxBandActivityGridCalibration.FromSettings(settings);
         SelectionResult result;
 
-        if (ShouldUseUdpReply(target.Decode))
+        if (!forceGuiGridClick && ShouldUseUdpReply(target.Decode))
         {
             result = await _udpReplySelector.SelectAsync(target.Decode, expectedCall, endpoint, fallbackEndpoint, appId, before, sendFallback, cancellationToken);
         }
         else
         {
-            result = _guiGridSelector.Select(target.Decode, expectedCall, settings, _visibleRowModel, calibration, before);
+            result = await _guiGridSelector.SelectAsync(
+                target.Decode,
+                expectedCall,
+                settings,
+                _visibleRowModel,
+                calibration,
+                before,
+                _delayAsync);
         }
+
+        if (result.SelectionActionAt.HasValue)
+            selectionActionObserver?.Invoke(result);
 
         if (result.FailureReason != SelectionFailureReason.None)
             return result;
 
-        return await ConfirmAsync(result, expectedCall, TimeSpan.FromSeconds(Math.Max(1, settings.ReplyConfirmSeconds)), cancellationToken);
+        return await ConfirmAsync(
+            result,
+            expectedCall,
+            ConfirmationTimeoutFor(result, settings, confirmationTimeout),
+            cancellationToken);
     }
 
     public async Task<SelectionResult> SelectTargetByGridForTestAsync(
@@ -62,7 +82,14 @@ public sealed class JtdxSelectionController
         var expectedCall = target.Callsign;
         var before = _getCurrentDxCall();
         var calibration = JtdxBandActivityGridCalibration.FromSettings(settings);
-        var result = _guiGridSelector.Select(target.Decode, expectedCall, settings, _visibleRowModel, calibration, before);
+        var result = await _guiGridSelector.SelectAsync(
+            target.Decode,
+            expectedCall,
+            settings,
+            _visibleRowModel,
+            calibration,
+            before,
+            _delayAsync);
         if (result.FailureReason != SelectionFailureReason.None)
             return result;
 
@@ -79,31 +106,65 @@ public sealed class JtdxSelectionController
         return !ShouldUseUdpReply(decode) && _visibleRowModel.FindDecode(decode) != null;
     }
 
+    private static TimeSpan ConfirmationTimeoutFor(
+        SelectionResult result,
+        AppSettings settings,
+        TimeSpan? requestedTimeout)
+    {
+        if (requestedTimeout.HasValue)
+            return requestedTimeout.Value;
+
+        // A GUI double-click changes JTDX's DX Call immediately. Waiting for the
+        // general 30-second UDP timeout blocks CALL NOW and consumes whole FT8
+        // cycles while every recovery request is rejected as "still selecting".
+        return result.SelectionMethod == JtdxSelectionMethod.GuiGridDoubleClick
+            ? TimeSpan.FromSeconds(4)
+            : TimeSpan.FromSeconds(Math.Max(1, settings.ReplyConfirmSeconds));
+    }
+
     private async Task<SelectionResult> ConfirmAsync(SelectionResult result, string expectedCall, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var until = DateTime.Now + timeout;
         while (DateTime.Now < until && !cancellationToken.IsCancellationRequested)
         {
-            var current = _getCurrentDxCall();
+            var status = _getCurrentStatus();
+            var current = status?.DxCall?.Trim() ?? _getCurrentDxCall();
             result.JtdxDxCallAfter = current;
-            if (current.Equals(expectedCall, StringComparison.OrdinalIgnoreCase))
+            if (IsFreshMatchingStatus(status, expectedCall, result.SelectionActionAt))
             {
                 result.Success = true;
                 result.ConfirmationTime = DateTime.Now;
+                result.ConfirmationStatusReceivedAt = status!.ReceivedAt;
                 return result;
             }
 
             await _delayAsync(TimeSpan.FromMilliseconds(150));
         }
 
-        var after = _getCurrentDxCall();
+        var finalStatus = _getCurrentStatus();
+        var after = finalStatus?.DxCall?.Trim() ?? _getCurrentDxCall();
         result.JtdxDxCallAfter = after;
-        result.FailureReason = string.IsNullOrWhiteSpace(after)
+        var onlyStaleExpectedStatus = after.Equals(expectedCall, StringComparison.OrdinalIgnoreCase)
+            && !IsFreshMatchingStatus(finalStatus, expectedCall, result.SelectionActionAt);
+        result.FailureReason = string.IsNullOrWhiteSpace(after) || onlyStaleExpectedStatus
             ? SelectionFailureReason.ConfirmationTimedOut
             : SelectionFailureReason.JtdxSelectedWrongCall;
-        result.FailureDetail = string.IsNullOrWhiteSpace(after)
-            ? $"Timed out waiting for JTDX DX Call '{expectedCall}'."
-            : $"JTDX DX Call is '{after}', expected '{expectedCall}'.";
+        result.FailureDetail = onlyStaleExpectedStatus
+            ? $"DX Call was already '{expectedCall}' before selection, but no fresh JTDX Status confirmed it after the selection action."
+            : string.IsNullOrWhiteSpace(after)
+                ? $"Timed out waiting for a fresh JTDX Status with DX Call '{expectedCall}'."
+                : $"Fresh JTDX Status reports DX Call '{after}', expected '{expectedCall}'.";
         return result;
+    }
+
+    private static bool IsFreshMatchingStatus(
+        JtdxStatusMessage? status,
+        string expectedCall,
+        DateTime? selectionActionAt)
+    {
+        return status != null
+            && selectionActionAt.HasValue
+            && status.ReceivedAt >= selectionActionAt.Value
+            && status.DxCall.Trim().Equals(expectedCall, StringComparison.OrdinalIgnoreCase);
     }
 }

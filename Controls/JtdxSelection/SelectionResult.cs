@@ -23,7 +23,9 @@ public sealed class SelectionResult
     public string CalibrationVersion { get; set; } = "";
     public SelectionFailureReason FailureReason { get; set; }
     public string FailureDetail { get; set; } = "";
+    public DateTime? SelectionActionAt { get; set; }
     public DateTime? ConfirmationTime { get; set; }
+    public DateTime? ConfirmationStatusReceivedAt { get; set; }
     public long VisibleRowModelVersion { get; set; }
     public string Details { get; set; } = "";
 

@@ -29,6 +29,7 @@ public sealed class JtdxUdpReplySelector
             await _udpClient.SendReplyAsync(target, appId, endpoint, cancellationToken);
             if (sendFallback)
                 await _udpClient.SendReplyAsync(target, appId, fallbackEndpoint, cancellationToken);
+            result.SelectionActionAt = DateTime.Now;
 
             result.Details = sendFallback
                 ? $"UDP Reply sent to {endpoint.Address}:{endpoint.Port} and fallback {fallbackEndpoint.Address}:{fallbackEndpoint.Port}."

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using JtdxAutoResume.V3.ViewModels;
 
 namespace JtdxAutoResume.V3.Views;
@@ -44,5 +45,10 @@ public partial class DxAssistView : System.Windows.Controls.UserControl
     {
         var availableMax = Math.Max(300, DxAssistContentGrid.ActualWidth - 5 - 500 - 12);
         return Math.Clamp(width, 300, Math.Min(900, availableMax));
+    }
+
+    private void StationGrid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        DataGridContextMenuHelper.SelectRightClickedRow(sender, e);
     }
 }

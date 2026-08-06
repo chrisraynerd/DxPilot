@@ -8,6 +8,9 @@ public sealed class DecodeMessage
     public double Dt { get; set; }
     public int? AudioOffset { get; set; }
     public string Mode { get; set; } = "";
+    public string ProtocolMode { get; set; } = "";
+    public long RadioContextGeneration { get; set; }
+    public ulong DialFrequencyHz { get; set; }
     public string RawText { get; set; } = "";
     public string SourceAppId { get; set; } = "";
     public Ft8MessageType MessageType { get; set; } = Ft8MessageType.Unknown;
@@ -65,6 +68,15 @@ public sealed class DecodeMessage
     public string ParseDebugLine { get; set; } = "";
     public string Callsign { get; set; } = "";
     public string Grid { get; set; } = "";
+    public string TransmittedGrid { get; set; } = "";
+    public string SessionObservedGrid { get; set; } = "";
+    public string AdifGrid { get; set; } = "";
+    public string QrzGrid { get; set; } = "";
+    public string EffectiveGrid { get; set; } = "";
+    public DecodeGridSource EffectiveGridSource { get; set; } = DecodeGridSource.Unknown;
+    public CallsignLookupStatus CallsignLookupStatus { get; set; } = CallsignLookupStatus.Pending;
+    public CallsignDataSource CallsignDataSource { get; set; } = CallsignDataSource.Unknown;
+    public string CallsignLookupError { get; set; } = "";
     public string ReportedGrid
     {
         get => Grid;
@@ -78,6 +90,8 @@ public sealed class DecodeMessage
         set => Dxcc = value;
     }
     public string EntityName { get; set; } = "";
+    public string Continent { get; set; } = "";
+    public string Iota { get; set; } = "";
     public string EntitySource { get; set; } = "";
     public string EntityConfidence { get; set; } = "";
     public string EntityReason { get; set; } = "";
@@ -86,13 +100,26 @@ public sealed class DecodeMessage
     public double? EntityLongitude { get; set; }
     public string DistanceSource { get; set; } = "";
     public string State { get; set; } = "";
+    public string StateSource { get; set; } = "";
     public string Band { get; set; } = "";
     public double? DistanceKm { get; set; }
     public double? DistanceMiles => DistanceKm / 1.609344;
     public bool IsNewDxcc { get; set; }
+    public bool IsUnconfirmedDxcc { get; set; }
     public bool IsNewGrid { get; set; }
     public bool IsNewState { get; set; }
-    public string PriorityClass => IsNewDxcc ? "NewDxcc" : IsNewState ? "NewState" : IsNewGrid ? "NewGrid" : "";
+    public bool IsPermanentlySuppressed { get; set; }
+    public string PriorityClass => IsNewDxcc ? "NewDxcc" : IsUnconfirmedDxcc ? "UnconfirmedDxcc" : IsNewGrid ? "NewGrid" : IsNewState ? "NewState" : "";
+    public string OpportunityClass => PriorityClass;
+    public string ActionStateClass => IsPermanentlySuppressed ? "PermanentlySuppressed" : LowConfidence ? "Muted" : "";
+    public string RankText { get; set; } = "";
+    public string JtdxRow { get; set; } = "";
+    public string AgeText { get; set; } = "";
+    public string WantedReasonDisplay { get; set; } = "";
+    public string StationStatusDisplay { get; set; } = "";
+    public bool WasCallWorkedBefore { get; set; }
+    public string WorkedCallToolTip { get; set; } = "";
+    public string CountryDisplay => string.IsNullOrWhiteSpace(EntityName) ? PrimaryDisplayEntity : EntityName;
     public bool LowConfidence { get; set; }
     public string DisplayTime => DecodeTime?.ToString(@"hh\:mm\:ss") ?? ReceivedAt.ToString("HH:mm:ss");
 }

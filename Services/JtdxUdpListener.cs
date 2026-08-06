@@ -16,6 +16,7 @@ public sealed class JtdxUdpListener : IDisposable
     private CancellationTokenSource? _cts;
     private IPEndPoint? _forwardEndpoint;
     private long _packetCount;
+    private long _decodeCount;
 
     public bool IsRunning => _udpClient != null;
     public IPEndPoint? LastSenderEndpoint { get; private set; }
@@ -39,6 +40,7 @@ public sealed class JtdxUdpListener : IDisposable
             }
 
             _packetCount = 0;
+            _decodeCount = 0;
             _cts = new CancellationTokenSource();
             _ = Task.Run(() => ListenLoopAsync(_cts.Token));
             var forwardText = _forwardEndpoint == null ? "" : $" Forwarding raw packets to {_forwardEndpoint}.";
@@ -80,6 +82,7 @@ public sealed class JtdxUdpListener : IDisposable
 
                 if (TryParseDecode(result.Buffer, out var decode, out var warning))
                 {
+                    _decodeCount++;
                     LastAppId = decode.SourceAppId;
                     DecodeReceived?.Invoke(decode);
                 }
@@ -92,7 +95,10 @@ public sealed class JtdxUdpListener : IDisposable
                 else if (!string.IsNullOrWhiteSpace(warning))
                     StatusChanged?.Invoke(warning);
                 else if (_packetCount == 1 || _packetCount % 25 == 0)
-                    StatusChanged?.Invoke($"UDP packets received: {_packetCount}. No decode message parsed yet.");
+                    StatusChanged?.Invoke(
+                        _decodeCount == 0
+                            ? $"UDP packets received: {_packetCount}. No decode message parsed yet."
+                            : $"UDP packets received: {_packetCount}; decode messages parsed: {_decodeCount}.");
             }
             catch (OperationCanceledException)
             {
@@ -131,19 +137,22 @@ public sealed class JtdxUdpListener : IDisposable
             var snr = reader.ReadInt32();
             var dt = reader.ReadDouble();
             var deltaFrequency = reader.ReadUInt32();
-            var mode = reader.ReadString();
+            var protocolMode = reader.ReadString();
+            var mode = AmateurBandMapper.NormalizeMode(protocolMode);
             var text = reader.ReadString();
             var lowConfidence = reader.TryReadBool(out var low) && low;
 
-            var receivedAt = DecodeTimestampLocal(milliseconds);
             decode = DecodeText(new DecodeMessage
             {
-                ReceivedAt = receivedAt,
+                // The UDP timestamp identifies the start of the FT8 slot. The packet normally
+                // arrives near the end of that slot, so it must not be used as "last heard".
+                ReceivedAt = DateTime.Now,
                 DecodeTime = TimeSpan.FromMilliseconds(milliseconds),
                 Snr = snr,
                 Dt = dt,
                 AudioOffset = (int)deltaFrequency,
                 Mode = mode,
+                ProtocolMode = protocolMode,
                 RawText = text.Trim(),
                 SourceAppId = appId,
                 LowConfidence = lowConfidence
@@ -157,19 +166,6 @@ public sealed class JtdxUdpListener : IDisposable
             warning = $"Ignored malformed UDP packet: {ex.Message}";
             return false;
         }
-    }
-
-    private static DateTime DecodeTimestampLocal(uint millisecondsSinceMidnightUtc)
-    {
-        var nowUtc = DateTime.UtcNow;
-        var decodeUtc = nowUtc.Date.AddMilliseconds(millisecondsSinceMidnightUtc);
-
-        if (decodeUtc > nowUtc.AddMinutes(2))
-            decodeUtc = decodeUtc.AddDays(-1);
-        else if (decodeUtc < nowUtc.AddHours(-23))
-            decodeUtc = decodeUtc.AddDays(1);
-
-        return DateTime.SpecifyKind(decodeUtc, DateTimeKind.Utc).ToLocalTime();
     }
 
     public static bool TryParseStatus(byte[] packet, out JtdxStatusMessage status)
@@ -189,11 +185,11 @@ public sealed class JtdxUdpListener : IDisposable
             if (messageType != 1)
                 return false;
 
-            _ = reader.ReadUInt64(); // dial frequency
-            var mode = reader.ReadString();
+            var dialFrequencyHz = reader.ReadUInt64();
+            var mode = AmateurBandMapper.NormalizeMode(reader.ReadString());
             var dxCall = reader.ReadString();
             _ = reader.ReadString(); // report
-            _ = reader.ReadString(); // TX mode
+            var txMode = AmateurBandMapper.NormalizeMode(reader.ReadString());
             var txEnabled = reader.ReadBool();
             var transmitting = reader.ReadBool();
             var decoding = reader.ReadBool();
@@ -207,7 +203,7 @@ public sealed class JtdxUdpListener : IDisposable
             _ = reader.TryReadBool(out _); // fast mode
             _ = reader.TryReadByte(out _); // special operation mode
             _ = reader.TryReadUInt32(out _); // frequency tolerance
-            _ = reader.TryReadUInt32(out _); // TR period
+            _ = reader.TryReadUInt32(out var trPeriodSeconds);
             _ = reader.TryReadString(out _); // configuration name
             _ = reader.TryReadString(out var txMessage);
 
@@ -215,7 +211,11 @@ public sealed class JtdxUdpListener : IDisposable
             {
                 ReceivedAt = DateTime.Now,
                 SourceAppId = appId,
-                Mode = mode.Trim(),
+                DialFrequencyHz = dialFrequencyHz,
+                Band = AmateurBandMapper.FromDialFrequency(dialFrequencyHz),
+                Mode = mode,
+                TxMode = txMode,
+                TrPeriodSeconds = trPeriodSeconds,
                 DxCall = dxCall.Trim().ToUpperInvariant(),
                 TxMessage = txMessage.Trim(),
                 TxEnabled = txEnabled,

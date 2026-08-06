@@ -59,6 +59,7 @@ public sealed class DxTargetScorer
             decode.Callsign = lookupCall;
             decode.Dxcc = entity.Code;
             decode.EntityName = entity.Name;
+            decode.Continent = entity.Continent;
             decode.PrimaryDisplayEntity = entity.Name;
             decode.EntitySource = entity.Source;
             decode.EntityConfidence = entity.Confidence;
@@ -90,7 +91,10 @@ public sealed class DxTargetScorer
             }
         }
 
-        if (!decode.DistanceKm.HasValue && !string.IsNullOrWhiteSpace(settings.HomeGrid) && !string.IsNullOrWhiteSpace(decode.Grid))
+        if (!decode.DistanceKm.HasValue
+            && !decode.GridSource.Equals("QRZ", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(settings.HomeGrid)
+            && !string.IsNullOrWhiteSpace(decode.Grid))
         {
             decode.DistanceKm = _distanceCalculator.DistanceKm(settings.HomeGrid, decode.Grid);
             decode.DistanceSource = "Grid";
@@ -104,12 +108,17 @@ public sealed class DxTargetScorer
             decode.DistanceSource = "None";
         }
 
+        decode.State = WasStateEligibility.IsEligible(decode)
+            ? WasStateEligibility.NormalizeState(decode.State, settings.IncludeDistrictOfColumbia)
+            : "";
+
         var dxccStatus = DetermineDxccStatus(decode, indexes);
         decode.IsNewDxcc = dxccStatus == DxccCandidateStatus.NotWorked;
+        decode.IsUnconfirmedDxcc = dxccStatus == DxccCandidateStatus.WorkedUnconfirmed;
         decode.IsNewGrid = !string.IsNullOrWhiteSpace(decode.Grid)
             && (!indexes.Grids.TryGetValue(decode.Grid, out var gridStatus) || !gridStatus.ConfirmedAny);
         decode.IsNewState = !string.IsNullOrWhiteSpace(decode.State)
-            && decode.EntityName.Equals("United States", StringComparison.OrdinalIgnoreCase)
+            && WasStateEligibility.IsEligible(decode)
             && (!indexes.States.TryGetValue(decode.State, out var stateStatus) || !stateStatus.ConfirmedAny);
     }
 
@@ -159,7 +168,7 @@ public sealed class DxTargetScorer
         ranking.RarityMatchSource = rarity.MatchSource;
         ranking.RarityMatchConfidence = rarity.MatchConfidence;
         ranking.SignalScore = SignalScore(decode.Snr);
-        ranking.FreshnessScore = FreshnessScore(ranking.AgeSeconds, settings);
+        ranking.FreshnessScore = FreshnessScore(ranking.AgeSeconds, decode, settings);
         ranking.PenaltyScore = PenaltyScore(decode, logbook, recentDecodes, settings);
 
         AssignTier(ranking, decode, logbook, indexes, settings);
@@ -180,19 +189,52 @@ public sealed class DxTargetScorer
             return;
         }
 
-        if (ranking.DxccStatus == DxccCandidateStatus.NotWorked)
+        if (ranking.DxccStatus is DxccCandidateStatus.NotWorked or DxccCandidateStatus.WorkedUnconfirmed)
         {
             ranking.PriorityTier = 10;
-            ranking.PriorityTierName = "Tier 1A: New DXCC, never worked";
+            ranking.PriorityTierName = ranking.DxccStatus == DxccCandidateStatus.NotWorked
+                ? "Tier 1A: New DXCC, never worked"
+                : "Tier 1A: Unconfirmed DXCC";
+            ranking.WantedScope = WantedScope.Overall;
+            ranking.NeedStatus = ranking.DxccStatus == DxccCandidateStatus.NotWorked
+                ? NeedStatus.NeverWorked
+                : NeedStatus.WorkedNotLoTWConfirmed;
             ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatDxcc(ranking.DxccStatus, decode.EntityName));
             return;
         }
 
-        if (ranking.DxccStatus == DxccCandidateStatus.WorkedUnconfirmed)
+        if (!string.IsNullOrWhiteSpace(decode.Dxcc)
+            && indexes.Dxcc.TryGetValue(decode.Dxcc, out var scopedDxcc)
+            && TryBestEnabledScopedNeed(
+                scopedDxcc.WorkedBands,
+                scopedDxcc.WorkedModes,
+                scopedDxcc.WorkedBandModes,
+                scopedDxcc.LoTWConfirmedBands,
+                scopedDxcc.LoTWConfirmedModes,
+                scopedDxcc.LoTWConfirmedBandModes,
+                decode.Band,
+                decode.Mode,
+                settings,
+                out var dxccScope,
+                out var dxccNeed))
         {
-            ranking.PriorityTier = 11;
-            ranking.PriorityTierName = "Tier 1B: Worked but not confirmed DXCC";
-            ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatDxcc(ranking.DxccStatus, decode.EntityName));
+            ranking.PriorityTier = dxccScope switch
+            {
+                WantedScope.CurrentBand => 12,
+                WantedScope.CurrentMode => 13,
+                _ => 14
+            };
+            var needLabel = dxccNeed == NeedStatus.NeverWorked ? "new" : "unconfirmed";
+            ranking.PriorityTierName = dxccScope switch
+            {
+                WantedScope.CurrentBand => $"Tier 1C: DXCC {needLabel} on current band",
+                WantedScope.CurrentMode => $"Tier 1D: DXCC {needLabel} on current mode",
+                _ => $"Tier 1E: DXCC {needLabel} on current band and mode"
+            };
+            ranking.WantedScope = dxccScope;
+            ranking.NeedStatus = dxccNeed;
+            ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatWantedReason(
+                "DXCC", dxccNeed, dxccScope, decode.EntityName, decode.Band, decode.Mode));
             return;
         }
 
@@ -207,21 +249,125 @@ public sealed class DxTargetScorer
             return;
         }
 
+        indexes.Grids.TryGetValue(decode.Grid, out var gridStatus);
         if (!string.IsNullOrWhiteSpace(decode.Grid)
-            && (!indexes.Grids.TryGetValue(decode.Grid, out var gridStatus) || !gridStatus.LoTWConfirmedAny))
+            && (gridStatus == null || !gridStatus.WorkedAny))
         {
             ranking.PriorityTier = 30;
-            ranking.PriorityTierName = "Tier 3: New/unconfirmed grid";
+            ranking.PriorityTierName = "Tier 3: New grid";
+            ranking.WantedScope = WantedScope.Overall;
+            ranking.NeedStatus = NeedStatus.NeverWorked;
             ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatGrid(gridStatus, decode.Grid));
             return;
         }
 
-        if (decode.EntityName.Equals("United States", StringComparison.OrdinalIgnoreCase)
+        if (!string.IsNullOrWhiteSpace(decode.Grid)
+            && gridStatus != null
+            && TryBestEnabledScopedNeed(
+                gridStatus.WorkedBands,
+                gridStatus.WorkedModes,
+                gridStatus.WorkedBandModes,
+                gridStatus.LoTWConfirmedBands,
+                gridStatus.LoTWConfirmedModes,
+                gridStatus.LoTWConfirmedBandModes,
+                decode.Band,
+                decode.Mode,
+                settings,
+                out var gridScope,
+                out var gridNeed))
+        {
+            ranking.PriorityTier = gridScope switch
+            {
+                WantedScope.CurrentBand => 31,
+                WantedScope.CurrentMode => 32,
+                _ => 33
+            };
+            var needLabel = gridNeed == NeedStatus.NeverWorked ? "new" : "unconfirmed";
+            ranking.PriorityTierName = gridScope switch
+            {
+                WantedScope.CurrentBand => $"Tier 3B: Grid {needLabel} on current band",
+                WantedScope.CurrentMode => $"Tier 3C: Grid {needLabel} on current mode",
+                _ => $"Tier 3D: Grid {needLabel} on current band and mode"
+            };
+            ranking.WantedScope = gridScope;
+            ranking.NeedStatus = gridNeed;
+            ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatWantedReason(
+                "Grid", gridNeed, gridScope, decode.Grid, decode.Band, decode.Mode));
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(decode.Grid)
+            && gridStatus != null
+            && !gridStatus.LoTWConfirmedAny)
+        {
+            ranking.PriorityTier = 34;
+            ranking.PriorityTierName = "Tier 3E: Worked but unconfirmed grid";
+            ranking.WantedScope = WantedScope.Overall;
+            ranking.NeedStatus = NeedStatus.WorkedNotLoTWConfirmed;
+            ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatGrid(gridStatus, decode.Grid));
+            return;
+        }
+
+        indexes.States.TryGetValue(decode.State, out var stateStatus);
+        if (WasStateEligibility.IsEligible(decode)
             && !string.IsNullOrWhiteSpace(decode.State)
-            && (!indexes.States.TryGetValue(decode.State, out var stateStatus) || !stateStatus.LoTWConfirmedAny))
+            && stateStatus == null
+            && settings.PrioritizeNewUsStates)
         {
             ranking.PriorityTier = 40;
-            ranking.PriorityTierName = "Tier 4: New/unconfirmed USA state";
+            ranking.PriorityTierName = "Tier 4: New USA state";
+            ranking.WantedScope = WantedScope.Overall;
+            ranking.NeedStatus = NeedStatus.NeverWorked;
+            ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatState(stateStatus, decode.State));
+            return;
+        }
+
+        if (WasStateEligibility.IsEligible(decode)
+            && !string.IsNullOrWhiteSpace(decode.State)
+            && stateStatus != null
+            && TryBestEnabledScopedNeed(
+                stateStatus.WorkedBands,
+                stateStatus.WorkedModes,
+                stateStatus.WorkedBandModes,
+                stateStatus.LoTWConfirmedBands,
+                stateStatus.LoTWConfirmedModes,
+                stateStatus.LoTWConfirmedBandModes,
+                decode.Band,
+                decode.Mode,
+                settings,
+                out var stateScope,
+                out var stateNeed))
+        {
+            ranking.PriorityTier = stateScope switch
+            {
+                WantedScope.CurrentBand => 41,
+                WantedScope.CurrentMode => 42,
+                _ => 43
+            };
+            var needLabel = stateNeed == NeedStatus.NeverWorked ? "new" : "unconfirmed";
+            ranking.PriorityTierName = stateScope switch
+            {
+                WantedScope.CurrentBand => $"Tier 4B: State {needLabel} on current band",
+                WantedScope.CurrentMode => $"Tier 4C: State {needLabel} on current mode",
+                _ => $"Tier 4D: State {needLabel} on current band and mode"
+            };
+            ranking.WantedScope = stateScope;
+            ranking.NeedStatus = stateNeed;
+            ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatWantedReason(
+                "USA State", stateNeed, stateScope, decode.State, decode.Band, decode.Mode));
+            return;
+        }
+
+        if (WasStateEligibility.IsEligible(decode)
+            && !string.IsNullOrWhiteSpace(decode.State)
+            && stateStatus != null
+            && !stateStatus.LoTWConfirmedAny
+            && settings.PrioritizeUnconfirmedUsStates)
+        {
+            ranking.PriorityTier = 44;
+            ranking.PriorityTierName = "Tier 4E: Worked but unconfirmed USA state";
+            ranking.WantedScope = WantedScope.Overall;
+            ranking.NeedStatus = NeedStatus.WorkedNotLoTWConfirmed;
             ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatState(stateStatus, decode.State));
             return;
         }
@@ -230,7 +376,9 @@ public sealed class DxTargetScorer
             q.Call.Equals(decode.Callsign, StringComparison.OrdinalIgnoreCase)
             && Matches(q.Band, decode.Band)
             && Matches(q.Mode, decode.Mode));
-        if (!workedBandMode && HasRealBandMode(decode.Band, decode.Mode))
+        if (settings.IncludeBandModeWanted
+            && !workedBandMode
+            && HasRealBandMode(decode.Band, decode.Mode))
         {
             ranking.PriorityTier = 60;
             ranking.PriorityTierName = "Tier 6: New band/mode slot";
@@ -238,18 +386,56 @@ public sealed class DxTargetScorer
             return;
         }
 
-        var workedCall = logbook.Any(q => q.Call.Equals(decode.Callsign, StringComparison.OrdinalIgnoreCase));
-        if (!workedCall)
-        {
-            ranking.PriorityTier = 70;
-            ranking.PriorityTierName = "Tier 7: New callsign";
-            ranking.AllWantedReasons.Add("New callsign");
-            return;
-        }
-
         ranking.PriorityTier = 80;
         ranking.PriorityTierName = "Tier 8: Distance/general DX";
         ranking.AllWantedReasons.Add("General DX / distance");
+    }
+
+    private static bool TryBestEnabledScopedNeed(
+        HashSet<string> workedBands,
+        HashSet<string> workedModes,
+        HashSet<string> workedBandModes,
+        HashSet<string> confirmedBands,
+        HashSet<string> confirmedModes,
+        HashSet<string> confirmedBandModes,
+        string band,
+        string mode,
+        AppSettings settings,
+        out WantedScope scope,
+        out NeedStatus need)
+    {
+        scope = WantedScope.Overall;
+        need = NeedStatus.Unknown;
+        var candidates = new List<(WantedScope Scope, bool Enabled, bool HasValue, bool Worked, bool Confirmed)>
+        {
+            (WantedScope.CurrentBand, settings.IncludeBandWanted, !string.IsNullOrWhiteSpace(band), workedBands.Contains(band), confirmedBands.Contains(band)),
+            (WantedScope.CurrentMode, settings.IncludeModeWanted, !string.IsNullOrWhiteSpace(mode), workedModes.Contains(mode), confirmedModes.Contains(mode)),
+            (WantedScope.CurrentBandMode, settings.IncludeBandModeWanted,
+                !string.IsNullOrWhiteSpace(band) && !string.IsNullOrWhiteSpace(mode),
+                workedBandModes.Contains(BandModeKey(band, mode)),
+                confirmedBandModes.Contains(BandModeKey(band, mode)))
+        };
+
+        foreach (var candidate in candidates.Where(candidate => candidate.Enabled && candidate.HasValue && !candidate.Worked))
+        {
+            scope = candidate.Scope;
+            need = NeedStatus.NeverWorked;
+            return true;
+        }
+
+        foreach (var candidate in candidates.Where(candidate => candidate.Enabled && candidate.HasValue && candidate.Worked && !candidate.Confirmed))
+        {
+            scope = candidate.Scope;
+            need = NeedStatus.WorkedNotLoTWConfirmed;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string BandModeKey(string band, string mode)
+    {
+        return $"{band.Trim().ToUpperInvariant()}|{mode.Trim().ToUpperInvariant()}";
     }
 
     private static DxccCandidateStatus DetermineDxccStatus(DecodeMessage decode, WorkedStatusIndexes indexes)
@@ -263,9 +449,9 @@ public sealed class DxTargetScorer
         return status.ConfirmedAny ? DxccCandidateStatus.Confirmed : DxccCandidateStatus.WorkedUnconfirmed;
     }
 
-    private static int FreshnessScore(double ageSeconds, AppSettings settings)
+    private static int FreshnessScore(double ageSeconds, DecodeMessage decode, AppSettings settings)
     {
-        var maxAge = Math.Max(30, settings.CandidateMaxAgeSeconds);
+        var maxAge = StaleWindowSeconds(decode, settings);
         if (ageSeconds >= maxAge)
             return 0;
         return Math.Clamp((int)Math.Round((maxAge - ageSeconds) * 5), 0, 450);
@@ -313,7 +499,7 @@ public sealed class DxTargetScorer
         var penalty = 0;
         if (decode.ParseConfidence == ParseConfidence.Low)
             penalty += 5000;
-        if (decode.AgeSeconds() > Math.Max(30, settings.CandidateMaxAgeSeconds))
+        if (decode.AgeSeconds() > StaleWindowSeconds(decode, settings))
             penalty += 5000;
         if (recentDecodes.Count(d => d.Callsign.Equals(decode.Callsign, StringComparison.OrdinalIgnoreCase) && d.ReceivedAt > DateTime.Now.AddMinutes(-5)) > 3)
             penalty += 30;
@@ -322,12 +508,19 @@ public sealed class DxTargetScorer
         return penalty;
     }
 
+    private static int StaleWindowSeconds(DecodeMessage decode, AppSettings settings)
+    {
+        var normal = Math.Max(30, settings.CandidateMaxAgeSeconds);
+        return decode.IsNewDxcc ? Math.Max(normal, settings.NewDxccStaleSeconds) : normal;
+    }
+
     private static string ExplainSelection(CandidateRanking ranking)
     {
         return ranking.PriorityTier switch
         {
             10 => $"{ranking.PriorityTierName} beats worked-but-unconfirmed DXCC, grid, state, band, callsign and general DX needs; adjusted DX value breaks ties.",
-            11 => $"{ranking.PriorityTierName} beats grid, state, band, callsign and general DX needs under the selected confirmation mode.",
+            12 or 13 or 14 => $"{ranking.PriorityTierName} is enabled as an optional scoped DXCC target and follows only a globally new DXCC.",
+            15 => $"{ranking.PriorityTierName} beats grid, state, band, callsign and general DX needs under the selected confirmation mode.",
             20 => "Rare confirmed DXCC chasing is enabled; no Tier 1 DXCC is higher in this candidate set.",
             30 => "Grid need considered after DXCC need tiers.",
             40 => "USA state need considered after DXCC/grid priorities.",

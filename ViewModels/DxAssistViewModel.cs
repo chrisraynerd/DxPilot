@@ -34,7 +34,7 @@ public sealed class DxAssistViewModel : ObservableObject
     private string _selectionMethodText = "Selection Method: None";
     private string _guiSelectionStatus = "GUI Selection: Not calibrated.";
     private DxCandidateRow? _selectedCandidate;
-    private bool _showOnlyTargetable = true;
+    private bool _showOnlyTargetable;
     private bool _showWantedOnly;
     private bool _showWorkedConfirmed = true;
     private bool _showStale = true;

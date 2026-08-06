@@ -7,12 +7,20 @@ public sealed class SessionDxOpportunity
     public DateTime LastSeenUtc { get; set; }
     public double LastSeenAgeSeconds => Math.Max(0, (DateTime.UtcNow - LastSeenUtc).TotalSeconds);
     public string Call { get; set; } = "";
+    public bool WasCallWorkedBefore { get; set; }
+    public string WorkedCallToolTip { get; set; } = "";
+    public string RankText { get; set; } = "";
+    public string JtdxRow { get; set; } = "";
+    public bool IsPermanentlySuppressed { get; set; }
     public string Entity { get; set; } = "";
     public string DxccNumber { get; set; } = "";
     public string DxccStatus { get; set; } = "";
     public string Category { get; set; } = "";
     public string Need { get; set; } = "";
     public string Scope { get; set; } = "";
+    public string Band { get; set; } = "";
+    public string Mode { get; set; } = "";
+    public ulong DialFrequencyHz { get; set; }
     public int? RarityRank { get; set; }
     public int RarityScore { get; set; }
     public int PriorityTier { get; set; } = 99;
@@ -70,6 +78,30 @@ public sealed class SessionDxOpportunity
         Outcome.Contains("progress", StringComparison.OrdinalIgnoreCase) ? "InProgress" :
         DxccStatus is "New DXCC" or "Worked unconfirmed" ? "WantedDxcc" :
         RarityRank.HasValue ? "Rare" : "";
+    public string OpportunityClass =>
+        DxccStatus == "New DXCC" ? "NewDxcc" :
+        DxccStatus == "Worked unconfirmed" ? "UnconfirmedDxcc" :
+        Category.Equals("Grid", StringComparison.OrdinalIgnoreCase) ? "NewGrid" :
+        Category.Equals("USA State", StringComparison.OrdinalIgnoreCase) ? "NewState" :
+        Category.Equals("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase) ? "RareDxcc" :
+        PriorityTier == 60 ? "BandMode" : "";
+    public string ActionStateClass =>
+        IsPermanentlySuppressed ? "PermanentlySuppressed" :
+        Outcome.Contains("Suppressed", StringComparison.OrdinalIgnoreCase) ? "Suppressed" :
+        Outcome.Contains("Missed", StringComparison.OrdinalIgnoreCase)
+            || Outcome.Contains("mismatch", StringComparison.OrdinalIgnoreCase)
+            || Outcome.Contains("Failed", StringComparison.OrdinalIgnoreCase) ? "Failed" :
+        Outcome.Equals("In progress", StringComparison.OrdinalIgnoreCase) ? "InProgress" :
+        Outcome.Equals("Called", StringComparison.OrdinalIgnoreCase) ? "Calling" :
+        WasWorked ? "Worked" : "";
+    public string WantedReasonDisplay =>
+        DxccStatus == "New DXCC" ? "New DXCC" :
+        DxccStatus == "Worked unconfirmed" ? "Unconfirmed DXCC" :
+        Category.Equals("Grid", StringComparison.OrdinalIgnoreCase) ? $"{Need} grid {Grid}".Trim() :
+        Category.Equals("USA State", StringComparison.OrdinalIgnoreCase) ? $"{Need} state {State}".Trim() :
+        Category.Equals("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase) ? "Rare confirmed DXCC" :
+        PrimaryReason;
+    public string StationStatusDisplay => Outcome;
 
     public string Details =>
         $"{Call} - {Entity}\n"
@@ -92,6 +124,7 @@ public sealed class SessionDxOpportunity
         + "\n\nAdvanced/debug\n"
         + $"- DXCC: {DxccNumber}  Status: {DxccStatus}\n"
         + $"- Category: {Category}  Need: {Need}  Scope: {Scope}\n"
+        + $"- Radio: {Band} {Mode}  Dial frequency: {(DialFrequencyHz == 0 ? "Unknown" : $"{DialFrequencyHz / 1_000_000d:0.000000} MHz")}\n"
         + $"- Tier: {PriorityTierName}  Rarity: {RarityRankText}  Score: {RarityScore}\n"
         + $"- Grid/state: {GridStateText}  Grid source: {GridSource}\n"
         + $"- Last SNR: {LastSnr}  Attempts: {AttemptCount}  Auto: {WasAutoSelected}  Manual: {WasManuallySelected}\n"

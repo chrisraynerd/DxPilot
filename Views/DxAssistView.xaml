@@ -123,10 +123,9 @@
                     <TabItem Header="Ranked Target Candidates">
                         <DockPanel Margin="0,8,0,0">
                             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
-                                <CheckBox Content="Targetable" IsChecked="{Binding DxAssist.ShowOnlyTargetable}" />
+                                <CheckBox Content="Contactable only" IsChecked="{Binding DxAssist.ShowOnlyTargetable}" />
                                 <CheckBox Content="Wanted only" IsChecked="{Binding DxAssist.ShowWantedOnly}" />
                                 <CheckBox Content="Worked/confirmed" IsChecked="{Binding DxAssist.ShowWorkedConfirmed}" />
-                                <CheckBox Content="Stale" IsChecked="{Binding DxAssist.ShowStale}" />
                                 <CheckBox Content="Suppressed" IsChecked="{Binding DxAssist.ShowSuppressed}" />
                             </StackPanel>
 
@@ -142,59 +141,32 @@
 
                             <DataGrid ItemsSource="{Binding DxAssist.CandidateRows}"
                                       SelectedItem="{Binding DxAssist.SelectedCandidate}"
+                                      RowStyle="{StaticResource SemanticStationRowStyle}"
                                       AutoGenerateColumns="False"
                                       IsReadOnly="True"
                                       CanUserAddRows="False"
                                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                       ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                      CanUserSortColumns="True">
-                                <DataGrid.RowStyle>
-                                    <Style TargetType="DataGridRow">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding PriorityClass}" Value="Locked">
-                                                <Setter Property="Background" Value="#FFE8A3" />
-                                                <Setter Property="FontWeight" Value="SemiBold" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding PriorityClass}" Value="DxccWanted">
-                                                <Setter Property="Background" Value="#CFF7D3" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding PriorityClass}" Value="GridWanted">
-                                                <Setter Property="Background" Value="#CFE8FF" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding PriorityClass}" Value="StateWanted">
-                                                <Setter Property="Background" Value="#E8D5FF" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding PriorityClass}" Value="Muted">
-                                                <Setter Property="Background" Value="#F3F4F6" />
-                                                <Setter Property="Foreground" Value="#6B7280" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding PriorityClass}" Value="Suppressed">
-                                                <Setter Property="Background" Value="#FFD6D6" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </DataGrid.RowStyle>
+                                      CanUserSortColumns="True"
+                                      PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
+                                <DataGrid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="CALL NOW" Command="{Binding PlacementTarget.DataContext.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Suppress indefinitely" Command="{Binding PlacementTarget.DataContext.PermanentlySuppressCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Release suppression" Command="{Binding PlacementTarget.DataContext.ReleaseSuppressionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                    </ContextMenu>
+                                </DataGrid.ContextMenu>
                                 <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Rank" Binding="{Binding RankText}" Width="48" />
+                                    <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignCallTemplate}" SortMemberPath="Call" Width="88" />
+                                    <DataGridTextColumn Header="Country" Binding="{Binding Country}" Width="135" />
+                                    <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="62" />
+                                    <DataGridTextColumn Header="State" Binding="{Binding State}" Width="52" />
+                                    <DataGridTextColumn Header="Age" Binding="{Binding Age}" Width="54" />
+                                    <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="46" />
                                     <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="70" />
-                                    <DataGridTextColumn Header="Rank" Binding="{Binding Rank}" Width="55" />
-                                    <DataGridTextColumn Header="Call" Binding="{Binding Call}" Width="95" />
-                                    <DataGridTextColumn Header="Country" Binding="{Binding Country}" Width="150" />
-                                    <DataGridTextColumn Header="DXCC" Binding="{Binding Dxcc}" Width="70" />
-                                    <DataGridTextColumn Header="Tier" Binding="{Binding Tier}" Width="175" />
-                                    <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedReason}" Width="180" />
-                                    <DataGridTextColumn Header="DXCC Status" Binding="{Binding DxccStatus}" Width="135" />
-                                    <DataGridTextColumn Header="Rarity Rank" Binding="{Binding RarityRank}" Width="95" />
-                                    <DataGridTextColumn Header="Rarity Score" Binding="{Binding RarityScore}" Width="95" />
-                                    <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="80" />
-                                    <DataGridTextColumn Header="Grid Status" Binding="{Binding GridStatus}" Width="100" />
-                                    <DataGridTextColumn Header="State" Binding="{Binding State}" Width="75" />
-                                    <DataGridTextColumn Header="State Status" Binding="{Binding StateStatus}" Width="100" />
-                                    <DataGridTextColumn Header="Distance" Binding="{Binding DistanceMiles, StringFormat={}{0:0} mi}" Width="90" />
-                                    <DataGridTextColumn Header="Age" Binding="{Binding Age}" Width="75" />
-                                    <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="60" />
-                                    <DataGridTextColumn Header="Source Type" Binding="{Binding SourceType}" Width="125" />
-                                    <DataGridTextColumn Header="Score" Binding="{Binding Score}" Width="70" />
-                                    <DataGridTextColumn Header="Status" Binding="{Binding TargetStatus}" Width="105" />
+                                    <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedReason}" Width="*" MinWidth="170" />
+                                    <DataGridTextColumn Header="Status" Binding="{Binding TargetStatus}" Width="110" />
                                 </DataGrid.Columns>
                             </DataGrid>
                         </DockPanel>
@@ -209,21 +181,18 @@
                                       CanUserAddRows="False"
                                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                       ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                      CanUserSortColumns="True">
+                                      CanUserSortColumns="True"
+                                      PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
+                                <DataGrid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="CALL NOW" Command="{Binding PlacementTarget.DataContext.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Suppress indefinitely" Command="{Binding PlacementTarget.DataContext.PermanentlySuppressCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <MenuItem Header="Release suppression" Command="{Binding PlacementTarget.DataContext.ReleaseSuppressionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                    </ContextMenu>
+                                </DataGrid.ContextMenu>
                                 <DataGrid.RowStyle>
-                                    <Style TargetType="DataGridRow">
+                                    <Style TargetType="DataGridRow" BasedOn="{StaticResource SemanticStationRowStyle}">
                                         <Setter Property="ToolTip" Value="{Binding ParserInterpretation}" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding PriorityClass}" Value="NewDxcc">
-                                                <Setter Property="Background" Value="#F5C6F7" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding PriorityClass}" Value="NewState">
-                                                <Setter Property="Background" Value="#FFF2A8" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding PriorityClass}" Value="NewGrid">
-                                                <Setter Property="Background" Value="#CFE8FF" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
                                     </Style>
                                 </DataGrid.RowStyle>
                                 <DataGrid.Columns>
@@ -241,6 +210,11 @@
                                     <DataGridTextColumn Header="Contactable DXCC" Binding="{Binding ContactableDxccNumber}" Width="130" />
                                     <DataGridTextColumn Header="Payload" Binding="{Binding Payload}" Width="100" />
                                     <DataGridTextColumn Header="Grid" Binding="{Binding ReportedGrid}" Width="90" />
+                                    <DataGridTextColumn Header="Grid Source" Binding="{Binding GridSource}" Width="105" />
+                                    <DataGridTextColumn Header="QRZ Grid" Binding="{Binding QrzGrid}" Width="90" />
+                                    <DataGridTextColumn Header="State" Binding="{Binding State}" Width="70" />
+                                    <DataGridTextColumn Header="State Source" Binding="{Binding StateSource}" Width="105" />
+                                    <DataGridTextColumn Header="QRZ Status" Binding="{Binding CallsignLookupStatus}" Width="105" />
                                     <DataGridTextColumn Header="Grid Owner" Binding="{Binding GridOwnerCall}" Width="120" />
                                     <DataGridTextColumn Header="Entity" Binding="{Binding PrimaryDisplayEntity}" Width="150" />
                                     <DataGridTextColumn Header="Contactable Call" Binding="{Binding ContactableCall}" Width="145" />

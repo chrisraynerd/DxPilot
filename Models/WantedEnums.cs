@@ -19,8 +19,14 @@ public enum NeedStatus
 public enum WantedSniperMode
 {
     Off,
-    Watch,
-    Armed
+    Active
+}
+
+public enum HuntingOperatingMode
+{
+    DxAssist,
+    WantedSniper,
+    LocationHunt
 }
 
 public enum WantedActionabilityStatus

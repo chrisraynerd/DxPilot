@@ -116,17 +116,21 @@ public sealed class JtdxBandActivityOverlay : Window
         calibration.BandActivityTopRelative = (int)Math.Round(Top - _jtdxWindowTop);
         calibration.BandActivityWidth = Math.Max(1, (int)Math.Round(ActualWidth));
         calibration.BandActivityHeight = Math.Max(1, (int)Math.Round(ActualHeight));
-        calibration.RowHeight = calibration.BandActivityHeight / (JtdxBandActivityGridCalibration.SafeFullRowCount + 0.5);
-        calibration.FirstFullRowCentreYRelative = (int)Math.Round(calibration.BandActivityTopRelative + calibration.RowHeight);
+        calibration.SafeVisibleFullRowCount =
+            JtdxBandActivityGridCalibration.NormalizeRowCount(calibration.SafeVisibleFullRowCount);
+        var partialTopAllowance = calibration.IgnoredPartialTopRow ? 0.5 : 0;
+        calibration.RowHeight =
+            calibration.BandActivityHeight / (calibration.SafeVisibleFullRowCount + partialTopAllowance);
+        calibration.FirstFullRowCentreYRelative = (int)Math.Round(
+            calibration.BandActivityTopRelative
+            + (calibration.IgnoredPartialTopRow ? calibration.RowHeight : calibration.RowHeight / 2));
         if (calibration.MessageClickXRelative <= calibration.BandActivityLeftRelative
             || calibration.MessageClickXRelative >= calibration.BandActivityLeftRelative + calibration.BandActivityWidth)
         {
             calibration.MessageClickXRelative = calibration.BandActivityLeftRelative + calibration.BandActivityWidth / 2;
         }
 
-        calibration.SafeVisibleFullRowCount = JtdxBandActivityGridCalibration.SafeFullRowCount;
-        calibration.IgnoredPartialTopRow = true;
-        calibration.Version = $"grid-v1-{DateTime.Now:yyyyMMddHHmmss}";
+        calibration.Version = $"grid-v2-{DateTime.Now:yyyyMMddHHmmss}";
         calibration.CalibrationDate = DateTime.Now;
         _canvas.InvalidateVisual();
         CalibrationChanged?.Invoke(calibration);

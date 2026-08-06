@@ -25,12 +25,12 @@
                             <TextBlock Grid.Column="3" Text="{Binding CurrentTargetStatus.TxGateStatus}" TextWrapping="Wrap" />
                         </Grid>
                     </Border>
-                    <TextBlock Text="Wanted type" FontWeight="SemiBold" />
+                    <TextBlock Text="Show wanted categories" FontWeight="SemiBold" />
                     <WrapPanel>
                         <CheckBox Content="DXCC" IsChecked="{Binding SessionHistory.ShowDxcc}" />
                         <CheckBox Content="Grids" IsChecked="{Binding SessionHistory.ShowGrids}" />
                         <CheckBox Content="USA States" IsChecked="{Binding SessionHistory.ShowUsaStates}" />
-                        <CheckBox Content="Rare confirmed DXCC" IsChecked="{Binding SessionHistory.ShowRareConfirmed}" />
+                        <CheckBox Content="Rare DXCC already confirmed" IsChecked="{Binding SessionHistory.ShowRareConfirmed}" />
                     </WrapPanel>
                     <TextBlock Text="Outcome" FontWeight="SemiBold" Margin="0,6,0,0" />
                     <WrapPanel>
@@ -64,53 +64,34 @@
 
         <DataGrid ItemsSource="{Binding SessionHistory.Opportunities}"
                   SelectedItem="{Binding SessionHistory.SelectedOpportunity}"
+                  RowStyle="{StaticResource SemanticStationRowStyle}"
                   AutoGenerateColumns="False"
                   IsReadOnly="True"
                   CanUserAddRows="False"
                   CanUserSortColumns="True"
                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                  ScrollViewer.VerticalScrollBarVisibility="Auto">
-            <DataGrid.RowStyle>
-                <Style TargetType="DataGridRow">
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding OutcomeClass}" Value="Worked">
-                            <Setter Property="Background" Value="#CFF7D3" />
-                            <Setter Property="FontWeight" Value="SemiBold" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding OutcomeClass}" Value="Missed">
-                            <Setter Property="Background" Value="#FFD6D6" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding OutcomeClass}" Value="Suppressed">
-                            <Setter Property="Background" Value="#FFE8A3" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding OutcomeClass}" Value="InProgress">
-                            <Setter Property="Background" Value="#CFE8FF" />
-                            <Setter Property="FontWeight" Value="SemiBold" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding OutcomeClass}" Value="WantedDxcc">
-                            <Setter Property="Background" Value="#E8D5FF" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding OutcomeClass}" Value="Rare">
-                            <Setter Property="Background" Value="#F4F8FF" />
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </DataGrid.RowStyle>
+                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                  PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="CALL NOW" Command="{Binding PlacementTarget.DataContext.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                    <MenuItem Header="Suppress indefinitely" Command="{Binding PlacementTarget.DataContext.PermanentlySuppressCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                    <MenuItem Header="Release suppression" Command="{Binding PlacementTarget.DataContext.ReleaseSuppressionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                </ContextMenu>
+            </DataGrid.ContextMenu>
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Last Seen" Binding="{Binding LastSeenText}" Width="85" />
-                <DataGridTextColumn Header="Seen For" Binding="{Binding SeenForText}" Width="80" />
-                <DataGridTextColumn Header="Ago" Binding="{Binding AgeText, Mode=OneWay}" Width="70" />
-                <DataGridTextColumn Header="Call" Binding="{Binding Call}" Width="95" />
-                <DataGridTextColumn Header="Country" Binding="{Binding Entity}" Width="145" />
-                <DataGridTextColumn Header="Wanted Reason" Binding="{Binding PrimaryReason}" Width="260" />
-                <DataGridTextColumn Header="Need" Binding="{Binding Need}" Width="85" />
-                <DataGridTextColumn Header="Grid / State" Binding="{Binding GridStateText}" Width="85" />
-                <DataGridTextColumn Header="Best SNR" Binding="{Binding BestSnrText}" Width="75" />
-                <DataGridTextColumn Header="Times Seen" Binding="{Binding TimesSeenText}" Width="85" />
-                <DataGridTextColumn Header="Called?" Binding="{Binding CalledText}" Width="70" />
-                <DataGridTextColumn Header="Worked/logged?" Binding="{Binding WorkedText}" Width="105" />
-                <DataGridTextColumn Header="Outcome" Binding="{Binding Outcome}" Width="135" />
-                <DataGridTextColumn Header="Outcome Reason" Binding="{Binding OutcomeReason}" Width="210" />
+                <DataGridTextColumn Header="Rank" Binding="{Binding RankText}" Width="48" />
+                <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignCallTemplate}" SortMemberPath="Call" Width="88" />
+                <DataGridTextColumn Header="Country" Binding="{Binding Entity}" Width="135" />
+                <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="62" />
+                <DataGridTextColumn Header="State" Binding="{Binding State}" Width="52" />
+                <DataGridTextColumn Header="Band" Binding="{Binding Band}" Width="52" />
+                <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="52" />
+                <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="54" />
+                <DataGridTextColumn Header="SNR" Binding="{Binding LastSnr}" Width="46" />
+                <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="70" />
+                <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedReasonDisplay}" Width="*" MinWidth="170" />
+                <DataGridTextColumn Header="Status" Binding="{Binding StationStatusDisplay}" Width="125" />
             </DataGrid.Columns>
         </DataGrid>
     </DockPanel>
