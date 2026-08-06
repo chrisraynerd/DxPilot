@@ -4,6 +4,8 @@ obj/
 .dotnet/
 .localappdata/
 PersonalConfigBaseline/
+config/*.local.json
+config/*private*.json
 *.user
 *.suo
 *.cache

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\JtdxAutoResume.V3.csproj" />
+    <Content Include="..\..\Data\cty.csv" Link="Data\cty.csv" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\Data\DXCC-UK-Desirability-G1CEC.csv" Link="Data\DXCC-UK-Desirability-G1CEC.csv" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
