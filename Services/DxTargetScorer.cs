@@ -250,60 +250,14 @@ public sealed class DxTargetScorer
         }
 
         indexes.Grids.TryGetValue(decode.Grid, out var gridStatus);
-        if (!string.IsNullOrWhiteSpace(decode.Grid)
+        if (settings.PrioritizeNewGridsInDxAssist
+            && !string.IsNullOrWhiteSpace(decode.Grid)
             && (gridStatus == null || !gridStatus.WorkedAny))
         {
             ranking.PriorityTier = 30;
-            ranking.PriorityTierName = "Tier 3: New grid";
+            ranking.PriorityTierName = "Tier 3: New grid priority enabled";
             ranking.WantedScope = WantedScope.Overall;
             ranking.NeedStatus = NeedStatus.NeverWorked;
-            ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatGrid(gridStatus, decode.Grid));
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(decode.Grid)
-            && gridStatus != null
-            && TryBestEnabledScopedNeed(
-                gridStatus.WorkedBands,
-                gridStatus.WorkedModes,
-                gridStatus.WorkedBandModes,
-                gridStatus.LoTWConfirmedBands,
-                gridStatus.LoTWConfirmedModes,
-                gridStatus.LoTWConfirmedBandModes,
-                decode.Band,
-                decode.Mode,
-                settings,
-                out var gridScope,
-                out var gridNeed))
-        {
-            ranking.PriorityTier = gridScope switch
-            {
-                WantedScope.CurrentBand => 31,
-                WantedScope.CurrentMode => 32,
-                _ => 33
-            };
-            var needLabel = gridNeed == NeedStatus.NeverWorked ? "new" : "unconfirmed";
-            ranking.PriorityTierName = gridScope switch
-            {
-                WantedScope.CurrentBand => $"Tier 3B: Grid {needLabel} on current band",
-                WantedScope.CurrentMode => $"Tier 3C: Grid {needLabel} on current mode",
-                _ => $"Tier 3D: Grid {needLabel} on current band and mode"
-            };
-            ranking.WantedScope = gridScope;
-            ranking.NeedStatus = gridNeed;
-            ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatWantedReason(
-                "Grid", gridNeed, gridScope, decode.Grid, decode.Band, decode.Mode));
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(decode.Grid)
-            && gridStatus != null
-            && !gridStatus.LoTWConfirmedAny)
-        {
-            ranking.PriorityTier = 34;
-            ranking.PriorityTierName = "Tier 3E: Worked but unconfirmed grid";
-            ranking.WantedScope = WantedScope.Overall;
-            ranking.NeedStatus = NeedStatus.WorkedNotLoTWConfirmed;
             ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatGrid(gridStatus, decode.Grid));
             return;
         }
@@ -522,7 +476,7 @@ public sealed class DxTargetScorer
             12 or 13 or 14 => $"{ranking.PriorityTierName} is enabled as an optional scoped DXCC target and follows only a globally new DXCC.",
             15 => $"{ranking.PriorityTierName} beats grid, state, band, callsign and general DX needs under the selected confirmation mode.",
             20 => "Rare-country repeat chasing is enabled; no needed DXCC is higher in this candidate set.",
-            30 => "Grid need considered after DXCC need tiers.",
+            30 => "New-grid priority is enabled; this grid follows needed DXCC and precedes normal DX ranking. Normal DX ranking resumes when no new grid is available.",
             40 => "USA state need considered after DXCC/grid priorities.",
             _ => "Lower-tier candidate ranked after DXCC need, adjusted DX value, global rarity, UK desirability, distance, freshness and signal."
         };

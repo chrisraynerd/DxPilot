@@ -69,6 +69,7 @@ public sealed class AppSettings
     public double GlobalRarityWeight { get; set; } = 0.50;
     public double UkDesirabilityWeight { get; set; } = 0.35;
     public double DistanceWeight { get; set; } = 0.15;
+    public bool PrioritizeNewGridsInDxAssist { get; set; }
     public bool ChaseRareConfirmedDxcc { get; set; } = false;
     public string AcceptIncomingCallsMode { get; set; } = "OnlyIfNoBetterHunterTarget";
     public string HuntingMode { get; set; } = "DXCC Hunter";

@@ -1061,6 +1061,109 @@ var bandModeTarget = scorer.Score(Candidate("15m", "FT4"), [], scopedIndexes, []
 if (bandModeTarget.Ranking.PriorityTier != 14 || bandModeTarget.Ranking.WantedScope != WantedScope.CurrentBandMode)
     failures.Add("Optional band-and-mode-new DXCC classification failed.");
 
+if (new AppSettings().PrioritizeNewGridsInDxAssist)
+    failures.Add("DX Assist new-grid priority must default to off.");
+
+var franceEntity = resolver.Resolve("F4GRID");
+var brazilEntity = resolver.Resolve("PY2DX");
+if (franceEntity == null || brazilEntity == null)
+{
+    failures.Add("DX Assist grid-priority test calls did not resolve to France and Brazil.");
+}
+else
+{
+    var dxRankingIndexes = new WorkedStatusIndexes();
+    dxRankingIndexes.Dxcc[franceEntity.Code] = new DxccWorkedStatus
+    {
+        DxccNumber = franceEntity.Code,
+        EntityName = franceEntity.Name,
+        WorkedAny = true,
+        ConfirmedAny = true,
+        LoTWConfirmedAny = true
+    };
+    dxRankingIndexes.Dxcc[brazilEntity.Code] = new DxccWorkedStatus
+    {
+        DxccNumber = brazilEntity.Code,
+        EntityName = brazilEntity.Name,
+        WorkedAny = true,
+        ConfirmedAny = true,
+        LoTWConfirmedAny = true
+    };
+    dxRankingIndexes.Grids["GG66"] = new SimpleWorkedStatus
+    {
+        Id = "GG66",
+        WorkedAny = true,
+        ConfirmedAny = true,
+        LoTWConfirmedAny = true
+    };
+
+    var nearbyNewGrid = new DecodeMessage
+    {
+        ReceivedAt = DateTime.Now,
+        Callsign = "F4GRID",
+        ContactableCall = "F4GRID",
+        HeardCall = "F4GRID",
+        Grid = "JN18",
+        DistanceKm = 500,
+        RawText = "CQ F4GRID JN18",
+        Targetable = true,
+        ParseConfidence = ParseConfidence.High
+    };
+    var distantWorkedGrid = new DecodeMessage
+    {
+        ReceivedAt = DateTime.Now,
+        Callsign = "PY2DX",
+        ContactableCall = "PY2DX",
+        HeardCall = "PY2DX",
+        Grid = "GG66",
+        DistanceKm = 9000,
+        RawText = "CQ PY2DX GG66",
+        Targetable = true,
+        ParseConfidence = ParseConfidence.High
+    };
+    var dxRankingSettings = new AppSettings
+    {
+        PrioritizeNewUsStates = false,
+        PrioritizeUnconfirmedUsStates = false
+    };
+    var selector = new TargetSelector(scorer);
+    var normalDxRanking = selector.SelectRanked(
+        [nearbyNewGrid, distantWorkedGrid], [], dxRankingIndexes, dxRankingSettings, 10, includeActiveQso: false);
+    if (normalDxRanking.FirstOrDefault()?.Callsign != "PY2DX"
+        || normalDxRanking.First(target => target.Callsign == "F4GRID").Ranking.PriorityTier != 80)
+    {
+        failures.Add("DX Assist let a nearby new grid outrank the more distant normal-DX candidate while new-grid priority was off.");
+    }
+
+    dxRankingSettings.PrioritizeNewGridsInDxAssist = true;
+    var gridFirstRanking = selector.SelectRanked(
+        [nearbyNewGrid, distantWorkedGrid], [], dxRankingIndexes, dxRankingSettings, 10, includeActiveQso: false);
+    if (gridFirstRanking.FirstOrDefault()?.Callsign != "F4GRID"
+        || gridFirstRanking[0].Ranking.PriorityTier != 30
+        || gridFirstRanking.First(target => target.Callsign == "PY2DX").Ranking.PriorityTier != 80)
+    {
+        failures.Add("DX Assist did not promote only the globally new grid when new-grid priority was enabled.");
+    }
+
+    var gridPriorityFallback = selector.SelectRanked(
+        [distantWorkedGrid], [], dxRankingIndexes, dxRankingSettings, 10, includeActiveQso: false);
+    if (gridPriorityFallback.FirstOrDefault()?.Callsign != "PY2DX"
+        || gridPriorityFallback[0].Ranking.PriorityTier != 80)
+    {
+        failures.Add("DX Assist did not fall back to normal DX ranking when grid priority was enabled but no new grid was available.");
+    }
+
+    var newDxccIndexes = new WorkedStatusIndexes();
+    newDxccIndexes.Dxcc[brazilEntity.Code] = dxRankingIndexes.Dxcc[brazilEntity.Code];
+    var newDxccStillWins = selector.SelectRanked(
+        [nearbyNewGrid, distantWorkedGrid], [], newDxccIndexes, dxRankingSettings, 10, includeActiveQso: false);
+    if (newDxccStillWins.FirstOrDefault()?.Callsign != "F4GRID"
+        || newDxccStillWins[0].Ranking.PriorityTier != 10)
+    {
+        failures.Add("A new DXCC did not remain above optional new-grid priority.");
+    }
+}
+
 var sessionOrdering = new SessionHistoryViewModel();
 sessionOrdering.AllOpportunities.Add(new SessionDxOpportunity
 {
@@ -1113,7 +1216,7 @@ if (failures.Count > 0)
     return 1;
 }
 
-Console.WriteLine($"PASS: configurable 5-200 row geometry/model/settings, secure settings/scheduler export-import validation, WAS-only state indexing with Alaska/Hawaii and optional DC, personal 52-row default migration, {bandCases.Length} band mappings, FT8/FT4 timing and Reply markers, binary JTDX parsing, stale-target policy, InQso CQ contradiction and no-progress safety, blank-status verification, band/mode resets, context inheritance, row-settling gate, optional scoped DXCC priorities, and Session History DXCC-first universal-rank ordering.");
+Console.WriteLine($"PASS: configurable 5-200 row geometry/model/settings, secure settings/scheduler export-import validation, WAS-only state indexing with Alaska/Hawaii and optional DC, personal 52-row default migration, {bandCases.Length} band mappings, FT8/FT4 timing and Reply markers, binary JTDX parsing, stale-target policy, InQso CQ contradiction and no-progress safety, blank-status verification, band/mode resets, context inheritance, row-settling gate, optional scoped DXCC and new-grid priorities with normal-DX fallback, and Session History DXCC-first universal-rank ordering.");
 return 0;
 
 static byte[] BuildDecodePacket(string modeMarker, string message)

@@ -4,8 +4,9 @@
 FT8/FT4 decodes and can select wanted DXCC entities, grids, US states and
 configured geographical areas.
 
-The current release is **v3.1.0**, adding the guided setup wizard while retaining
-the Configurable Rows Fix17 safety baseline.
+The current release is **v3.1.1**, restoring DX Assist's normal DX ranking by
+default and adding optional new-grid priority with automatic fallback. It also
+includes the v3.1.0 guided setup wizard and Configurable Rows Fix17 safety baseline.
 
 ## Download
 
@@ -31,6 +32,8 @@ computer or display configuration.
 ## Current capabilities
 
 - Universal ranking shared by DX Assist, Wanted and Location views.
+- DX Assist keeps needed DXCC at absolute priority and leaves new-grid promotion off by default. The optional **Give new grids priority** control promotes globally new grids, then automatically falls back to normal DX ranking when none are available.
+- Wanted Sniper remains a separate strict wanted-item mode; its grid choices do not change DX Assist ranking.
 - Overall New DXCC as the highest-priority target.
 - Optional current-band, current-mode and band-plus-mode wanted scopes.
 - Configurable JTDX Band Activity row count (5–200 rows).

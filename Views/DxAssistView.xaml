@@ -19,6 +19,12 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <CheckBox Content="Auto-select best target" IsChecked="{Binding DxAssist.AutoSelectBestCq}" VerticalAlignment="Center" />
+                    <ToggleButton Content="Give new grids priority"
+                                  IsChecked="{Binding PrioritizeNewGridsInDxAssist, Mode=TwoWay}"
+                                  VerticalAlignment="Center"
+                                  Margin="12,0,12,0"
+                                  Padding="10,4"
+                                  ToolTip="When enabled, a globally new grid ranks below needed DXCC but above normal DX ranking. If no new grid is available, DX Assist continues with normal ranking." />
                     <TextBlock Text="{Binding LogbookStatus}" VerticalAlignment="Center" Foreground="#526577" ToolTip="{Binding AdifDiagnostics}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">

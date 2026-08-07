@@ -524,6 +524,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    public bool PrioritizeNewGridsInDxAssist
+    {
+        get => Settings.Settings.PrioritizeNewGridsInDxAssist;
+        set
+        {
+            if (Settings.Settings.PrioritizeNewGridsInDxAssist == value)
+                return;
+
+            Settings.Settings.PrioritizeNewGridsInDxAssist = value;
+            OnPropertyChanged();
+            SaveAll();
+            AddAction(value
+                ? "DX Assist new-grid priority enabled. Needed DXCC remains first; new grids now precede normal DX ranking."
+                : "DX Assist new-grid priority disabled. Grid needs remain visible but normal DX ranking decides their position.");
+            RequestNextBestTargetsUpdate();
+        }
+    }
+
     public bool IncludeBandWanted
     {
         get => Settings.Settings.IncludeBandWanted;
