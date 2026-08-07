@@ -14,10 +14,10 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "8.0.x"
 
@@ -30,23 +30,29 @@ jobs:
       - name: Run application smoke tests
         run: dotnet run -c Release --project Tests\ConfigurableRows.SmokeTests\JtdxAutoResume.ConfigurableRows.SmokeTests.csproj
 
+      - name: Shut down build servers
+        run: dotnet build-server shutdown
+
       - name: Publish self-contained Windows application
-        run: >-
-          dotnet publish JtdxAutoResume.V3.csproj
-          -c Release
-          -r win-x64
-          --self-contained true
-          -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:DebugType=None
-          -p:DebugSymbols=false
-          -o artifacts\publish
+        shell: pwsh
+        run: |
+          dotnet publish JtdxAutoResume.V3.csproj `
+            -c GitHubRelease `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -p:UseSharedCompilation=false `
+            -o "$env:RUNNER_TEMP\dxpilot-publish"
 
       - name: Create release ZIP
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
           $zip = "artifacts\DXPilot-for-JTDX-$env:GITHUB_REF_NAME-win-x64.zip"
-          Compress-Archive -Path "artifacts\publish\*" -DestinationPath $zip -Force
+          Compress-Archive -Path "$env:RUNNER_TEMP\dxpilot-publish\*" -DestinationPath $zip -Force
           "RELEASE_ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Create GitHub Release
