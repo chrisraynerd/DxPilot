@@ -115,7 +115,7 @@ public sealed class SessionDxOpportunity
         + $"Best SNR: {BestSnrText}\n"
         + $"Times seen: {TimesSeenText}\n\n"
         + "Action:\n"
-        + $"Called by AutoResume: {CalledText}\n"
+        + $"Called by DX Pilot: {CalledText}\n"
         + $"Worked/logged: {WorkedText}\n"
         + $"Outcome: {Outcome}\n"
         + $"Outcome reason: {OutcomeReason}\n\n"

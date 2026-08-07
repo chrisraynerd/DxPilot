@@ -150,7 +150,7 @@ public sealed class SettingsService
 
                 if (!looksLikeLegacySettings)
                 {
-                    error = "The selected JSON file is not an AutoResume settings export.";
+                    error = "The selected JSON file is not a DX Pilot settings export.";
                     return false;
                 }
 

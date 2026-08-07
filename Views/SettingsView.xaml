@@ -280,7 +280,7 @@
                         <Button Content="Import Settings" Command="{Binding ImportSettingsCommand}" />
                     </WrapPanel>
                     <TextBlock Text="{Binding SettingsTransferStatus}" TextWrapping="Wrap" Foreground="#526577" Margin="0,8,0,0" />
-                    <TextBlock Text="Exports include the complete AutoResume configuration and scheduler, but deliberately exclude the QRZ password. Import validates the file and backs up the current configuration before replacement." TextWrapping="Wrap" Foreground="#526577" Margin="0,6,0,0" />
+                    <TextBlock Text="Exports include the complete DX Pilot configuration and scheduler, but deliberately exclude the QRZ password. Import validates the file and backs up the current configuration before replacement." TextWrapping="Wrap" Foreground="#526577" Margin="0,6,0,0" />
                     <TextBlock Text="UDP Reply depends on JTDX/WSJT-X accepting UDP requests; Enable TX recovery remains mouse/pixel based." TextWrapping="Wrap" Foreground="#526577" Margin="0,18,0,0" />
                 </StackPanel>
             </Border>

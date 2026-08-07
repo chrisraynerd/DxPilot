@@ -4,7 +4,7 @@ public sealed class DashboardViewModel : ObservableObject
 {
     private string _overallStatus = "Ready.";
     private string _udpStatus = "UDP listener stopped.";
-    private string _autoResumeStatus = "AutoResume stopped.";
+    private string _autoResumeStatus = "DX Pilot stopped.";
     private string _pixelState = "No pixel sample yet.";
     private string _bestTarget = "No target selected.";
     private string _bestReason = "";

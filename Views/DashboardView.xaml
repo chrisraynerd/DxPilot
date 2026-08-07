@@ -53,7 +53,7 @@
             </Border>
             <Border Style="{StaticResource PanelBorder}" Margin="0,0,10,0">
                 <StackPanel>
-                    <TextBlock Text="AutoResume" FontWeight="SemiBold" />
+                    <TextBlock Text="DX Pilot" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding Dashboard.AutoResumeStatus}" TextWrapping="Wrap" Margin="0,6,0,0" />
                 </StackPanel>
             </Border>

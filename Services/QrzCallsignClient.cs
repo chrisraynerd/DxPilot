@@ -170,7 +170,7 @@ public sealed class QrzCallsignClient : IQrzCallsignClient, IDisposable
     private static string Agent()
     {
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "3.0.0";
-        return $"AutoResume-{version}";
+        return $"DXPilotForJTDX-{version}";
     }
 
     public void Dispose()

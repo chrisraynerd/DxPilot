@@ -1,15 +1,15 @@
-# JTDX AutoResume V3
+# DX Pilot for JTDX
 
-JTDX AutoResume is a Windows/WPF companion for JTDX that ranks live FT8/FT4
-decodes and can select wanted DXCC entities, grids, US states and configured
-geographical areas.
+**DX Pilot for JTDX**, by G1CEC, is a Windows/WPF companion that ranks live
+FT8/FT4 decodes and can select wanted DXCC entities, grids, US states and
+configured geographical areas.
 
 The current protected version is **Configurable Rows Fix17**. Its local Git tag
 is `stable-configurable-rows-fix17-20260806`.
 
 ## Important safety note
 
-AutoResume can control JTDX through UDP messages and calibrated screen clicks.
+DX Pilot can control JTDX through UDP messages and calibrated screen clicks.
 Always verify the JTDX window geometry, visible-row count, message-column click
 position and Enable TX coordinates before enabling automatic hunting on another
 computer or display configuration.
@@ -34,7 +34,7 @@ computer or display configuration.
 
 - Windows 10 or Windows 11.
 - .NET 8 Desktop Runtime when using the framework-dependent build.
-- JTDX configured to send UDP Status and Decode messages to AutoResume.
+- JTDX configured to send UDP Status and Decode messages to DX Pilot.
 - A correctly calibrated JTDX Band Activity grid for GUI row selection.
 
 The personal development configuration listens on UDP port `2237` and forwards
@@ -58,6 +58,10 @@ dotnet run -c Release --project Tests\ConfigurableRows.SmokeTests\JtdxAutoResume
 Live settings are stored outside the repository under:
 
 `%APPDATA%\JtdxAutoResume.V3`
+
+That legacy folder name and the `JtdxAutoResume.V3` UDP identity are deliberately
+retained so existing installations keep their settings and JTDX integration
+after the product rename.
 
 The `config` directory contains a QRZ-sanitized example of the personal testing
 baseline. It intentionally retains the 52-row/test-rig values, so another user

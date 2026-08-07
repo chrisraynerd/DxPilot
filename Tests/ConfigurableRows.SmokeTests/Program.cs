@@ -89,6 +89,21 @@ if (!(bool)windowMatchesCalibration.Invoke(null, [matchingWindow, customCalibrat
 if (!new JtdxWindowInfo(IntPtr.Zero, "JTDX", 123, 0, 0, 1400, 800, true).IsMinimized)
     failures.Add("The JTDX window model did not retain the click-time minimised state.");
 
+var scoreWindowCandidate = typeof(JtdxWindowLocator).GetMethod(
+    "ScoreCandidate",
+    BindingFlags.Static | BindingFlags.NonPublic)
+    ?? throw new InvalidOperationException("Missing JTDX window candidate scorer.");
+var dxPilotSelfScore = (int)scoreWindowCandidate.Invoke(
+    null,
+    ["DX Pilot for JTDX — G1CEC", "HwndWrapper", "DXPilot-for-JTDX-G1CEC", "JTDX"])!;
+if (dxPilotSelfScore >= 0)
+    failures.Add("The renamed DX Pilot window was not excluded from JTDX window discovery.");
+
+if (!typeof(MainViewModel).Assembly.GetName().Name!.Equals("DXPilot-for-JTDX-G1CEC", StringComparison.Ordinal))
+    failures.Add("The executable assembly does not use the DX Pilot/G1CEC identity.");
+if (!new SettingsService().AppFolder.EndsWith("JtdxAutoResume.V3", StringComparison.OrdinalIgnoreCase))
+    failures.Add("The DX Pilot rename changed the legacy settings folder and would hide existing configuration.");
+
 var visibleModel = new JtdxVisibleRowModel();
 var visibleDecodes = Enumerable.Range(0, 50)
     .Select(index => new DecodeMessage
@@ -347,7 +362,7 @@ try
     var unrelatedJsonFile = Path.Combine(settingsTransferFolder, "unrelated.json");
     File.WriteAllText(unrelatedJsonFile, "{\"example\":true}");
     if (transferService.TryReadSettingsImport(unrelatedJsonFile, out _, out _))
-        failures.Add("An unrelated JSON file was accepted as AutoResume settings.");
+        failures.Add("An unrelated JSON file was accepted as DX Pilot settings.");
 }
 finally
 {
@@ -866,7 +881,7 @@ using (var viewModel = new MainViewModel())
     if (!firstCqHandled || PrivateLockedTarget(viewModel) == null)
         failures.Add("The InQso CQ contradiction did not retain the locked target for immediate correction.");
     if ((bool)(InvokePrivate(viewModel, "ShouldClickEnableTxRecovery") ?? true))
-        failures.Add("Pixel AutoResume was allowed to re-enable TX during an InQso CQ contradiction.");
+        failures.Add("DX Pilot pixel recovery was allowed to re-enable TX during an InQso CQ contradiction.");
 
     InvokePrivate(viewModel, "ProcessDecodeForCurrentQso", new DecodeMessage
     {

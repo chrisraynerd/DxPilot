@@ -98,6 +98,7 @@ public sealed class JtdxWindowLocator
             || className.Equals("CabinetWClass", StringComparison.OrdinalIgnoreCase)
             || title.Contains("File Explorer", StringComparison.OrdinalIgnoreCase)
             || title.Contains("JtdxAutoResume", StringComparison.OrdinalIgnoreCase)
+            || title.Contains("DX Pilot for JTDX", StringComparison.OrdinalIgnoreCase)
             || title.Contains("JTDX Auto TX", StringComparison.OrdinalIgnoreCase))
         {
             score -= 250;

@@ -56,8 +56,8 @@ public sealed class AutoResumeService
 
         _cts = new CancellationTokenSource();
         _ = Task.Run(() => RunLoopAsync(settings, scheduleSnapshot, _cts.Token));
-        StatusChanged?.Invoke($"AutoResume running at {settings.IntervalMs} ms.");
-        ActionLogged?.Invoke("AutoResume started.");
+        StatusChanged?.Invoke($"DX Pilot running at {settings.IntervalMs} ms.");
+        ActionLogged?.Invoke("DX Pilot started.");
     }
 
     public void Stop()
@@ -68,8 +68,8 @@ public sealed class AutoResumeService
         _cts.Cancel();
         _cts = null;
         _clicker.KeepAwake(false);
-        StatusChanged?.Invoke("AutoResume stopped.");
-        ActionLogged?.Invoke("AutoResume stopped.");
+        StatusChanged?.Invoke("DX Pilot stopped.");
+        ActionLogged?.Invoke("DX Pilot stopped.");
     }
 
     private async Task RunLoopAsync(AppSettings settings, IList<BandScheduleItem> schedule, CancellationToken cancellationToken)
@@ -82,7 +82,7 @@ public sealed class AutoResumeService
             }
             catch (Exception ex)
             {
-                StatusChanged?.Invoke($"AutoResume tick error: {ex.Message}");
+                StatusChanged?.Invoke($"DX Pilot tick error: {ex.Message}");
             }
 
             await Task.Delay(Math.Max(50, settings.IntervalMs), cancellationToken).ContinueWith(_ => { });
@@ -107,7 +107,7 @@ public sealed class AutoResumeService
 
         var looksOff = greyPct >= settings.MinGreyPercent && redPct <= settings.MaxRedPercent;
         PixelStateChanged?.Invoke(greyPct, redPct, looksOff);
-        StatusChanged?.Invoke($"AutoResume running. Grey {greyPct}% / red {redPct}%.");
+        StatusChanged?.Invoke($"DX Pilot running. Grey {greyPct}% / red {redPct}%.");
 
         if (looksOff)
         {
@@ -117,7 +117,7 @@ public sealed class AutoResumeService
                 return;
             }
 
-            // AutoResume never deliberately selects CQ/TX6. It may only re-enable
+            // DX Pilot never deliberately selects CQ/TX6. It may only re-enable
             // TX after the target gate confirms a locked station.
             _ = InvokeOnUiThread(ShouldUseCqReset);
             var shouldClickEnable = InvokeOnUiThread(ShouldClickEnableTx) ?? false;
@@ -126,7 +126,7 @@ public sealed class AutoResumeService
                 _lastFire = Environment.TickCount64;
                 _lastWasGrey = false;
                 LogBlocked("CQ/TX6 is disabled; Enable TX remains blocked until JTDX confirms a selected target.");
-                StatusChanged?.Invoke("AutoResume waiting for JTDX to accept selected target before enabling TX.");
+                StatusChanged?.Invoke("DX Pilot waiting for JTDX to accept selected target before enabling TX.");
                 return;
             }
 

@@ -304,7 +304,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _wantedRefreshTimer.Start();
 
         WireEvents();
-        Dashboard.OverallStatus = "V3 ready. Start UDP and AutoResume when JTDX is open.";
+        Dashboard.OverallStatus = "DX Pilot ready. Start UDP and select a hunting mode when JTDX is open.";
         ResolverDiagnostics = _dxccResolver.Diagnostics;
         RarityDiagnostics = _rarityService.Diagnostics.Summary;
         AddAction(ResolverDiagnostics);
@@ -666,7 +666,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             var statusAge = DateTime.Now - _lastAutoResumeStatusUiAt;
             if ((message.Equals(_lastAutoResumeStatusUi, StringComparison.Ordinal)
-                    || message.StartsWith("AutoResume running.", StringComparison.Ordinal))
+                    || message.StartsWith("DX Pilot running.", StringComparison.Ordinal))
                 && statusAge < TimeSpan.FromSeconds(2))
             {
                 return;
@@ -1205,7 +1205,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (!_udpListener.IsRunning)
             await StartUdpAsync();
         else
-            CaptureJtdxWindow(resetGrid: false, source: "AutoResume start");
+            CaptureJtdxWindow(resetGrid: false, source: "DX Pilot start");
         _autoResume.Start(Settings.Settings, Scheduler.ScheduleItems);
         AddAction(_operatingMode switch
         {
@@ -1217,7 +1217,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         await HuntTickAsync();
         if (_operatingMode == HuntingOperatingMode.DxAssist)
         {
-            ArmEnableTxForSelectedTarget("Start AutoResume");
+            ArmEnableTxForSelectedTarget("Start DX Pilot");
         }
         else if (_lockedTarget == null)
         {
@@ -1237,7 +1237,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _autoResume.Stop();
         _huntTimer.Stop();
         _operatingMode = HuntingOperatingMode.DxAssist;
-        await ReleaseLockedTargetAndMaybeResumeAsync("AutoResume stopped", "Abandoned - AutoResume stopped", suppress: false, resumeSniper: false);
+        await ReleaseLockedTargetAndMaybeResumeAsync("DX Pilot stopped", "Abandoned - DX Pilot stopped", suppress: false, resumeSniper: false);
         EnsureEnableTxOff("Stop All");
         Dashboard.OverallStatus = "Stopped. DX Assist, Wanted Sniper and Location Hunt are off.";
         AddAction("Stop All: all hunting modes stopped and active target cleared.");
@@ -1252,9 +1252,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _autoResume.Stop();
             _huntTimer.Stop();
             _operatingMode = HuntingOperatingMode.DxAssist;
-            await ReleaseLockedTargetAndMaybeResumeAsync("UDP stopped; AutoResume stopped to avoid blind TX control", "Abandoned - AutoResume stopped", suppress: false, resumeSniper: false);
-            Dashboard.OverallStatus = "AutoResume stopped because UDP listener was stopped.";
-            AddAction("AutoResume stopped because UDP listener was stopped; UDP status is required before enabling TX.");
+            await ReleaseLockedTargetAndMaybeResumeAsync("UDP stopped; DX Pilot stopped to avoid blind TX control", "Abandoned - DX Pilot stopped", suppress: false, resumeSniper: false);
+            Dashboard.OverallStatus = "DX Pilot stopped because the UDP listener was stopped.";
+            AddAction("DX Pilot stopped because the UDP listener was stopped; UDP status is required before enabling TX.");
             RefreshModeIndicators();
         }
     }
@@ -1387,9 +1387,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Title = "Export AutoResume settings",
-            Filter = "AutoResume settings (*.json)|*.json|All files (*.*)|*.*",
-            FileName = $"AutoResume-Settings-{DateTime.Now:yyyyMMdd-HHmmss}.json",
+            Title = "Export DX Pilot settings",
+            Filter = "DX Pilot settings (*.json)|*.json|All files (*.*)|*.*",
+            FileName = $"DXPilot-Settings-{DateTime.Now:yyyyMMdd-HHmmss}.json",
             AddExtension = true,
             DefaultExt = ".json"
         };
@@ -1409,7 +1409,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             AddAction(SettingsTransferStatus);
             System.Windows.MessageBox.Show(
                 "Settings exported successfully.\n\nThe QRZ password was deliberately excluded. Enter it again after importing on another installation.",
-                "AutoResume Settings Export",
+                "DX Pilot Settings Export",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
@@ -1419,7 +1419,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             AddAction(SettingsTransferStatus);
             System.Windows.MessageBox.Show(
                 SettingsTransferStatus,
-                "AutoResume Settings Export",
+                "DX Pilot Settings Export",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -1429,8 +1429,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Import AutoResume settings",
-            Filter = "AutoResume settings (*.json)|*.json|All files (*.*)|*.*",
+            Title = "Import DX Pilot settings",
+            Filter = "DX Pilot settings (*.json)|*.json|All files (*.*)|*.*",
             CheckFileExists = true,
             Multiselect = false
         };
@@ -1444,7 +1444,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             AddAction(SettingsTransferStatus);
             System.Windows.MessageBox.Show(
                 SettingsTransferStatus,
-                "AutoResume Settings Import",
+                "DX Pilot Settings Import",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             return;
@@ -1465,11 +1465,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             + $"JTDX visible rows: {payload.Settings.JtdxBandVisibleRowCount}\n"
             + $"{scheduleText}{credentialText}\n\n"
             + "The current configuration will be backed up automatically. "
-            + "AutoResume will then close so the imported settings can be loaded cleanly.";
+            + "DX Pilot will then close so the imported settings can be loaded cleanly.";
 
         if (System.Windows.MessageBox.Show(
                 confirmation,
-                "Confirm AutoResume Settings Import",
+                "Confirm DX Pilot Settings Import",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning) != MessageBoxResult.Yes)
         {
@@ -1503,8 +1503,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 $"Settings imported from {dialog.FileName}. Previous configuration backed up to {backupFolder}.";
             AddAction(SettingsTransferStatus);
             System.Windows.MessageBox.Show(
-                $"Settings imported successfully.\n\nBackup:\n{backupFolder}\n\nAutoResume will now close. Reopen this build to use the imported configuration.",
-                "AutoResume Settings Import",
+                $"Settings imported successfully.\n\nBackup:\n{backupFolder}\n\nDX Pilot will now close. Reopen this build to use the imported configuration.",
+                "DX Pilot Settings Import",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             System.Windows.Application.Current?.Shutdown();
@@ -1515,7 +1515,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             AddAction(SettingsTransferStatus);
             System.Windows.MessageBox.Show(
                 SettingsTransferStatus + "\n\nThe previous settings remain available in the automatic backup if it was created.",
-                "AutoResume Settings Import",
+                "DX Pilot Settings Import",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -1983,7 +1983,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         if (!_autoResume.IsRunning)
         {
-            Wanted.Status = "Wanted Sniper is selected, but AutoResume is stopped.";
+            Wanted.Status = "Wanted Sniper is selected, but DX Pilot is stopped.";
             return;
         }
         if (_huntState != HuntState.Idle)
@@ -2927,7 +2927,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             {
                 _txVerificationState = "Unauthorised transmission - no locked target";
                 _lastCorrectiveAction = $"Stopped {transmission.Message}: no target is locked";
-                AddAction($"JTDX transmitted '{transmission.Message}' while AutoResume had no locked target. Clicking Enable TX off.");
+                AddAction($"JTDX transmitted '{transmission.Message}' while DX Pilot had no locked target. Clicking Enable TX off.");
                 EnsureEnableTxOff("ALL.TXT detected transmission with no locked target");
             }
             return;
@@ -3144,7 +3144,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         if (!_autoResume.IsRunning)
         {
-            ClearLockedTarget("AutoResume stopped; clearing locked target.");
+            ClearLockedTarget("DX Pilot stopped; clearing locked target.");
             return;
         }
 
@@ -3265,7 +3265,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _lastForcedTxOffAt = DateTime.Now;
         _lastCorrectiveAction = "Forced Enable TX off: CQ detected with no locked target";
         _recoveryMode = "NoLockedTarget";
-        AddAction($"Prevented unwanted CQ '{status.TxMessage}'; clicked Enable TX off because AutoResume has no locked target.");
+        AddAction($"Prevented unwanted CQ '{status.TxMessage}'; clicked Enable TX off because DX Pilot has no locked target.");
         _clicker.MoveClickRestore(Settings.Settings.EnableTxX, Settings.Settings.EnableTxY);
         return true;
     }
@@ -3287,7 +3287,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _txVerificationState = "CQ during QSO - immediate correction";
         _recoveryMode = "ImmediateInSlotRetarget";
         _lastCorrectiveAction = $"Immediately reloading {targetCall} during CQ";
-        _stuckReason = $"JTDX prepared CQ while AutoResume still held an InQso lock for {targetCall}.";
+        _stuckReason = $"JTDX prepared CQ while DX Pilot still held an InQso lock for {targetCall}.";
         AddAction($"In-QSO CQ contradiction detected for {targetCall}: '{status.TxMessage}'. Immediately reloading the locked target without stopping TX or suppressing it.");
         await ImmediatelyReloadLockedTargetAsync($"In-QSO CQ contradiction for {targetCall}");
         return true;
@@ -3748,7 +3748,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 : $"CQ/TX6 reset blocked because next/active target exists: {target}.");
         }
 
-        // AutoResume never intentionally selects CQ/TX6. If no target is locked,
+        // DX Pilot never intentionally selects CQ/TX6. If no target is locked,
         // Enable TX remains off until hunting supplies a safe target.
         return false;
     }
@@ -4747,7 +4747,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             && !string.IsNullOrWhiteSpace(locked)
             && !best.Equals(locked, StringComparison.OrdinalIgnoreCase))
         {
-            return $"Best candidate differs from active QSO target. AutoResume is monitoring {locked} and will not call {best} until this QSO completes.";
+            return $"Best candidate differs from active QSO target. DX Pilot is monitoring {locked} and will not call {best} until this QSO completes.";
         }
 
         return "";
@@ -4969,7 +4969,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string PlainStatusMessage(DxTarget? target)
     {
         if (!_autoResume.IsRunning)
-            return "AutoResume monitoring is stopped.";
+            return "DX Pilot monitoring is stopped.";
         if (target == null)
             return "No target selected.";
         if (_huntState == HuntState.Calling && _jtdxShowsWrongTx)
@@ -5613,7 +5613,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         item.AttemptCount++;
         item.LastAttemptUtc = DateTime.UtcNow;
         item.Outcome = "Called";
-        item.OutcomeReason = manual ? "Manual Wanted target selected" : "AutoResume selected target";
+        item.OutcomeReason = manual ? "Manual Wanted target selected" : "DX Pilot selected target";
         AddSessionTimeline(item, manual ? "Manual-selected" : "Auto-selected");
         AddSessionTimeline(item, "UDP Reply sent");
         SessionHistory.Refresh();
@@ -5681,9 +5681,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             item.Outcome = "Abandoned - TX stopped";
             item.OutcomeReason = reason;
         }
-        else if (reason.Contains("Abandoned - AutoResume stopped", StringComparison.OrdinalIgnoreCase))
+        else if (reason.Contains("Abandoned - DX Pilot stopped", StringComparison.OrdinalIgnoreCase))
         {
-            item.Outcome = "Abandoned - AutoResume stopped";
+            item.Outcome = "Abandoned - DX Pilot stopped";
             item.OutcomeReason = reason;
         }
         else if (reason.Contains("Missed - no progress", StringComparison.OrdinalIgnoreCase))
@@ -5913,7 +5913,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
-            FileName = $"AutoResume-Session-History-{DateTime.Now:yyyyMMdd-HHmmss}.csv"
+            FileName = $"DXPilot-Session-History-{DateTime.Now:yyyyMMdd-HHmmss}.csv"
         };
         if (dialog.ShowDialog() != true)
             return;
@@ -5959,17 +5959,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "Text files (*.txt)|*.txt|CSV files (*.csv)|*.csv|All files (*.*)|*.*",
-            FileName = $"AutoResume-Recent-Actions-{DateTime.Now:yyyyMMdd-HHmmss}.txt"
+            FileName = $"DXPilot-Recent-Actions-{DateTime.Now:yyyyMMdd-HHmmss}.txt"
         };
         if (dialog.ShowDialog() != true)
             return;
 
         var sb = new StringBuilder();
-        sb.AppendLine("AutoResume V3 Recent Actions Export");
+        sb.AppendLine("DX Pilot for JTDX Recent Actions Export");
         sb.AppendLine($"Exported: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         sb.AppendLine($"Overall: {Dashboard.OverallStatus}");
         sb.AppendLine($"UDP: {Dashboard.UdpStatus}");
-        sb.AppendLine($"AutoResume: {Dashboard.AutoResumeStatus}");
+        sb.AppendLine($"DX Pilot: {Dashboard.AutoResumeStatus}");
         sb.AppendLine($"Hunt State: {Dashboard.HuntState}");
         sb.AppendLine($"Radio Context: {_radioContext?.Display ?? "Unknown"}");
         sb.AppendLine($"Dial Frequency Hz: {_radioContext?.DialFrequencyHz.ToString() ?? "Unknown"}");
@@ -5992,7 +5992,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void ClearSessionHistory()
     {
-        if (System.Windows.MessageBox.Show("Clear Session History for this app session?", "AutoResume", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        if (System.Windows.MessageBox.Show("Clear Session History for this app session?", "DX Pilot for JTDX", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
 
         SessionHistory.AllOpportunities.Clear();
@@ -6638,7 +6638,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _autoResume.Start(Settings.Settings, Scheduler.ScheduleItems);
             _huntTimer.Start();
             RefreshModeIndicators();
-            AddAction("CALL NOW started AutoResume target monitoring.");
+            AddAction("CALL NOW started DX Pilot target monitoring.");
         }
 
         var target = _targetScorer.Score(decode, _logbook, _adifMergeResult.Indexes, _decodeHistory, Settings.Settings);
@@ -7467,7 +7467,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var calibrated = settings.JtdxBandActivityRight > settings.JtdxBandActivityLeft
             && settings.JtdxBandActivityBottom > settings.JtdxBandActivityTop;
         DxAssist.GuiSelectionStatus = calibrated
-            ? $"GUI Selection calibrated: {JtdxVisibleRowCount}-row grid set. AutoResume uses UDP decodes as truth and calibrated row geometry for directed rows."
+            ? $"GUI Selection calibrated: {JtdxVisibleRowCount}-row grid set. DX Pilot uses UDP decodes as truth and calibrated row geometry for directed rows."
             : "GUI Selection: calibration incomplete.";
     }
 

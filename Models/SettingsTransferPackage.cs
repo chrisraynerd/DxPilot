@@ -2,6 +2,7 @@ namespace JtdxAutoResume.V3.Models;
 
 public sealed class SettingsTransferPackage
 {
+    // Retained so settings exported by AutoResume-branded builds remain importable.
     public const string ExpectedFormat = "JtdxAutoResume.V3.SettingsExport";
     public const int CurrentFormatVersion = 1;
 

@@ -9,8 +9,14 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>AutoResume.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <AssemblyName>AutoResume.V3-2E0CCD</AssemblyName>
+    <AssemblyName>DXPilot-for-JTDX-G1CEC</AssemblyName>
     <RootNamespace>JtdxAutoResume.V3</RootNamespace>
+    <Product>DX Pilot for JTDX</Product>
+    <Title>DX Pilot for JTDX</Title>
+    <Description>Intelligent DX hunting and station control for JTDX</Description>
+    <Authors>G1CEC</Authors>
+    <Company>G1CEC</Company>
+    <Copyright>Copyright © G1CEC 2026</Copyright>
     <Version>3.0.0</Version>
     <AssemblyVersion>3.0.0.0</AssemblyVersion>
     <FileVersion>3.0.0.0</FileVersion>
