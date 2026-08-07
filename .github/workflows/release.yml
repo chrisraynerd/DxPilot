@@ -36,7 +36,7 @@ jobs:
       - name: Publish self-contained Windows application
         shell: pwsh
         run: |
-          dotnet publish JtdxAutoResume.V3.csproj `
+          $publishOutput = & dotnet publish JtdxAutoResume.V3.csproj `
             -c GitHubRelease `
             -r win-x64 `
             --self-contained true `
@@ -45,7 +45,15 @@ jobs:
             -p:DebugType=None `
             -p:DebugSymbols=false `
             -p:UseSharedCompilation=false `
-            -o "$env:RUNNER_TEMP\dxpilot-publish"
+            -o "$env:RUNNER_TEMP\dxpilot-publish" 2>&1
+          $publishExitCode = $LASTEXITCODE
+          $publishOutput | ForEach-Object { Write-Host $_ }
+          if ($publishExitCode -ne 0) {
+            $diagnostic = ($publishOutput | Select-Object -Last 30) -join "`n"
+            $diagnostic = $diagnostic.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=dotnet publish failed::$diagnostic"
+            exit $publishExitCode
+          }
 
       - name: Create release ZIP
         shell: pwsh
