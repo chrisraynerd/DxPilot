@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using JtdxAutoResume.V3.Controls.JtdxSelection;
 using JtdxAutoResume.V3.Models;
 using JtdxAutoResume.V3.Services;
+using JtdxAutoResume.V3.Views;
 using Microsoft.Win32;
 
 namespace JtdxAutoResume.V3.ViewModels;
@@ -243,6 +244,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SaveSettingsCommand = new RelayCommand(SaveAll);
         ExportSettingsCommand = new RelayCommand(ExportSettings);
         ImportSettingsCommand = new RelayCommand(ImportSettings);
+        OpenSetupWizardCommand = new RelayCommand(OpenSetupWizardAsync);
         BrowseAllTxtCommand = new RelayCommand(BrowseAllTxt);
         RunDiagnosticLookupCommand = new RelayCommand(RunDiagnosticLookup);
         AddScheduleCommand = new RelayCommand(AddSchedule);
@@ -481,6 +483,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ICommand SaveSettingsCommand { get; }
     public ICommand ExportSettingsCommand { get; }
     public ICommand ImportSettingsCommand { get; }
+    public ICommand OpenSetupWizardCommand { get; }
     public ICommand BrowseAllTxtCommand { get; }
     public ICommand ExportRecentActionsCommand { get; }
     public ICommand RunDiagnosticLookupCommand { get; }
@@ -1359,6 +1362,39 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         StartAllTxtMonitor();
         UpdateAdifDiagnostics();
         AddAction("Settings saved.");
+    }
+
+    private async Task OpenSetupWizardAsync()
+    {
+        var dialog = new SetupWizardWindow(Settings.Settings, isFirstRun: false)
+        {
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var restartUdp = _udpListener.IsRunning;
+        Settings.Refresh();
+        SaveAll();
+        LoadAdifSources();
+        StartAdifWatcher();
+        StartAllTxtMonitor(forceRestart: true);
+
+        if (restartUdp)
+        {
+            await _udpListener.StartAsync(
+                Settings.Settings.UdpListenPort,
+                Settings.Settings.UdpForwardEnabled,
+                Settings.Settings.UdpForwardHost,
+                Settings.Settings.UdpForwardPort);
+            CaptureJtdxWindow(resetGrid: false, source: "Setup wizard");
+        }
+
+        SettingsTransferStatus = "Setup wizard completed and settings saved.";
+        Dashboard.OverallStatus = restartUdp
+            ? "Setup updated; UDP restarted with the new connection settings."
+            : "Setup updated and saved.";
+        AddAction(Dashboard.OverallStatus);
     }
 
     private void BrowseAllTxt()

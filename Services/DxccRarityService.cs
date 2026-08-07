@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.IO;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using JtdxAutoResume.V3.Models;
 
@@ -195,13 +194,8 @@ public sealed partial class DxccRarityService
         if (File.Exists(bundled))
             return bundled;
 
-        var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? baseDir;
-        var assemblyBundled = Path.Combine(assemblyDir, "Data", "DXCC-UK-Desirability-G1CEC.csv");
-        if (File.Exists(assemblyBundled))
-            return assemblyBundled;
-
         return string.IsNullOrWhiteSpace(configured)
-            ? Path.Combine(assemblyDir, "Data", "DXCC-UK-Desirability-G1CEC.csv")
+            ? bundled
             : configured;
     }
 

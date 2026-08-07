@@ -235,7 +235,8 @@ public sealed class SettingsService
         error = "";
         if (settings.UdpListenPort is < 1 or > 65535
             || settings.UdpReplyFallbackPort is < 1 or > 65535
-            || settings.UdpForwardPort is < 1 or > 65535)
+            || settings.UdpForwardPort is < 1 or > 65535
+            || settings.DownstreamLoggerPort is < 1 or > 65535)
         {
             error = "The settings file contains an invalid UDP port.";
             return false;
@@ -345,7 +346,9 @@ public sealed class SettingsService
         if (settings.UdpForwardPort <= 0)
             settings.UdpForwardPort = 2238;
 
-        settings.UdpForwardEnabled = true;
+        if (settings.DownstreamLoggerPort <= 0)
+            settings.DownstreamLoggerPort = 2236;
+
     }
 
     private static void NormalizeCoordinateDefaults(AppSettings settings)

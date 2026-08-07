@@ -4,8 +4,22 @@
 FT8/FT4 decodes and can select wanted DXCC entities, grids, US states and
 configured geographical areas.
 
-The current protected version is **Configurable Rows Fix17**. Its local Git tag
-is `stable-configurable-rows-fix17-20260806`.
+The current release is **v3.1.0**, adding the guided setup wizard while retaining
+the Configurable Rows Fix17 safety baseline.
+
+## Download
+
+Open the [DX Pilot Releases page](https://github.com/chrisraynerd/DxPilot/releases),
+choose the latest release, expand **Assets**, and download the Windows `win-x64.zip`
+file. Extract the complete ZIP to a normal folder, then run
+`DXPilot-for-JTDX-G1CEC.exe`.
+
+The downloadable package is self-contained, so users do not need to install the
+.NET Desktop Runtime separately. Windows may display a SmartScreen warning until
+the application is code-signed.
+
+The setup wizard does not open automatically. Open **Settings** in DX Pilot and
+choose **Run Setup Wizard** at the top of the page.
 
 ## Important safety note
 
@@ -28,6 +42,8 @@ computer or display configuration.
 - Manual CALL NOW override.
 - `ALL.TXT` monitoring for transmitted-message and wrong-target recovery.
 - Settings export/import with QRZ passwords excluded from portable exports.
+- Guided setup for station identity, adaptive JTDX/GridTracker/logger UDP paths,
+  log files, Enable TX safety calibration and the JTDX Band Activity grid.
 - Visible failed-row retry with a receive-period cooldown and GUI fallback.
 
 ## Requirements
@@ -51,6 +67,7 @@ dotnet build -c Release
 
 ```powershell
 dotnet run -c Release --project Tests\ConfigurableRows.SmokeTests\JtdxAutoResume.ConfigurableRows.SmokeTests.csproj
+dotnet run -c Release --project Tests\SetupWizard.SmokeTests\SetupWizard.SmokeTests.csproj
 ```
 
 ## Configuration and credentials
@@ -73,11 +90,12 @@ ADIF log, `ALL.TXT`, QRZ cache or Recent Actions export.
 ## Stable builds
 
 Protected local snapshots are maintained outside this repository in the sibling
-`SAFE-STABLE-VERSIONS` directory. Build outputs are ignored by Git and should be
-attached separately to a GitHub Release if the project is published.
+`SAFE-STABLE-VERSIONS` directory. Pushing a version tag such as `v3.1.0` runs the
+release workflow, builds the self-contained Windows package and attaches its ZIP
+to a GitHub Release automatically.
 
 ## Project status
 
-This remains a personalized working application. A private GitHub repository is
-recommended initially. Public distribution should add end-user setup guidance,
-a licence decision and broader testing on different JTDX window layouts.
+This remains a developing application. Wider public distribution would still
+benefit from code signing, a documented licence decision and broader testing on
+different JTDX window layouts.

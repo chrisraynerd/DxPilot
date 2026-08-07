@@ -1,0 +1,59 @@
+name: Publish Windows release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore JtdxAutoResume.V3.csproj
+
+      - name: Run setup wizard smoke tests
+        run: dotnet run -c Release --project Tests\SetupWizard.SmokeTests\SetupWizard.SmokeTests.csproj
+
+      - name: Run application smoke tests
+        run: dotnet run -c Release --project Tests\ConfigurableRows.SmokeTests\JtdxAutoResume.ConfigurableRows.SmokeTests.csproj
+
+      - name: Publish self-contained Windows application
+        run: >-
+          dotnet publish JtdxAutoResume.V3.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=None
+          -p:DebugSymbols=false
+          -o artifacts\publish
+
+      - name: Create release ZIP
+        shell: pwsh
+        run: |
+          $zip = "artifacts\DXPilot-for-JTDX-$env:GITHUB_REF_NAME-win-x64.zip"
+          Compress-Archive -Path "artifacts\publish\*" -DestinationPath $zip -Force
+          "RELEASE_ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME $env:RELEASE_ZIP `
+            --title "DX Pilot for JTDX $env:GITHUB_REF_NAME" `
+            --generate-notes

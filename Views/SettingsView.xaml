@@ -7,8 +7,24 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
-            <Border Style="{StaticResource PanelBorder}" Margin="0,0,12,0">
+            <Border Grid.ColumnSpan="2" Style="{StaticResource PanelBorder}" Margin="0,0,0,12" Background="#E0F2FE">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Run Setup Wizard" Command="{Binding OpenSetupWizardCommand}"
+                            Background="#0284C7" BorderBrush="#0369A1" Foreground="White" FontWeight="SemiBold" Margin="16,0,0,0" />
+                    <StackPanel>
+                        <TextBlock Text="Setup Wizard" FontSize="17" FontWeight="SemiBold" Foreground="#0C4A6E" />
+                        <TextBlock Text="Configure station details, JTDX and companion-program ports, log files, Enable TX safety, and Band Activity grid calibration."
+                                   TextWrapping="Wrap" Foreground="#075985" Margin="0,4,0,0" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Row="1" Style="{StaticResource PanelBorder}" Margin="0,0,12,0">
                 <StackPanel>
                     <TextBlock Text="Automation Coordinates" FontWeight="SemiBold" Margin="0,0,0,12" />
                     <UniformGrid Columns="2">
@@ -53,7 +69,7 @@
                 </StackPanel>
             </Border>
 
-            <Border Grid.Column="1" Style="{StaticResource PanelBorder}">
+            <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource PanelBorder}">
                 <StackPanel>
                     <TextBlock Text="Runtime" FontWeight="SemiBold" Margin="0,0,0,12" />
                     <UniformGrid Columns="2">

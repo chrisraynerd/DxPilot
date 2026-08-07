@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.IO;
-using System.Reflection;
 
 namespace JtdxAutoResume.V3.Services;
 
@@ -403,8 +402,7 @@ public sealed class DxccResolver
         if (File.Exists(bundled))
             return bundled;
 
-        var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? baseDir;
-        return Path.Combine(assemblyDir, "Data", "cty.csv");
+        return bundled;
     }
 
     private void LoadFallback()

@@ -5,6 +5,9 @@ namespace JtdxAutoResume.V3.Models;
 
 public sealed class AppSettings
 {
+    public bool SetupWizardCompleted { get; set; }
+    public int DownstreamLoggerPort { get; set; } = 2236;
+    public DateTime EnableTxCalibrationDate { get; set; } = DateTime.MinValue;
     public string LocationProfile { get; set; } = "Worldwide";
     public List<string>? LocationHuntAreas { get; set; }
     public int EnableTxX { get; set; } = 1360;

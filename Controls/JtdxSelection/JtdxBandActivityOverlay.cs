@@ -31,6 +31,11 @@ public sealed class JtdxBandActivityOverlay : Window
         Content = _canvas;
         MouseLeftButtonDown += (_, _) => DragMove();
         MouseWheel += OnMouseWheel;
+        KeyDown += (_, args) =>
+        {
+            if (args.Key == Key.Escape)
+                Close();
+        };
         LocationChanged += (_, _) => UpdateCalibrationFromWindow();
         SizeChanged += (_, _) => UpdateCalibrationFromWindow();
         Closed += (_, _) => OpenOverlays.Remove(this);

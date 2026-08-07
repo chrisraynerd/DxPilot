@@ -1,0 +1,382 @@
+<Window x:Class="JtdxAutoResume.V3.Views.SetupWizardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:JtdxAutoResume.V3.Views"
+        Title="Set up DX Pilot for JTDX"
+        Width="940" Height="690"
+        MinWidth="840" MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize"
+        Background="#F8FAFC"
+        ShowInTaskbar="True">
+    <Window.Resources>
+        <views:WizardStepVisibilityConverter x:Key="StepVisibility" />
+        <BooleanToVisibilityConverter x:Key="BooleanVisibility" />
+        <Style x:Key="WizardFieldLabel" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#334155" />
+            <Setter Property="Margin" Value="0,0,0,5" />
+        </Style>
+        <Style x:Key="WizardTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+        <Style x:Key="StepNumber" TargetType="Border">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Background" Value="#334155" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+        </Style>
+        <Style x:Key="ReviewCard" TargetType="Border">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#DCE4EC" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="230" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Background="#172331" Padding="26,30">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel>
+                    <TextBlock Text="DX PILOT" Foreground="#38BDF8" FontSize="13" FontWeight="Bold" />
+                    <TextBlock Text="Quick setup" Foreground="White" FontSize="25" FontWeight="SemiBold" Margin="0,4,0,0" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Margin="0,42,0,0">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,22">
+                        <Border Style="{StaticResource StepNumber}"><TextBlock Text="1" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                        <TextBlock Text="Welcome" Foreground="White" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,22">
+                        <Border Style="{StaticResource StepNumber}"><TextBlock Text="2" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                        <TextBlock Text="Your station" Foreground="White" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,22">
+                        <Border Style="{StaticResource StepNumber}"><TextBlock Text="3" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                        <TextBlock Text="JTDX connection" Foreground="White" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,22">
+                        <Border Style="{StaticResource StepNumber}"><TextBlock Text="4" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                        <TextBlock Text="Log files" Foreground="White" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Border Style="{StaticResource StepNumber}"><TextBlock Text="5" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                        <TextBlock Text="Enable TX" Foreground="White" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
+                        <Border Style="{StaticResource StepNumber}"><TextBlock Text="6" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                        <TextBlock Text="Grid calibration" Foreground="White" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
+                        <Border Style="{StaticResource StepNumber}"><TextBlock Text="7" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                        <TextBlock Text="Finish" Foreground="White" VerticalAlignment="Center" />
+                    </StackPanel>
+                </StackPanel>
+
+                <TextBlock Grid.Row="2" Text="Nothing transmits during setup."
+                           Foreground="#AFC2D5" FontSize="12" TextWrapping="Wrap" />
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Border Background="White" BorderBrush="#DCE4EC" BorderThickness="0,0,0,1" Padding="34,24,34,18">
+                <StackPanel>
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding StepNumber, StringFormat=Step {0} of 7}"
+                                   Foreground="#64748B" VerticalAlignment="Center" />
+                        <StackPanel>
+                            <TextBlock Text="{Binding StepTitle}" FontSize="24" FontWeight="SemiBold" Foreground="#172331" />
+                            <TextBlock Text="{Binding StepDescription}" Foreground="#64748B" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </DockPanel>
+                    <ProgressBar Minimum="0" Maximum="7" Value="{Binding StepNumber, Mode=OneWay}"
+                                 Height="4" Margin="0,18,0,0" Foreground="#0EA5E9" Background="#E2E8F0" BorderThickness="0" />
+                </StackPanel>
+            </Border>
+
+            <Grid Grid.Row="1" Margin="34,24,34,18">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid>
+                        <StackPanel Visibility="{Binding CurrentStep, Converter={StaticResource StepVisibility}, ConverterParameter=0}">
+                            <Border Background="#E0F2FE" CornerRadius="12" Padding="24" Margin="0,0,0,22">
+                                <StackPanel>
+                                    <TextBlock Text="Everything needed to start safely" FontSize="20" FontWeight="SemiBold" Foreground="#0C4A6E" />
+                                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#075985"
+                                               Text="This wizard connects DX Pilot to JTDX and, if used, GridTracker and Log4OM or another logging program. It also configures your logs and calibrates safe JTDX row selection." />
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="What you'll need" FontSize="17" FontWeight="SemiBold" Foreground="#1E293B" Margin="0,0,0,12" />
+                            <TextBlock Text="• Your callsign and Maidenhead grid" FontSize="14" Margin="0,0,0,10" />
+                            <TextBlock Text="• JTDX installed with UDP reporting available" FontSize="14" Margin="0,0,0,10" />
+                            <TextBlock Text="• Your ADIF log location (optional, but recommended)" FontSize="14" Margin="0,0,0,22" />
+                            <Border Background="#FFF7ED" BorderBrush="#FDBA74" BorderThickness="1" CornerRadius="8" Padding="14">
+                                <TextBlock TextWrapping="Wrap" Foreground="#9A3412"
+                                           Text="DX Pilot will start receiving messages from JTDX after the wizard, but hunting begins only when you choose a Start button in the main window." />
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding CurrentStep, Converter={StaticResource StepVisibility}, ConverterParameter=1}">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="18" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="My callsign" Style="{StaticResource WizardFieldLabel}" />
+                                    <TextBox Text="{Binding Callsign, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource WizardTextBox}" />
+                                    <TextBlock Text="Example: G1CEC" Foreground="#64748B" FontSize="12" Margin="0,5,0,0" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Home Maidenhead grid" Style="{StaticResource WizardFieldLabel}" />
+                                    <TextBox Text="{Binding HomeGrid, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource WizardTextBox}" />
+                                    <TextBlock Text="4, 6, or 8 characters — for example IO91WM" Foreground="#64748B" FontSize="12" Margin="0,5,0,0" />
+                                </StackPanel>
+                            </Grid>
+                            <Border Background="White" BorderBrush="#DCE4EC" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,24,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Why the grid matters" FontWeight="SemiBold" Foreground="#1E293B" />
+                                    <TextBlock Text="It is used for distance scoring, beam direction, and deciding whether a decoded grid is new to you." TextWrapping="Wrap" Foreground="#526577" Margin="0,6,0,0" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding CurrentStep, Converter={StaticResource StepVisibility}, ConverterParameter=2}">
+                            <TextBlock Text="Which programs do you use with JTDX?" Style="{StaticResource WizardFieldLabel}" />
+                            <ComboBox ItemsSource="{Binding ConnectionSetupOptions}"
+                                      SelectedItem="{Binding ConnectionSetup, UpdateSourceTrigger=PropertyChanged}"
+                                      MinHeight="38" Padding="8,5" FontSize="14" Margin="0,0,0,18" />
+                            <Border Background="#EFF6FF" CornerRadius="8" Padding="14" Margin="0,0,0,18">
+                                <StackPanel>
+                                    <TextBlock Text="UDP settings to apply" FontWeight="SemiBold" Foreground="#1E40AF" />
+                                    <TextBlock TextWrapping="Wrap" Foreground="#1E40AF" Margin="0,5,0,0"
+                                               Text="The instructions below now match the setup selected above. GridTracker is optional, and Log4OM is only one example of a compatible logging program." />
+                                </StackPanel>
+                            </Border>
+                            <WrapPanel Margin="0,0,0,20">
+                                <Border Width="190" Background="White" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="7" Padding="10" Margin="0,0,8,0">
+                                    <StackPanel><TextBlock Text="1  JTDX" FontWeight="SemiBold" /><TextBlock Text="Primary UDP Server" Foreground="#64748B" FontSize="11" /><TextBlock FontWeight="SemiBold" Margin="0,3,0,0"><Run Text="127.0.0.1 : " /><Run Text="{Binding UdpListenPort}" /></TextBlock></StackPanel>
+                                </Border>
+                                <Border Width="190" Background="White" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="7" Padding="10" Margin="0,0,8,0"
+                                        Visibility="{Binding UsesGridTracker, Converter={StaticResource BooleanVisibility}}">
+                                    <StackPanel><TextBlock Text="2  GridTracker" FontWeight="SemiBold" /><TextBlock Text="Receive UDP Messages" Foreground="#64748B" FontSize="11" /><TextBlock FontWeight="SemiBold" Margin="0,3,0,0"><Run Text="Port " /><Run Text="{Binding UdpForwardPort}" /></TextBlock></StackPanel>
+                                </Border>
+                                <Border Width="190" Background="White" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="7" Padding="10"
+                                        Visibility="{Binding UsesLoggingProgram, Converter={StaticResource BooleanVisibility}}">
+                                    <StackPanel><TextBlock Text="Logging program" FontWeight="SemiBold" /><TextBlock Text="JTDX/WSJT-X messages" Foreground="#64748B" FontSize="11" /><TextBlock FontWeight="SemiBold" Margin="0,3,0,0"><Run Text="Port " /><Run Text="{Binding LoggingProgramPort}" /></TextBlock></StackPanel>
+                                </Border>
+                            </WrapPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="18" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="JTDX: UDP Server port number" Style="{StaticResource WizardFieldLabel}" />
+                                    <TextBox Text="{Binding UdpListenPort, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource WizardTextBox}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="DX Pilot: UDP reply fallback" Style="{StaticResource WizardFieldLabel}" />
+                                    <TextBox Text="{Binding UdpReplyFallbackPort, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource WizardTextBox}" />
+                                </StackPanel>
+                            </Grid>
+                            <WrapPanel Margin="0,24,0,0" Visibility="{Binding UsesForwarding, Converter={StaticResource BooleanVisibility}}">
+                                <StackPanel Width="190" Margin="0,0,18,12">
+                                    <TextBlock Text="DX Pilot: Forward host/IP" Style="{StaticResource WizardFieldLabel}" />
+                                    <TextBox Text="{Binding UdpForwardHost, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource WizardTextBox}" />
+                                </StackPanel>
+                                <StackPanel Width="190" Margin="0,0,18,12" Visibility="{Binding UsesGridTracker, Converter={StaticResource BooleanVisibility}}">
+                                    <TextBlock Text="GridTracker: Receive UDP Port" Style="{StaticResource WizardFieldLabel}" />
+                                    <TextBox Text="{Binding UdpForwardPort, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource WizardTextBox}" />
+                                </StackPanel>
+                                <StackPanel Width="190" Margin="0,0,0,12" Visibility="{Binding UsesLoggingProgram, Converter={StaticResource BooleanVisibility}}">
+                                    <TextBlock Text="Logging program: message port" Style="{StaticResource WizardFieldLabel}" />
+                                    <TextBox Text="{Binding LoggingProgramPort, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource WizardTextBox}" />
+                                </StackPanel>
+                            </WrapPanel>
+                            <StackPanel Margin="0,14,0,0">
+                                <TextBlock TextWrapping="Wrap" Foreground="#334155" FontWeight="SemiBold"
+                                           Text="JTDX — File → Settings → Reporting → Primary UDP Server" />
+                                <TextBlock TextWrapping="Wrap" Foreground="#526577" Margin="0,3,0,8"
+                                           Text="{Binding JtdxPortInstructions}" />
+                                <TextBlock TextWrapping="Wrap" Foreground="#334155" FontWeight="SemiBold"
+                                           Text="GridTracker — Settings → General"
+                                           Visibility="{Binding UsesGridTracker, Converter={StaticResource BooleanVisibility}}" />
+                                <TextBlock TextWrapping="Wrap" Foreground="#526577" Margin="0,3,0,8"
+                                           Text="{Binding GridTrackerPortInstructions}"
+                                           Visibility="{Binding UsesGridTracker, Converter={StaticResource BooleanVisibility}}" />
+                                <TextBlock TextWrapping="Wrap" Foreground="#334155" FontWeight="SemiBold"
+                                           Visibility="{Binding UsesLoggingProgram, Converter={StaticResource BooleanVisibility}}">
+                                    <Run Text="Logging program — receive JTDX/WSJT-X messages on port " /><Run Text="{Binding LoggingProgramPort}" />
+                                </TextBlock>
+                                <TextBlock TextWrapping="Wrap" Foreground="#526577" Margin="0,3,0,0"
+                                           Text="{Binding LoggingProgramInstructions}"
+                                           Visibility="{Binding UsesLoggingProgram, Converter={StaticResource BooleanVisibility}}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding CurrentStep, Converter={StaticResource StepVisibility}, ConverterParameter=3}">
+                            <Button Content="Use standard JTDX locations" Command="{Binding UseJtdxDefaultsCommand}" HorizontalAlignment="Left" Margin="0,0,0,18" />
+
+                            <TextBlock Text="Main ADIF log" Style="{StaticResource WizardFieldLabel}" />
+                            <TextBlock Text="This can be updated at regular intervals, or you can connect to a live master log. This log must include LoTW confirmations so DX Pilot can distinguish worked from confirmed countries and grids."
+                                       TextWrapping="Wrap" Foreground="#526577" Margin="0,0,0,8" />
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <TextBox Text="{Binding FullAdifPath, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource WizardTextBox}" />
+                                <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseFullAdifCommand}" Margin="8,0,0,0" />
+                            </Grid>
+                            <DockPanel Margin="0,5,0,18"><CheckBox DockPanel.Dock="Right" Content="Load on startup" IsChecked="{Binding AutoLoadFullAdifOnStartup}" /><TextBlock Text="{Binding FullAdifStatus}" Foreground="#64748B" FontSize="12" /></DockPanel>
+
+                            <TextBlock Text="JTDX Live ADIF" Style="{StaticResource WizardFieldLabel}" />
+                            <TextBlock Text="Commonly found at %LOCALAPPDATA%\JTDX\wsjtx_log.adi"
+                                       TextWrapping="Wrap" Foreground="#526577" Margin="0,0,0,8" />
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <TextBox Text="{Binding LiveJtdxAdifPath, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource WizardTextBox}" />
+                                <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseLiveAdifCommand}" Margin="8,0,0,0" />
+                            </Grid>
+                            <DockPanel Margin="0,5,0,18"><CheckBox DockPanel.Dock="Right" Content="Watch for new QSOs" IsChecked="{Binding WatchLiveJtdxAdif}" /><TextBlock Text="{Binding LiveAdifStatus}" Foreground="#64748B" FontSize="12" /></DockPanel>
+
+                            <TextBlock Text="JTDX monthly ALL.TXT" Style="{StaticResource WizardFieldLabel}" />
+                            <TextBlock Text="Commonly found at %LOCALAPPDATA%\JTDX\YYYYMM_ALL.TXT, where YYYYMM is the current year and month."
+                                       TextWrapping="Wrap" Foreground="#526577" Margin="0,0,0,8" />
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <TextBox Text="{Binding JtdxAllTxtPath, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource WizardTextBox}" />
+                                <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseAllTxtCommand}" Margin="8,0,0,0" />
+                            </Grid>
+                            <DockPanel Margin="0,5,0,0"><CheckBox DockPanel.Dock="Right" Content="Monitor outgoing messages" IsChecked="{Binding WatchJtdxAllTxt}" /><TextBlock Text="{Binding AllTxtStatus}" Foreground="#64748B" FontSize="12" /></DockPanel>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding CurrentStep, Converter={StaticResource StepVisibility}, ConverterParameter=4}">
+                            <Border Background="#FEF3C7" BorderBrush="#F59E0B" BorderThickness="1" CornerRadius="9" Padding="16" Margin="0,0,0,18">
+                                <StackPanel>
+                                    <TextBlock Text="Safety-critical screen calibration" FontWeight="SemiBold" Foreground="#78350F" />
+                                    <TextBlock Text="JTDX must be open and positioned at its normal operating size. Make sure Enable TX is OFF and grey. This capture records where DX Pilot may safely click and what the OFF button looks like." TextWrapping="Wrap" Foreground="#92400E" Margin="0,6,0,0" />
+                                </StackPanel>
+                            </Border>
+                            <Button Content="Capture OFF/grey Enable TX button" Command="{Binding CaptureEnableTxCommand}"
+                                    HorizontalAlignment="Left" Background="#0284C7" BorderBrush="#0369A1" Foreground="White" FontWeight="SemiBold" />
+                            <Border Background="White" BorderBrush="#DCE4EC" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,18,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Capture status" FontWeight="SemiBold" Foreground="#334155" />
+                                    <TextBlock Text="{Binding EnableTxCalibrationStatus}" TextWrapping="Wrap" Foreground="#526577" Margin="0,6,0,0" />
+                                    <TextBlock Text="{Binding EnableTxCoordinates}" Foreground="#0F766E" FontWeight="SemiBold" Margin="0,8,0,0" />
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="How to capture it" FontWeight="SemiBold" Foreground="#334155" Margin="0,22,0,8" />
+                            <TextBlock Text="1. In JTDX, confirm Enable TX is OFF and the button is grey." Margin="0,0,0,6" />
+                            <TextBlock Text="2. Choose Capture, then hover over a clear grey area inside Enable TX—not over its lettering." Margin="0,0,0,6" TextWrapping="Wrap" />
+                            <TextBlock Text="3. Press Space or Enter without clicking the mouse. Press Esc to cancel." TextWrapping="Wrap" />
+                            <TextBlock Text="The CQ/TX6 button is deliberately not captured: DX Pilot never intentionally selects CQ/TX6. RX-green calibration is only required if you later use scheduled band changes." TextWrapping="Wrap" Foreground="#526577" Margin="0,20,0,0" />
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding CurrentStep, Converter={StaticResource StepVisibility}, ConverterParameter=5}">
+                            <Border Background="#FEF3C7" BorderBrush="#F59E0B" BorderThickness="1" CornerRadius="9" Padding="16" Margin="0,0,0,18">
+                                <StackPanel>
+                                    <TextBlock Text="JTDX must be open, restored, and kept at its normal operating size." FontWeight="SemiBold" Foreground="#78350F" />
+                                    <TextBlock Text="The setup window will hide while the overlay is active. Move and resize the blue overlay until its green lines run through the centres of every complete Band Activity row. Press Esc when finished." TextWrapping="Wrap" Foreground="#92400E" Margin="0,6,0,0" />
+                                </StackPanel>
+                            </Border>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="18" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Complete visible rows" Style="{StaticResource WizardFieldLabel}" />
+                                    <TextBox Text="{Binding JtdxVisibleRowCount, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource WizardTextBox}" />
+                                    <TextBlock Text="This is sometimes surprisingly difficult to count. Count only complete, safe Band Activity rows and please check carefully." TextWrapping="Wrap" Foreground="#9A3412" FontWeight="SemiBold" FontSize="12" Margin="0,5,0,0" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
+                                    <Button Content="Start grid calibration" Command="{Binding StartGridCalibrationCommand}" Background="#0284C7" BorderBrush="#0369A1" Foreground="White" FontWeight="SemiBold" Height="40" />
+                                </StackPanel>
+                            </Grid>
+                            <Border Background="White" BorderBrush="#DCE4EC" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,22,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Calibration status" FontWeight="SemiBold" Foreground="#334155" />
+                                    <TextBlock Text="{Binding GridCalibrationStatus}" TextWrapping="Wrap" Foreground="#526577" Margin="0,6,0,0" />
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="Overlay controls" FontWeight="SemiBold" Foreground="#334155" Margin="0,22,0,8" />
+                            <TextBlock Text="• Drag anywhere to move the grid over Band Activity" Margin="0,0,0,6" />
+                            <TextBlock Text="• Drag the resize grip, or use the mouse wheel, to match the row area" Margin="0,0,0,6" />
+                            <TextBlock Text="• Hold Shift while using the mouse wheel to adjust width" Margin="0,0,0,6" />
+                            <TextBlock Text="• Press Esc to save the alignment and return here" />
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding CurrentStep, Converter={StaticResource StepVisibility}, ConverterParameter=6}">
+                            <Border Style="{StaticResource ReviewCard}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                    <TextBlock Text="Station" Foreground="#64748B" />
+                                    <TextBlock Grid.Column="1" FontWeight="SemiBold"><Run Text="{Binding Callsign}" /><Run Text="  •  " /><Run Text="{Binding HomeGrid}" /></TextBlock>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource ReviewCard}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                    <TextBlock Text="Enable TX" Foreground="#64748B" />
+                                    <TextBlock Grid.Column="1" Text="{Binding EnableTxCoordinates}" FontWeight="SemiBold" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource ReviewCard}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                    <TextBlock Text="Connection" Foreground="#64748B" />
+                                    <TextBlock Grid.Column="1" Text="{Binding ConnectionSummary}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource ReviewCard}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                    <TextBlock Text="Live log" Foreground="#64748B" />
+                                    <TextBlock Grid.Column="1" Text="{Binding LiveJtdxAdifPath}" TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                            </Border>
+
+                            <TextBlock Text="Automation safety" FontSize="16" FontWeight="SemiBold" Foreground="#1E293B" Margin="0,14,0,10" />
+                            <CheckBox IsChecked="{Binding AutoHuntEnabled}" Content="Allow automatic hunting when I press a Start button" Margin="0,0,0,10" />
+                            <CheckBox IsChecked="{Binding JtdxGuiSelectionEnabled}" Content="Allow calibrated JTDX row selection when UDP Reply is unavailable" />
+                            <Border Background="#FFF7ED" BorderBrush="#FDBA74" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,18,0,0">
+                                <TextBlock TextWrapping="Wrap" Foreground="#9A3412"
+                                           Text="Recalibrate after moving or resizing JTDX, or after changing how many Band Activity rows are visible. DX Pilot keeps Enable TX off when it cannot confirm a safe target." />
+                            </Border>
+                            <Border Background="#ECFDF5" BorderBrush="#6EE7B7" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,12,0,0">
+                                <TextBlock TextWrapping="Wrap" Foreground="#065F46"
+                                           Text="After finishing: keep JTDX open, return to the DX Pilot main window, confirm UDP messages are arriving, then choose Start DX Assist. Wanted Sniper uses the Wanted preferences; Location Hunt also requires target areas to be selected on the Location tab." />
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+
+            <Border Grid.Row="2" Background="White" BorderBrush="#DCE4EC" BorderThickness="0,1,0,0" Padding="34,14">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ErrorMessage}" Foreground="#B91C1C" FontWeight="SemiBold"
+                                   Visibility="{Binding HasError, Converter={StaticResource BooleanVisibility}}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Content="{Binding CancelButtonText}" Command="{Binding CancelCommand}" Background="Transparent" BorderBrush="Transparent" Foreground="#526577" />
+                        <Button Content="Back" Command="{Binding BackCommand}" IsEnabled="{Binding CanGoBack}" />
+                        <Button Content="{Binding NextButtonText}" Command="{Binding NextCommand}" Background="#0284C7" BorderBrush="#0369A1" Foreground="White" FontWeight="SemiBold" Margin="0" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
