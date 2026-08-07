@@ -49,6 +49,10 @@
                 <StackPanel>
                     <TextBlock Text="UDP" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding Dashboard.UdpStatus}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button Content="Start UDP" Command="{Binding StartUdpCommand}" MinWidth="72" Padding="8,4" />
+                        <Button Content="Stop UDP" Command="{Binding StopUdpCommand}" MinWidth="72" Padding="8,4" />
+                    </WrapPanel>
                 </StackPanel>
             </Border>
             <Border Style="{StaticResource PanelBorder}" Margin="0,0,10,0">

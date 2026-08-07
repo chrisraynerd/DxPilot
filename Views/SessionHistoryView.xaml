@@ -27,10 +27,14 @@
                     </Border>
                     <TextBlock Text="Show wanted categories" FontWeight="SemiBold" />
                     <WrapPanel>
-                        <CheckBox Content="DXCC" IsChecked="{Binding SessionHistory.ShowDxcc}" />
+                        <CheckBox Content="New / unconfirmed DXCC"
+                                  IsChecked="{Binding SessionHistory.ShowDxcc}"
+                                  ToolTip="Countries that have never been worked, or have been worked but are not yet confirmed under your selected DXCC confirmation rule." />
                         <CheckBox Content="Grids" IsChecked="{Binding SessionHistory.ShowGrids}" />
                         <CheckBox Content="USA States" IsChecked="{Binding SessionHistory.ShowUsaStates}" />
-                        <CheckBox Content="Rare DXCC already confirmed" IsChecked="{Binding SessionHistory.ShowRareConfirmed}" />
+                        <CheckBox Content="Rare country (DXCC already confirmed)"
+                                  IsChecked="{Binding SessionHistory.ShowRareConfirmed}"
+                                  ToolTip="An optional repeat contact with a country you have already confirmed, because it ranks highly in the rarity list. It does not outrank a needed DXCC." />
                     </WrapPanel>
                     <TextBlock Text="Outcome" FontWeight="SemiBold" Margin="0,6,0,0" />
                     <WrapPanel>
@@ -64,7 +68,6 @@
 
         <DataGrid ItemsSource="{Binding SessionHistory.Opportunities}"
                   SelectedItem="{Binding SessionHistory.SelectedOpportunity}"
-                  RowStyle="{StaticResource SemanticStationRowStyle}"
                   AutoGenerateColumns="False"
                   IsReadOnly="True"
                   CanUserAddRows="False"
@@ -72,6 +75,26 @@
                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
                   ScrollViewer.VerticalScrollBarVisibility="Auto"
                   PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow" BasedOn="{StaticResource SemanticStationRowStyle}">
+                    <!-- Live tables use a four-pixel action stripe. In Session History it
+                         renders as disconnected dots, so retain category fills without it. -->
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding ActionStateClass}" Value="Failed">
+                            <Setter Property="BorderThickness" Value="0" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding ActionStateClass}" Value="Calling">
+                            <Setter Property="BorderThickness" Value="0" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding ActionStateClass}" Value="InProgress">
+                            <Setter Property="BorderThickness" Value="0" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding ActionStateClass}" Value="Worked">
+                            <Setter Property="BorderThickness" Value="0" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
             <DataGrid.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="CALL NOW" Command="{Binding PlacementTarget.DataContext.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />

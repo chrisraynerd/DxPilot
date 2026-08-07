@@ -130,7 +130,11 @@
                         <TextBlock Text="IOTA confirmation mode" />
                         <TextBox Text="{Binding Settings.Settings.IotaConfirmationMode, UpdateSourceTrigger=PropertyChanged}" />
                     </UniformGrid>
-                    <Button Content="Browse JTDX ALL.TXT" Command="{Binding BrowseAllTxtCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button Content="Load / Choose Full ADIF" Command="{Binding LoadAdifCommand}"
+                                ToolTip="Choose the main ADIF log, save its location, and load it now." />
+                        <Button Content="Browse JTDX ALL.TXT" Command="{Binding BrowseAllTxtCommand}" />
+                    </WrapPanel>
                     <TextBlock Text="{Binding AdifDiagnostics}" TextWrapping="Wrap" Foreground="#263645" Margin="0,10,0,0" />
                     <TextBlock Text="{Binding AllTxtDiagnostics}" TextWrapping="Wrap" Foreground="#263645" Margin="0,6,0,0" />
 
@@ -154,9 +158,10 @@
                         <TextBox Text="{Binding Settings.Settings.UkDesirabilityWeight, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Distance weight" />
                         <TextBox Text="{Binding Settings.Settings.DistanceWeight, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Chase rare confirmed DXCC" />
+                        <TextBlock Text="Chase rare countries already confirmed"
+                                   ToolTip="Optionally target countries already confirmed when their rarity-list rank is within the threshold. Needed DXCC remains higher priority." />
                         <CheckBox IsChecked="{Binding Settings.Settings.ChaseRareConfirmedDxcc, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Rare confirmed rank threshold" />
+                        <TextBlock Text="Rare-country rank threshold" />
                         <TextBox Text="{Binding Settings.Settings.RareDxccRankThreshold, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Max acquisition cycles" />
                         <TextBox Text="{Binding Settings.Settings.MaxTargetAcquisitionCycles, UpdateSourceTrigger=PropertyChanged}" />
@@ -248,7 +253,7 @@
                     <UniformGrid Columns="2">
                         <TextBlock Text="Enable session DX history" />
                         <CheckBox IsChecked="{Binding Settings.Settings.EnableSessionDxHistory, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Rare DXCC rank threshold" />
+                        <TextBlock Text="Rare-country rank threshold" />
                         <TextBox Text="{Binding Settings.Settings.RareDxccRankThreshold, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Session history expiry minutes" />
                         <TextBox Text="{Binding Settings.Settings.SessionHistoryExpiryMinutes, UpdateSourceTrigger=PropertyChanged}" />

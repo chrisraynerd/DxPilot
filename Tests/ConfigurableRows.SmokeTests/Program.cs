@@ -95,7 +95,7 @@ var scoreWindowCandidate = typeof(JtdxWindowLocator).GetMethod(
     ?? throw new InvalidOperationException("Missing JTDX window candidate scorer.");
 var dxPilotSelfScore = (int)scoreWindowCandidate.Invoke(
     null,
-    ["DX Pilot for JTDX — G1CEC", "HwndWrapper", "DXPilot-for-JTDX-G1CEC", "JTDX"])!;
+    ["DX Pilot for JTDX by G1CEC", "HwndWrapper", "DXPilot-for-JTDX-G1CEC", "JTDX"])!;
 if (dxPilotSelfScore >= 0)
     failures.Add("The renamed DX Pilot window was not excluded from JTDX window discovery.");
 
@@ -1061,13 +1061,59 @@ var bandModeTarget = scorer.Score(Candidate("15m", "FT4"), [], scopedIndexes, []
 if (bandModeTarget.Ranking.PriorityTier != 14 || bandModeTarget.Ranking.WantedScope != WantedScope.CurrentBandMode)
     failures.Add("Optional band-and-mode-new DXCC classification failed.");
 
+var sessionOrdering = new SessionHistoryViewModel();
+sessionOrdering.AllOpportunities.Add(new SessionDxOpportunity
+{
+    Call = "GRID1",
+    Category = "Grid",
+    DxccStatus = "Confirmed",
+    UniversalRank = 1,
+    PriorityTier = 30,
+    LastSeenUtc = DateTime.UtcNow,
+    Outcome = "Seen only"
+});
+sessionOrdering.AllOpportunities.Add(new SessionDxOpportunity
+{
+    Call = "NEW2",
+    Category = "DXCC",
+    DxccStatus = "New DXCC",
+    UniversalRank = 2,
+    PriorityTier = 10,
+    LastSeenUtc = DateTime.UtcNow,
+    Outcome = "Seen only"
+});
+sessionOrdering.AllOpportunities.Add(new SessionDxOpportunity
+{
+    Call = "UNCONF5",
+    Category = "DXCC",
+    DxccStatus = "Worked unconfirmed",
+    UniversalRank = 5,
+    PriorityTier = 10,
+    LastSeenUtc = DateTime.UtcNow,
+    Outcome = "Seen only"
+});
+sessionOrdering.AllOpportunities.Add(new SessionDxOpportunity
+{
+    Call = "GRID3",
+    Category = "Grid",
+    DxccStatus = "Confirmed",
+    UniversalRank = 3,
+    PriorityTier = 30,
+    LastSeenUtc = DateTime.UtcNow,
+    Outcome = "Seen only"
+});
+sessionOrdering.Refresh();
+var orderedSessionCalls = sessionOrdering.Opportunities.Select(item => item.Call).ToArray();
+if (!orderedSessionCalls.SequenceEqual(new[] { "NEW2", "UNCONF5", "GRID1", "GRID3" }))
+    failures.Add($"Session History did not keep new/unconfirmed DXCC first and then follow universal rank: {string.Join(",", orderedSessionCalls)}.");
+
 if (failures.Count > 0)
 {
     Console.Error.WriteLine(string.Join(Environment.NewLine, failures));
     return 1;
 }
 
-Console.WriteLine($"PASS: configurable 5-200 row geometry/model/settings, secure settings/scheduler export-import validation, WAS-only state indexing with Alaska/Hawaii and optional DC, personal 52-row default migration, {bandCases.Length} band mappings, FT8/FT4 timing and Reply markers, binary JTDX parsing, stale-target policy, InQso CQ contradiction and no-progress safety, blank-status verification, band/mode resets, context inheritance, row-settling gate, and optional scoped DXCC priorities.");
+Console.WriteLine($"PASS: configurable 5-200 row geometry/model/settings, secure settings/scheduler export-import validation, WAS-only state indexing with Alaska/Hawaii and optional DC, personal 52-row default migration, {bandCases.Length} band mappings, FT8/FT4 timing and Reply markers, binary JTDX parsing, stale-target policy, InQso CQ contradiction and no-progress safety, blank-status verification, band/mode resets, context inheritance, row-settling gate, optional scoped DXCC priorities, and Session History DXCC-first universal-rank ordering.");
 return 0;
 
 static byte[] BuildDecodePacket(string modeMarker, string message)

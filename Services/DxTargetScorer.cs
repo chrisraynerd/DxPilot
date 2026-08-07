@@ -244,7 +244,7 @@ public sealed class DxTargetScorer
             && ranking.RarityRank.Value <= Math.Max(1, settings.RareDxccRankThreshold))
         {
             ranking.PriorityTier = 20;
-            ranking.PriorityTierName = "Tier 2: Rare confirmed DXCC";
+            ranking.PriorityTierName = "Tier 2: Rare country already confirmed";
             ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatRareConfirmedDxcc(decode.EntityName));
             return;
         }
@@ -521,7 +521,7 @@ public sealed class DxTargetScorer
             10 => $"{ranking.PriorityTierName} beats worked-but-unconfirmed DXCC, grid, state, band, callsign and general DX needs; adjusted DX value breaks ties.",
             12 or 13 or 14 => $"{ranking.PriorityTierName} is enabled as an optional scoped DXCC target and follows only a globally new DXCC.",
             15 => $"{ranking.PriorityTierName} beats grid, state, band, callsign and general DX needs under the selected confirmation mode.",
-            20 => "Rare confirmed DXCC chasing is enabled; no Tier 1 DXCC is higher in this candidate set.",
+            20 => "Rare-country repeat chasing is enabled; no needed DXCC is higher in this candidate set.",
             30 => "Grid need considered after DXCC need tiers.",
             40 => "USA state need considered after DXCC/grid priorities.",
             _ => "Lower-tier candidate ranked after DXCC need, adjusted DX value, global rarity, UK desirability, distance, freshness and signal."

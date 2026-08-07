@@ -115,7 +115,9 @@ public sealed class SessionHistoryViewModel : ObservableObject
     {
         var rows = AllOpportunities
             .Where(PassesFilter)
-            .OrderBy(o => o.PriorityTier)
+            .OrderBy(NewOrUnconfirmedDxccSort)
+            .ThenBy(o => o.UniversalRank ?? int.MaxValue)
+            .ThenBy(o => o.PriorityTier)
             .ThenBy(o => o.RarityRank ?? int.MaxValue)
             .ThenByDescending(o => o.LastSeenUtc)
             .ThenBy(o => OutcomeSort(o.Outcome))
@@ -135,12 +137,10 @@ public sealed class SessionHistoryViewModel : ObservableObject
 
     private bool PassesFilter(SessionDxOpportunity item)
     {
-        var isDxcc = item.Category.Equals("DXCC", StringComparison.OrdinalIgnoreCase)
-            || item.DxccStatus is "New DXCC" or "Worked unconfirmed";
+        var isDxcc = item.DxccStatus is "New DXCC" or "Worked unconfirmed";
         var isGrid = item.Category.Equals("Grid", StringComparison.OrdinalIgnoreCase);
         var isState = item.Category.Equals("USA State", StringComparison.OrdinalIgnoreCase);
-        var isRareConfirmed = item.Category.Equals("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase)
-            || item.DxccStatus == "Confirmed" && item.RarityRank.HasValue;
+        var isRareConfirmed = item.Category.Equals("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase);
         var passesType = (ShowDxcc && isDxcc)
             || (ShowGrids && isGrid)
             || (ShowUsaStates && isState)
@@ -179,4 +179,7 @@ public sealed class SessionHistoryViewModel : ObservableObject
             return 4;
         return 5;
     }
+
+    private static int NewOrUnconfirmedDxccSort(SessionDxOpportunity item) =>
+        item.DxccStatus is "New DXCC" or "Worked unconfirmed" ? 0 : 1;
 }

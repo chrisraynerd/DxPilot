@@ -22,8 +22,6 @@
                     <TextBlock Text="{Binding LogbookStatus}" VerticalAlignment="Center" Foreground="#526577" ToolTip="{Binding AdifDiagnostics}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button Content="Load ADIF" Command="{Binding LoadAdifCommand}" />
-                    <Button Content="Select Target" Command="{Binding ReplyToBestCommand}" />
                     <Button Content="Test Grid Selection" Command="{Binding TestGuiSelectionCommand}" MinWidth="190" />
                 </StackPanel>
                 <Border Grid.Row="1" Grid.ColumnSpan="2" BorderBrush="#D8E0E8" BorderThickness="0,1,0,0" Margin="0,10,0,0" Padding="0,8,0,0">

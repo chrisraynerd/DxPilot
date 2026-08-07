@@ -5114,7 +5114,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         foreach (var item in SessionHistory.AllOpportunities)
         {
             var workedCall = WorkedCallDisplay(item.Call);
-            item.RankText = DisplayRankText(item.Call);
+            var currentRank = DisplayRankValue(item.Call);
+            if (currentRank.HasValue)
+                item.UniversalRank = currentRank;
+            item.RankText = currentRank?.ToString() ?? "—";
             item.WasCallWorkedBefore = workedCall.Worked;
             item.WorkedCallToolTip = workedCall.ToolTip;
             var latestDecode = _decodeHistory
@@ -5764,6 +5767,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var workedCall = WorkedCallDisplay(target.Callsign);
         item.WasCallWorkedBefore = workedCall.Worked;
         item.WorkedCallToolTip = workedCall.ToolTip;
+        item.UniversalRank = DisplayRankValue(target.Callsign);
         item.RankText = DisplayRankText(target.Callsign);
         item.JtdxRow = JtdxRowText(target.Decode);
         item.IsPermanentlySuppressed = IsPermanentlySuppressed(target.Callsign);
@@ -5859,14 +5863,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var reason = target.Ranking.PrimaryWantedReason;
         if (target.Ranking.DxccStatus is DxccCandidateStatus.NotWorked or DxccCandidateStatus.WorkedUnconfirmed)
             return "DXCC";
+        if (target.Ranking.PriorityTier == 20
+            || reason.Contains("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("Rare country (already confirmed)", StringComparison.OrdinalIgnoreCase))
+            return "Rare confirmed DXCC";
         if (reason.Contains("DXCC", StringComparison.OrdinalIgnoreCase))
             return "DXCC";
         if (reason.Contains("grid", StringComparison.OrdinalIgnoreCase))
             return "Grid";
         if (reason.Contains("USA state", StringComparison.OrdinalIgnoreCase) || reason.Contains("state", StringComparison.OrdinalIgnoreCase))
             return "USA State";
-        if (reason.Contains("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase))
-            return "Rare confirmed DXCC";
         return "General";
     }
 

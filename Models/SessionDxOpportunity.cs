@@ -9,6 +9,7 @@ public sealed class SessionDxOpportunity
     public string Call { get; set; } = "";
     public bool WasCallWorkedBefore { get; set; }
     public string WorkedCallToolTip { get; set; } = "";
+    public int? UniversalRank { get; set; }
     public string RankText { get; set; } = "";
     public string JtdxRow { get; set; } = "";
     public bool IsPermanentlySuppressed { get; set; }
@@ -99,7 +100,7 @@ public sealed class SessionDxOpportunity
         DxccStatus == "Worked unconfirmed" ? "Unconfirmed DXCC" :
         Category.Equals("Grid", StringComparison.OrdinalIgnoreCase) ? $"{Need} grid {Grid}".Trim() :
         Category.Equals("USA State", StringComparison.OrdinalIgnoreCase) ? $"{Need} state {State}".Trim() :
-        Category.Equals("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase) ? "Rare confirmed DXCC" :
+        Category.Equals("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase) ? "Rare country (already confirmed)" :
         PrimaryReason;
     public string StationStatusDisplay => Outcome;
 

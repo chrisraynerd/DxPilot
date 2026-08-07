@@ -75,8 +75,8 @@ public static class TargetReasonFormatter
     {
         entity = (entity ?? "").Trim();
         return string.IsNullOrWhiteSpace(entity)
-            ? "Rare confirmed DXCC"
-            : $"Rare confirmed DXCC: {entity}";
+            ? "Rare country (already confirmed)"
+            : $"Rare country (already confirmed): {entity}";
     }
 
     public static string FormatGeneral(string fallback)
