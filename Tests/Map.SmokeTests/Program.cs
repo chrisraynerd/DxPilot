@@ -149,6 +149,15 @@ using (var txMap = new MapViewModel("IO91WM"))
         "The red active-call override cleared the target's stored grid classification.");
     Require(txMap.Stations.Single(station => station.Callsign == "STATE1").IsNewState,
         "TX contactability refresh cleared another station's state colour.");
+
+    txMap.Clear();
+    Require(txMap.ActiveCallsign == "GRID1" && txMap.Stations.Count == 0,
+        "Clearing live map stations incorrectly released the active hunting/QSO target.");
+    txMap.ObserveDecode(
+        new DecodeMessage { ContactableCall = "GRID1", Grid = "JN02", ReceivedAt = DateTime.Now },
+        MapOpportunityProfile.FromOverall(new MapOpportunityFlags(false, false, true, false)));
+    Require(txMap.ActiveCallsign == "GRID1" && txMap.Stations.Single().Callsign == "GRID1",
+        "The active target was not retained when its station dot was replotted after a map clear.");
 }
 
 var markerColourResolver = typeof(GridMapControl).GetMethod("MarkerColourHex", BindingFlags.NonPublic | BindingFlags.Static)

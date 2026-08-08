@@ -2748,12 +2748,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         _selectedIntendedTarget = target;
         _lockedTarget = target;
-        Map.ActiveCallsign = target.Callsign;
         _targetSelectionCancellation?.Cancel();
         _targetSelectionCancellation?.Dispose();
         _targetSelectionCancellation = new CancellationTokenSource();
         DxAssist.BestTarget = target;
         _huntState = HuntState.Calling;
+        SynchronizeMapActiveTarget();
         _targetStartedAt = DateTime.Now;
         _targetStartedUtc = DateTime.UtcNow;
         _lastReplyAt = DateTime.MinValue;
@@ -3963,9 +3963,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         _lockedTarget = _targetScorer.Score(adoptedDecode, _logbook, _adifMergeResult.Indexes, _decodeHistory, Settings.Settings);
-        Map.ActiveCallsign = _lockedTarget.Callsign;
         _selectedIntendedTarget = null;
         _huntState = HuntState.InQso;
+        SynchronizeMapActiveTarget();
         _targetSource = "Adopted from JTDX";
         _actualJtdxDxCall = observedCall;
         _qsoStage = QsoStage.TargetReportSeen;
@@ -4402,8 +4402,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var sourceTarget = _targetScorer.Score(decode, _logbook, _adifMergeResult.Indexes, _decodeHistory, Settings.Settings);
         _selectedIntendedTarget = null;
         _lockedTarget = sourceTarget;
-        Map.ActiveCallsign = sourceTarget.Callsign;
         _huntState = HuntState.InQso;
+        SynchronizeMapActiveTarget();
         _targetStartedAt = DateTime.Now;
         _targetStartedUtc = DateTime.UtcNow;
         _targetSource = "Inbound CQ reply / AdoptedFromJTDX";
@@ -4577,8 +4577,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         _lockedTarget = null;
         _selectedIntendedTarget = null;
-        Map.ActiveCallsign = "";
         _huntState = HuntState.Idle;
+        SynchronizeMapActiveTarget();
         _targetConfirmedInFeed = false;
         _targetConfirmedInJtdx = false;
         _jtdxShowsWrongTx = false;
@@ -5037,6 +5037,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void UpdateHuntStateDisplay()
     {
+        SynchronizeMapActiveTarget();
         Dashboard.HuntState = _lockedTarget == null
             ? $"{_huntState}"
             : $"{_huntState}: {_lockedTarget.Callsign} since {_targetStartedAt:HH:mm:ss}"
@@ -5112,6 +5113,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         DxAssist.LastCorrectiveAction = $"Last Corrective Action: {_lastCorrectiveAction}";
         DxAssist.LastObservedTransmitState = $"Last observed JTDX state: {_lastObservedTransmitState}";
         UpdateTargetStatusSummary();
+    }
+
+    private void SynchronizeMapActiveTarget()
+    {
+        var activeCall = _lockedTarget != null && _huntState is HuntState.Calling or HuntState.InQso
+            ? DecodeTargetCall(_lockedTarget.Decode)
+            : "";
+        Map.ActiveCallsign = CallsignNormalizer.Normalize(activeCall);
     }
 
     private void UpdateTargetStatusSummary()

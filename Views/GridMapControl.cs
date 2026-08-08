@@ -41,7 +41,7 @@ public sealed class MapStationDoubleClickedEventArgs : EventArgs
 /// </summary>
 public sealed class GridMapControl : MapControl
 {
-    private const string UserAgent = "DXPilot-for-JTDX-G1CEC/3.4.2 (amateur-radio companion)";
+    private const string UserAgent = "DXPilot-for-JTDX-G1CEC/3.4.3 (amateur-radio companion)";
     private const string OsmAttribution = "© OpenStreetMap contributors";
     private const string EsriAttribution = "Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, Esri Japan, METI, © OpenStreetMap contributors, and the GIS User Community";
     private ILayer _baseLayer;

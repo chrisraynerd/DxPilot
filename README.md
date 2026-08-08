@@ -4,11 +4,14 @@
 FT8/FT4 decodes and can select wanted DXCC entities, grids, US states and
 configured geographical areas.
 
-The current release is **v3.4.2**. It adds remembered, key-free OpenStreetMap and
-Esri basemap choices, and keeps the background-built, raster-cached LoTW-confirmed
-Grid4 overlay visible at world scale. A QRZ-result stability fix safely handles
-decodes without locators and serialises all activity-list updates on the WPF UI
-thread; QRZ request volume and enrichment remain unchanged.
+The current release is **v3.4.3**. The map's red active-station marker now follows
+the actual locked hunting/QSO target in Wanted Sniper, DX Assist, Location Hunt,
+CALL NOW and adopted inbound QSOs. Clearing live map dots no longer forgets an
+active target, so its next plotted decode immediately returns as red.
+
+It retains the v3.4.2 remembered, key-free OpenStreetMap and Esri basemap choices,
+the world-scale raster-cached LoTW-confirmed Grid4 overlay, and the QRZ-result
+stability fix. QRZ request volume and enrichment remain unchanged.
 
 The release retains the remembered 5%-50% confirmation-opacity slider, its 25%
 default, separate all-time/current-band/current-mode fill scopes, and automatic

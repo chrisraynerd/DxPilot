@@ -460,7 +460,9 @@ public sealed class MapViewModel : ObservableObject, IDisposable
         _byCall.Clear();
         Stations.Clear();
         SelectedStation = null;
-        ActiveCallsign = "";
+        // The active target belongs to the hunting/QSO controller, not to the
+        // current set of plotted stations. Preserve it so that, after a manual
+        // clear, the next decode for the station being worked is red again.
         Status = status;
         OnPropertyChanged(nameof(StationCount));
         OnPropertyChanged(nameof(VisibleStationCount));
