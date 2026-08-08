@@ -435,6 +435,13 @@ public sealed class SettingsService
         if (!Enum.TryParse<JtdxAutoResume.V3.Models.WantedScope>(settings.MapColourScope, true, out _))
             settings.MapColourScope = JtdxAutoResume.V3.Models.WantedScope.Overall.ToString();
 
+        var supportedBasemaps = new[]
+        {
+            "OpenStreetMap", "EsriStreets", "EsriOutdoor", "EsriLightGray", "EsriStreetsNight"
+        };
+        if (!supportedBasemaps.Contains(settings.MapBasemapId, StringComparer.OrdinalIgnoreCase))
+            settings.MapBasemapId = "OpenStreetMap";
+
         if (settings.QrzLookupTimeoutSeconds <= 0)
             settings.QrzLookupTimeoutSeconds = 3;
 

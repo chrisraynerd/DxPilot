@@ -17,8 +17,15 @@
                 <StackPanel>
                     <TextBlock Text="Live Grid Map" FontSize="18" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding Map.Status}" Foreground="#526577" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Map.BasemapStatus}" Foreground="#526577" FontSize="11" TextWrapping="Wrap" />
                 </StackPanel>
                 <WrapPanel Grid.Column="1" VerticalAlignment="Center" Margin="18,0,0,0">
+                    <TextBlock Text="Map style" VerticalAlignment="Center" Margin="0,0,5,7" />
+                    <ComboBox ItemsSource="{Binding Map.BasemapOptions}"
+                              DisplayMemberPath="Label" SelectedValuePath="Id"
+                              SelectedValue="{Binding Map.BasemapId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              Width="205" VerticalAlignment="Center" Margin="0,0,9,7"
+                              ToolTip="Choose OpenStreetMap or a public Esri cached basemap. No account or API key is required." />
                     <CheckBox Content="Paths" IsChecked="{Binding Map.ShowPaths}" VerticalAlignment="Center" />
                     <CheckBox Content="Labels" IsChecked="{Binding Map.ShowLabels}" VerticalAlignment="Center" />
                     <CheckBox Content="Detailed squares + Grid4 refs" IsChecked="{Binding Map.ShowGridSquares}" VerticalAlignment="Center"
@@ -61,6 +68,10 @@
                     <views:GridMapControl x:Name="LiveMap" Model="{Binding Map}" StationDoubleClicked="LiveMap_StationDoubleClicked" />
                     <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="9" Padding="8,5" CornerRadius="4" Background="#D905111C">
                         <TextBlock Foreground="#D7E7F0" FontSize="11" Text="Wheel to zoom · drag to pan · click to select · double-click to call" />
+                    </Border>
+                    <Border VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="9" Padding="6,3" CornerRadius="3" Background="#D9FFFFFF"
+                            ToolTip="Required basemap and source attribution.">
+                        <TextBlock Foreground="#263645" FontSize="9" Text="{Binding Map.BasemapAttribution}" TextWrapping="Wrap" MaxWidth="620" />
                     </Border>
                 </Grid>
             </Border>

@@ -2,6 +2,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using BruTile;
+using BruTile.Predefined;
+using BruTile.Web;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
@@ -10,6 +13,7 @@ using Mapsui.Nts;
 using Mapsui.Projections;
 using Mapsui.Styles;
 using Mapsui.Tiling;
+using Mapsui.Tiling.Layers;
 using Mapsui.UI.Wpf;
 using NetTopologySuite.Geometries;
 using JtdxAutoResume.V3.Models;
@@ -37,10 +41,14 @@ public sealed class MapStationDoubleClickedEventArgs : EventArgs
 /// </summary>
 public sealed class GridMapControl : MapControl
 {
-    private const string UserAgent = "DXPilot-for-JTDX-G1CEC/3.3 (amateur-radio companion)";
+    private const string UserAgent = "DXPilot-for-JTDX-G1CEC/3.4.2 (amateur-radio companion)";
+    private const string OsmAttribution = "© OpenStreetMap contributors";
+    private const string EsriAttribution = "Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, Esri Japan, METI, © OpenStreetMap contributors, and the GIS User Community";
+    private ILayer _baseLayer;
     private readonly MemoryLayer _fieldGridLayer;
     private readonly MemoryLayer _squareGridLayer;
     private readonly MemoryLayer _confirmedGridLayer;
+    private readonly RasterizingLayer _confirmedGridRasterLayer;
     private readonly MemoryLayer _squareLabelLayer;
     private readonly MemoryLayer _fieldLabelLayer;
     private readonly MemoryLayer _pathLayer;
@@ -53,10 +61,12 @@ public sealed class GridMapControl : MapControl
     private bool _lastShowSquares;
     private bool _lastShowLotwConfirmedGrids;
     private int _lastConfirmedGridVersion = -1;
+    private int _confirmedGridCacheVersion = -1;
     private double _lastConfirmedGridOpacityPercent = -1;
     private bool _initialViewApplied;
     private DateTime _lastHoverCheckUtc = DateTime.MinValue;
     private string _hoveredCallsign = "";
+    private string _lastRequestedBasemapId = "";
 
     public static readonly DependencyProperty ModelProperty = DependencyProperty.Register(
         nameof(Model), typeof(MapViewModel), typeof(GridMapControl),
@@ -67,7 +77,8 @@ public sealed class GridMapControl : MapControl
     public GridMapControl()
     {
         Map = new Mapsui.Map { BackColor = MapColor.FromString("#DCE8EE") };
-        Map.Layers.Add(OpenStreetMap.CreateTileLayer(UserAgent));
+        _baseLayer = OpenStreetMap.CreateTileLayer(UserAgent);
+        Map.Layers.Add(_baseLayer);
 
         _confirmedGridLayer = new MemoryLayer("LoTW confirmed Grid4 squares")
         {
@@ -78,6 +89,11 @@ public sealed class GridMapControl : MapControl
                 Opacity = 0.25f
             },
             Features = Array.Empty<IFeature>(),
+            Enabled = true
+        };
+        _confirmedGridRasterLayer = new RasterizingLayer(_confirmedGridLayer, delayBeforeRasterize: 160)
+        {
+            Name = "Cached LoTW confirmed Grid4 squares",
             Enabled = false
         };
         _fieldGridLayer = CreateLineLayer("Maidenhead fields", CreateGridLines(20, 10), "#27657E", 1.15f, 0.78f);
@@ -100,7 +116,7 @@ public sealed class GridMapControl : MapControl
 
         // The confirmation wash sits immediately above the map tiles. Grid
         // lines, names, radio paths and station dots remain fully legible above it.
-        Map.Layers.Add(_confirmedGridLayer);
+        Map.Layers.Add(_confirmedGridRasterLayer);
         Map.Layers.Add(_squareGridLayer);
         Map.Layers.Add(_fieldGridLayer);
         Map.Layers.Add(_fieldLabelLayer);
@@ -200,6 +216,8 @@ public sealed class GridMapControl : MapControl
         if (Model == null)
             return;
 
+        RefreshBasemap(Model);
+
         var showSquares = Model.ShowGridSquares;
         if (showSquares != _lastShowSquares)
         {
@@ -212,14 +230,17 @@ public sealed class GridMapControl : MapControl
         var showConfirmedGrids = Model.ShowLotwConfirmedGrids;
         if (showConfirmedGrids != _lastShowLotwConfirmedGrids)
         {
-            _confirmedGridLayer.Enabled = showConfirmedGrids;
+            _confirmedGridRasterLayer.Enabled = showConfirmedGrids;
             _lastShowLotwConfirmedGrids = showConfirmedGrids;
-            ScheduleSquareLabelRefresh();
+            if (showConfirmedGrids)
+                ScheduleConfirmedGridCacheRefresh(Model);
+            Map.Refresh();
         }
         if (_lastConfirmedGridVersion != Model.ConfirmedGridVersion)
         {
             _lastConfirmedGridVersion = Model.ConfirmedGridVersion;
-            ScheduleSquareLabelRefresh();
+            if (showConfirmedGrids)
+                ScheduleConfirmedGridCacheRefresh(Model);
         }
         if (Math.Abs(_lastConfirmedGridOpacityPercent - Model.LotwConfirmedGridOpacityPercent) > 0.01)
         {
@@ -258,6 +279,80 @@ public sealed class GridMapControl : MapControl
         _homeLayer.DataHasChanged();
         _pathLayer.DataHasChanged();
         Map.RefreshGraphics();
+    }
+
+    private void RefreshBasemap(MapViewModel model)
+    {
+        var requestedId = MapViewModel.NormalizeBasemapId(model.BasemapId);
+        if (requestedId.Equals(_lastRequestedBasemapId, StringComparison.Ordinal))
+            return;
+
+        _lastRequestedBasemapId = requestedId;
+        var option = MapViewModel.AvailableBasemaps.First(item => item.Id.Equals(requestedId, StringComparison.Ordinal));
+
+        ILayer replacement;
+        string status;
+        string attribution;
+        if (string.IsNullOrWhiteSpace(option.TileUrl))
+        {
+            replacement = OpenStreetMap.CreateTileLayer(UserAgent);
+            status = option.Label;
+            attribution = OsmAttribution;
+        }
+        else
+        {
+            try
+            {
+                var esriLayer = CreateEsriTileLayer(option);
+                esriLayer.DataChanged += (_, args) =>
+                {
+                    if (args.Error != null)
+                        Dispatcher.BeginInvoke(() => FallBackAfterEsriTileError(esriLayer, option.Label));
+                };
+                replacement = esriLayer;
+                status = $"{option.Label} selected.";
+                attribution = EsriAttribution;
+            }
+            catch
+            {
+                replacement = OpenStreetMap.CreateTileLayer(UserAgent);
+                status = $"Could not start {option.Label}; showing OpenStreetMap.";
+                attribution = OsmAttribution;
+            }
+        }
+
+        var oldLayer = _baseLayer;
+        Map.Layers.Remove(oldLayer);
+        Map.Layers.Insert(0, replacement);
+        _baseLayer = replacement;
+        if (oldLayer is IDisposable disposable)
+            disposable.Dispose();
+        model.ReportBasemapState(status, attribution);
+    }
+
+    private void FallBackAfterEsriTileError(TileLayer failedLayer, string label)
+    {
+        if (!ReferenceEquals(_baseLayer, failedLayer))
+            return;
+
+        var fallback = OpenStreetMap.CreateTileLayer(UserAgent);
+        Map.Layers.Remove(failedLayer);
+        Map.Layers.Insert(0, fallback);
+        _baseLayer = fallback;
+        failedLayer.Dispose();
+        Model?.ReportBasemapState($"{label} could not load. Check the internet connection; showing OpenStreetMap.", OsmAttribution);
+        Map.RefreshGraphics();
+    }
+
+    private static TileLayer CreateEsriTileLayer(MapBasemapOption option)
+    {
+        var source = new HttpTileSource(
+            new GlobalSphericalMercator(),
+            option.TileUrl!,
+            name: option.Label,
+            attribution: new Attribution(EsriAttribution, "https://www.esri.com/en-us/legal/terms/full-master-agreement"),
+            configureHttpRequestMessage: request => request.Headers.TryAddWithoutValidation("User-Agent", UserAgent));
+        return new TileLayer(source) { Name = option.Label };
     }
 
     private IFeature CreateStationFeature(MapStationViewModel station)
@@ -421,7 +516,7 @@ public sealed class GridMapControl : MapControl
     private void ScheduleSquareLabelRefresh()
     {
         if (Model is not { } model
-            || (!model.ShowGridSquares && !model.ShowLotwConfirmedGrids)
+            || !model.ShowGridSquares
             || !IsVisible)
             return;
         _squareLabelRefreshTimer.Stop();
@@ -432,7 +527,7 @@ public sealed class GridMapControl : MapControl
     {
         _squareLabelRefreshTimer.Stop();
         if (Model == null
-            || (!Model.ShowGridSquares && !Model.ShowLotwConfirmedGrids)
+            || !Model.ShowGridSquares
             || Map?.Navigator?.Viewport == null)
             return;
 
@@ -464,22 +559,50 @@ public sealed class GridMapControl : MapControl
             _squareLabelLayer.Features = features;
             _squareLabelLayer.DataHasChanged();
 
-            // At broad world scale individual Grid4 squares are too small to
-            // convey useful gaps. The ceiling also prevents thousands of tiny
-            // polygons being allocated until the operator zooms into a region.
-            var confirmedFeatures = !Model.ShowLotwConfirmedGrids || cellCount > 6000
-                ? new List<IFeature>()
-                : CreateVisibleConfirmedGridFeatures(
-                    Model.LotwConfirmedGrids,
-                    minimumLongitudeCell, maximumLongitudeCell,
-                    minimumLatitudeCell, maximumLatitudeCell);
-            _confirmedGridLayer.Features = confirmedFeatures;
-            _confirmedGridLayer.DataHasChanged();
             Map.RefreshGraphics();
         }
         catch (Exception ex)
         {
             Model.ReportMapError(ex.GetBaseException().Message);
+        }
+    }
+
+    private void ScheduleConfirmedGridCacheRefresh(MapViewModel model)
+    {
+        var version = model.ConfirmedGridVersion;
+        if (_confirmedGridCacheVersion == version)
+            return;
+
+        _confirmedGridCacheVersion = version;
+        var grids = model.LotwConfirmedGrids.ToArray();
+        _ = BuildConfirmedGridCacheAsync(grids, version);
+    }
+
+    private async Task BuildConfirmedGridCacheAsync(IReadOnlyCollection<string> grids, int version)
+    {
+        try
+        {
+            var features = await Task.Run(() => CreateVisibleConfirmedGridFeatures(
+                grids.ToHashSet(StringComparer.OrdinalIgnoreCase),
+                0, 179, 0, 179));
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (Model?.ConfirmedGridVersion != version || _confirmedGridCacheVersion != version)
+                    return;
+
+                _confirmedGridLayer.Features = features;
+                _confirmedGridLayer.DataHasChanged();
+                Map.Refresh();
+            });
+        }
+        catch (Exception ex)
+        {
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (_confirmedGridCacheVersion == version)
+                    _confirmedGridCacheVersion = -1;
+                Model?.ReportMapError(ex.GetBaseException().Message);
+            });
         }
     }
 

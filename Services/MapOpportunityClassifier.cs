@@ -24,10 +24,18 @@ public static class MapOpportunityClassifier
 
     public static MapOpportunityProfile Classify(DecodeMessage decode, WorkedStatusIndexes indexes)
     {
-        indexes.Dxcc.TryGetValue(decode.Dxcc, out var dxcc);
+        DxccWorkedStatus? dxcc = null;
+        if (!string.IsNullOrWhiteSpace(decode.Dxcc))
+            indexes.Dxcc.TryGetValue(decode.Dxcc, out dxcc);
+
         var normalizedGrid = NormalizeBestAvailableGrid(decode);
-        indexes.Grids.TryGetValue(normalizedGrid.Grid4, out var grid);
-        indexes.States.TryGetValue(decode.State, out var state);
+        SimpleWorkedStatus? grid = null;
+        if (normalizedGrid.IsValid)
+            indexes.Grids.TryGetValue(normalizedGrid.Grid4, out grid);
+
+        SimpleWorkedStatus? state = null;
+        if (!string.IsNullOrWhiteSpace(decode.State))
+            indexes.States.TryGetValue(decode.State, out state);
 
         return new MapOpportunityProfile(
             Flags(decode, normalizedGrid.IsValid, dxcc, grid, state, WantedScope.Overall),

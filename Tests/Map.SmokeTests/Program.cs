@@ -3,6 +3,8 @@ using JtdxAutoResume.V3.Services;
 using JtdxAutoResume.V3.ViewModels;
 using JtdxAutoResume.V3.Views;
 using Mapsui;
+using BruTile.Web;
+using Mapsui.Tiling.Layers;
 using System.Reflection;
 
 static void Require(bool condition, string message)
@@ -23,7 +25,35 @@ var squareLabelTexts = squareLabels.Select(feature => feature.Data as string).Wh
 Require(squareLabelTexts.Count == 4 && squareLabelTexts.Contains("JN00") && squareLabelTexts.Contains("JN11"), "Visible detailed-square Grid4 labels were not generated correctly.");
 
 using (var defaults = new MapViewModel("IO91WM"))
+{
     Require(defaults.AgeLimitMinutes == 2, "Map hide-if-not-heard default is not two minutes.");
+    Require(defaults.BasemapId == "OpenStreetMap" && defaults.BasemapOptions.Count == 5,
+        "Map basemap selector did not default to OpenStreetMap with all expected choices.");
+}
+
+using (var esriDefaults = new MapViewModel("IO91WM", basemapId: "esristreets"))
+{
+    Require(esriDefaults.BasemapId == "EsriStreets",
+        "English Esri World Street selection was not retained by the map model.");
+    esriDefaults.BasemapId = "unsupported";
+    Require(esriDefaults.BasemapId == "OpenStreetMap", "Unsupported basemap did not fall back safely to OpenStreetMap.");
+}
+
+var streetOption = MapViewModel.AvailableBasemaps.Single(option => option.Id == "EsriStreets");
+Require(streetOption.TileUrl != null
+    && streetOption.TileUrl.Contains("World_Street_Map/MapServer/tile/{z}/{y}/{x}", StringComparison.Ordinal)
+    && !streetOption.TileUrl.Contains("token", StringComparison.OrdinalIgnoreCase),
+    "Esri World Street is not configured as an anonymous cached map service.");
+var esriLayerFactory = typeof(GridMapControl).GetMethod("CreateEsriTileLayer", BindingFlags.NonPublic | BindingFlags.Static)
+    ?? throw new InvalidOperationException("Esri tile layer factory was not found.");
+using (var esriLayer = (TileLayer)(esriLayerFactory.Invoke(null, [streetOption])
+    ?? throw new InvalidOperationException("Esri tile layer factory returned no layer.")))
+{
+    var esriSource = (HttpTileSource)esriLayer.TileSource;
+    Require(esriSource.Schema.GetTileWidth(0) == 256
+        && esriSource.Schema.Resolutions.Count >= 20,
+        "Esri cached basemap does not use the expected Web Mercator tile schema.");
+}
 
 var scopedIndexes = new WorkedStatusIndexes();
 var workedGrid = new SimpleWorkedStatus { Id = "JN02", WorkedAny = true, ConfirmedAny = true, LoTWConfirmedAny = true };
@@ -53,6 +83,18 @@ Require(!scopedProfile.Overall.IsNewGrid, "Grid6 was not matched to its worked G
 Require(scopedProfile.CurrentBand.IsNewGrid, "Current-band grid need was not identified.");
 Require(!scopedProfile.CurrentMode.IsNewGrid, "Worked current-mode grid was incorrectly marked needed.");
 Require(scopedProfile.CurrentBandMode.IsNewGrid, "Unworked band-and-mode grid slot was not identified.");
+
+var noLocationProfile = MapOpportunityClassifier.Classify(
+    new DecodeMessage
+    {
+        ContactableCall = "NOGRID",
+        Band = "20m",
+        Mode = "FT8",
+        ReceivedAt = DateTime.Now
+    },
+    scopedIndexes);
+Require(!noLocationProfile.Overall.IsNewGrid,
+    "A decode without a locator was not classified safely.");
 
 var japanIndexes = new WorkedStatusIndexes();
 japanIndexes.Grids["PM43"] = new SimpleWorkedStatus
@@ -137,6 +179,14 @@ var createConfirmedGridFeatures = typeof(GridMapControl).GetMethod(
 var jn02Features = (System.Collections.ICollection)createConfirmedGridFeatures.Invoke(
     null, [map.LotwConfirmedGrids, 90, 90, 132, 132])!;
 Require(jn02Features.Count == 1, "Viewport-limited LoTW overlay did not render exactly the visible confirmed Grid4 square.");
+var worldConfirmedFeatures = (System.Collections.ICollection)createConfirmedGridFeatures.Invoke(
+    null, [map.LotwConfirmedGrids, 0, 179, 0, 179])!;
+Require(worldConfirmedFeatures.Count == map.LotwConfirmedGridCount,
+    "World-scale LoTW cache did not retain every confirmed Grid4 polygon.");
+var confirmedRasterField = typeof(GridMapControl).GetField("_confirmedGridRasterLayer", BindingFlags.NonPublic | BindingFlags.Instance)
+    ?? throw new InvalidOperationException("Raster-cached LoTW confirmation layer was not found.");
+Require(confirmedRasterField.FieldType == typeof(Mapsui.Layers.RasterizingLayer),
+    "LoTW confirmations are not isolated in the cached raster display layer.");
 map.AgeLimitMinutes = 0;
 Require(map.AgeLimitMinutes == 1, "Map display limit was not clamped to 1 minute.");
 map.AgeLimitMinutes = 12;
@@ -256,4 +306,4 @@ Require(map.VisibleStationCount == 3, "Released stale target remained visible as
 map.Clear();
 Require(map.StationCount == 0 && map.Stations.Count == 0, "Clear map did not clear session stations.");
 
-Console.WriteLine("PASS: Grid4-normalized map/Wanted status, LoTW-aligned Japan new/unconfirmed grid colours, colour scopes, two-minute default, QRZ refinement, TX-safe semantic colours, contactability, active-call retention, stale filtering and session clearing.");
+Console.WriteLine("PASS: Grid4-normalized map/Wanted status, world-scale raster-cached LoTW confirmations, colour scopes, two-minute default, QRZ refinement, TX-safe semantic colours, contactability, active-call retention, stale filtering and session clearing.");

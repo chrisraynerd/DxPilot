@@ -17,9 +17,9 @@
     <Authors>G1CEC</Authors>
     <Company>G1CEC</Company>
     <Copyright>Copyright © G1CEC 2026</Copyright>
-    <Version>3.4.1</Version>
-    <AssemblyVersion>3.4.1.0</AssemblyVersion>
-    <FileVersion>3.4.1.0</FileVersion>
+    <Version>3.4.2</Version>
+    <AssemblyVersion>3.4.2.0</AssemblyVersion>
+    <FileVersion>3.4.2.0</FileVersion>
     <DefaultItemExcludes>$(DefaultItemExcludes);Tests\**</DefaultItemExcludes>
     <NoWarn>$(NoWarn);NU1701</NoWarn>
   </PropertyGroup>

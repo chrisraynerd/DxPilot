@@ -340,7 +340,8 @@ try
         JtdxBandVisibleRowCount = 51,
         QrzUsername = "TESTUSER",
         QrzPassword = "plain-secret-must-not-export",
-        QrzPasswordProtected = "protected-secret-must-not-export"
+        QrzPasswordProtected = "protected-secret-must-not-export",
+        MapBasemapId = "EsriStreets"
     };
     var transferSchedule = new[]
     {
@@ -369,6 +370,7 @@ try
     else if (importedTransfer.Settings.JtdxBandVisibleRowCount != 51
         || importedTransfer.Schedule?.Count != 1
         || importedTransfer.Schedule[0].Label != "15m"
+        || importedTransfer.Settings.MapBasemapId != "EsriStreets"
         || !importedTransfer.QrzPasswordExcluded)
     {
         failures.Add("Settings/scheduler data did not survive the portable export/import round-trip.");

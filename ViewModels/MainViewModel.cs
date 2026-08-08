@@ -46,6 +46,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         public HashSet<string> Sources { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
+    private readonly Dispatcher _uiDispatcher;
     private readonly SettingsService _settingsService;
     private readonly PixelDetector _pixels;
     private readonly ScreenClicker _clicker;
@@ -196,6 +197,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public MainViewModel()
     {
+        // Capture the UI dispatcher once. Background QRZ/UDP callbacks can arrive
+        // concurrently, but every collection bound to WPF must only be changed by
+        // this dispatcher.
+        _uiDispatcher = System.Windows.Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _settingsService = new SettingsService();
         _pixels = new PixelDetector();
         _clicker = new ScreenClicker();
@@ -244,7 +249,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Settings.Settings.MapColourState,
             Settings.Settings.MapShowLotwConfirmedGrids,
             Settings.Settings.MapLotwConfirmedGridOpacityPercent,
-            Settings.Settings.MapLotwConfirmedGridScope);
+            Settings.Settings.MapLotwConfirmedGridScope,
+            Settings.Settings.MapBasemapId);
         Map.PropertyChanged += OnMapPropertyChanged;
         Location.SetSelectedAreas(Settings.Settings.LocationHuntAreas ?? new List<string>());
         SessionHistory = new SessionHistoryViewModel();
@@ -1533,6 +1539,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Settings.Settings.MapShowLotwConfirmedGrids = Map.ShowLotwConfirmedGrids;
         Settings.Settings.MapLotwConfirmedGridOpacityPercent = (int)Map.LotwConfirmedGridOpacityPercent;
         Settings.Settings.MapLotwConfirmedGridScope = Map.LotwConfirmedGridScope.ToString();
+        Settings.Settings.MapBasemapId = Map.BasemapId;
         Settings.Settings.MapColourScope = Map.ColourScope.ToString();
         Settings.Settings.MapColourDxcc = Map.ColourDxcc;
         Settings.Settings.MapColourGrid = Map.ColourGrid;
@@ -1553,12 +1560,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         if (!string.Equals(e.PropertyName, nameof(MapViewModel.ShowLotwConfirmedGrids), StringComparison.Ordinal)
             && !string.Equals(e.PropertyName, nameof(MapViewModel.LotwConfirmedGridOpacityPercent), StringComparison.Ordinal)
-            && !string.Equals(e.PropertyName, nameof(MapViewModel.LotwConfirmedGridScope), StringComparison.Ordinal))
+            && !string.Equals(e.PropertyName, nameof(MapViewModel.LotwConfirmedGridScope), StringComparison.Ordinal)
+            && !string.Equals(e.PropertyName, nameof(MapViewModel.BasemapId), StringComparison.Ordinal))
             return;
 
         Settings.Settings.MapShowLotwConfirmedGrids = Map.ShowLotwConfirmedGrids;
         Settings.Settings.MapLotwConfirmedGridOpacityPercent = (int)Map.LotwConfirmedGridOpacityPercent;
         Settings.Settings.MapLotwConfirmedGridScope = Map.LotwConfirmedGridScope.ToString();
+        Settings.Settings.MapBasemapId = Map.BasemapId;
         if (string.Equals(e.PropertyName, nameof(MapViewModel.LotwConfirmedGridScope), StringComparison.Ordinal))
             RefreshMapLotwConfirmedGrids();
         _settingsService.SaveSettings(Settings.Settings);
@@ -7896,6 +7905,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void AddAction(string message)
     {
+        if (!_uiDispatcher.CheckAccess())
+        {
+            if (_uiDispatcher.HasShutdownStarted || _uiDispatcher.HasShutdownFinished)
+                return;
+
+            try
+            {
+                _uiDispatcher.BeginInvoke(
+                    DispatcherPriority.Background,
+                    new Action(() => AddAction(message)));
+            }
+            catch (InvalidOperationException)
+            {
+                // The application is already shutting down; there is no UI left
+                // on which to display this final activity message.
+            }
+            return;
+        }
+
         var radio = _radioContext == null
             ? ""
             : $" [{_radioContext.BandDisplay} {_radioContext.ModeDisplay}]";
@@ -7957,11 +7985,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var dispatcher = System.Windows.Application.Current?.Dispatcher;
-            if (dispatcher == null || dispatcher.CheckAccess())
+            if (_uiDispatcher.CheckAccess())
                 action();
             else
-                dispatcher.Invoke(action);
+                _uiDispatcher.Invoke(action);
         }
         catch (Exception ex)
         {

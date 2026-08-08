@@ -63,6 +63,7 @@ public sealed class AppSettings
     public bool MapShowLotwConfirmedGrids { get; set; }
     public int MapLotwConfirmedGridOpacityPercent { get; set; } = 25;
     public string MapLotwConfirmedGridScope { get; set; } = "Overall";
+    public string MapBasemapId { get; set; } = "OpenStreetMap";
     public string AdifFilePath { get; set; } = @"C:\Users\Chris\AppData\Local\JTDX\wsjtx_log.adi";
     public string FullAdifPath { get; set; } = "";
     public string LiveJtdxAdifPath { get; set; } = @"C:\Users\Chris\AppData\Local\JTDX\wsjtx_log.adi";

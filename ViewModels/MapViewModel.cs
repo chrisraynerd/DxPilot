@@ -83,6 +83,8 @@ public sealed class MapStationViewModel : ObservableObject
     }
 }
 
+public sealed record MapBasemapOption(string Id, string Label, string? TileUrl = null);
+
 public sealed class MapViewModel : ObservableObject, IDisposable
 {
     private const int MaximumStations = 500;
@@ -105,6 +107,18 @@ public sealed class MapViewModel : ObservableObject, IDisposable
     private bool _colourDxcc = true;
     private bool _colourGrid = true;
     private bool _colourState = true;
+    private string _basemapId = "OpenStreetMap";
+    private string _basemapStatus = "OpenStreetMap";
+    private string _basemapAttribution = "© OpenStreetMap contributors";
+
+    public static IReadOnlyList<MapBasemapOption> AvailableBasemaps { get; } =
+    [
+        new("OpenStreetMap", "OpenStreetMap"),
+        new("EsriStreets", "Esri World Street (English)", "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"),
+        new("EsriOutdoor", "Esri World Topographic", "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"),
+        new("EsriLightGray", "Esri Light Gray", "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"),
+        new("EsriStreetsNight", "Esri Dark Gray", "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}")
+    ];
 
     public MapViewModel(
         string homeGrid,
@@ -118,7 +132,8 @@ public sealed class MapViewModel : ObservableObject, IDisposable
         bool colourState = true,
         bool showLotwConfirmedGrids = false,
         double lotwConfirmedGridOpacityPercent = 25,
-        string lotwConfirmedGridScope = "Overall")
+        string lotwConfirmedGridScope = "Overall",
+        string basemapId = "OpenStreetMap")
     {
         _homeGrid = homeGrid?.Trim().ToUpperInvariant() ?? "";
         _ageLimitMinutes = Math.Clamp(Math.Round(ageLimitMinutes), 1, 12);
@@ -137,6 +152,7 @@ public sealed class MapViewModel : ObservableObject, IDisposable
             && parsedLotwScope is WantedScope.Overall or WantedScope.CurrentBand or WantedScope.CurrentMode
                 ? parsedLotwScope
                 : WantedScope.Overall;
+        _basemapId = NormalizeBasemapId(basemapId);
         ClearCommand = new RelayCommand(Clear);
         _ageTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(10) };
         _ageTimer.Tick += (_, _) =>
@@ -151,6 +167,7 @@ public sealed class MapViewModel : ObservableObject, IDisposable
     }
 
     public ObservableCollection<MapStationViewModel> Stations { get; } = new();
+    public IReadOnlyList<MapBasemapOption> BasemapOptions => AvailableBasemaps;
     public IReadOnlyList<MapColourScopeOption> ColourScopeOptions { get; } =
     [
         new(WantedScope.Overall, "Overall"),
@@ -166,6 +183,31 @@ public sealed class MapViewModel : ObservableObject, IDisposable
     ];
     public ICommand ClearCommand { get; }
     public event EventHandler? MapChanged;
+
+    public string BasemapId
+    {
+        get => _basemapId;
+        set
+        {
+            var normalized = NormalizeBasemapId(value);
+            if (SetProperty(ref _basemapId, normalized))
+                RaiseMapChanged();
+        }
+    }
+
+    public string BasemapStatus { get => _basemapStatus; private set => SetProperty(ref _basemapStatus, value); }
+    public string BasemapAttribution { get => _basemapAttribution; private set => SetProperty(ref _basemapAttribution, value); }
+
+    public void ReportBasemapState(string status, string attribution)
+    {
+        BasemapStatus = status;
+        BasemapAttribution = attribution;
+    }
+
+    public static string NormalizeBasemapId(string? value) =>
+        AvailableBasemaps.Any(option => option.Id.Equals(value?.Trim(), StringComparison.OrdinalIgnoreCase))
+            ? AvailableBasemaps.First(option => option.Id.Equals(value?.Trim(), StringComparison.OrdinalIgnoreCase)).Id
+            : "OpenStreetMap";
 
     public string HomeGrid
     {

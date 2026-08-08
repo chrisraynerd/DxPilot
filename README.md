@@ -4,11 +4,16 @@
 FT8/FT4 decodes and can select wanted DXCC entities, grids, US states and
 configured geographical areas.
 
-The current release is **v3.4.1**, adding a remembered 5%-50% opacity slider to
-the LoTW-confirmed Grid4 overlay, with a more visible 25% default, plus separate
-all-time, current-band and current-mode fill scopes. It also automatically clears
-live map stations when JTDX changes band. Confirmation shading remains visible across band changes and
-updates whenever the merged ADIF logbook is rebuilt. It also includes the v3.3.1
+The current release is **v3.4.2**. It adds remembered, key-free OpenStreetMap and
+Esri basemap choices, and keeps the background-built, raster-cached LoTW-confirmed
+Grid4 overlay visible at world scale. A QRZ-result stability fix safely handles
+decodes without locators and serialises all activity-list updates on the WPF UI
+thread; QRZ request volume and enrichment remain unchanged.
+
+The release retains the remembered 5%-50% confirmation-opacity slider, its 25%
+default, separate all-time/current-band/current-mode fill scopes, and automatic
+live-station clearing when JTDX changes band. Confirmation shading updates whenever
+the merged ADIF logbook is rebuilt. It also includes the v3.3.1
 map-marker double-click CALL NOW and disabled unable-to-contact state, plus the
 v3.3.0 event-led Current Session history
 and permanent searchable Full Archive. Every valid station heard is retained,
@@ -60,9 +65,13 @@ computer or display configuration.
 
 ## Current capabilities
 
-- Interactive live OpenStreetMap with Maidenhead field/square overlays, session
-  station history, adjustable stale time, colour-coded wanted status and CALL NOW.
-  Map tiles require internet access; already fetched tiles are cached by the map engine.
+- Interactive live map with remembered OpenStreetMap, Esri World Street,
+  World Topographic, Light Gray and Dark Gray public cached basemaps.
+  Maidenhead overlays, session station history, adjustable stale time,
+  colour-coded wanted status and CALL NOW remain independent of the basemap.
+  The Esri choices require no account or API key.
+  LoTW-confirmed Grid4 polygons are built in the background and raster-cached,
+  so the confirmation overlay remains visible from regional to world scale.
 - QRZ latitude/longitude map refinement reuses the existing cached lookup pipeline;
   it cannot override a transmitted six-character locator or a conflicting parent square,
   and fixed QRZ coordinates are ignored for portable/mobile calls.
