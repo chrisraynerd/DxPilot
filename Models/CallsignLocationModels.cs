@@ -45,7 +45,11 @@ public sealed record CallsignLocationResult(
     CallsignDataSource Source,
     DateTimeOffset RetrievedAt,
     string? ErrorMessage = null,
-    string? Iota = null);
+    string? Iota = null,
+    double? Latitude = null,
+    double? Longitude = null,
+    string? GeoLocationSource = null,
+    int PrecisionVersion = 0);
 
 public sealed class CallsignLocationUpdatedEventArgs : EventArgs
 {

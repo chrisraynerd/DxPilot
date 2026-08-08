@@ -8,6 +8,28 @@ using JtdxAutoResume.V3.Services;
 using JtdxAutoResume.V3.ViewModels;
 
 var failures = new List<string>();
+
+var callNowSession = new CallNowSessionState();
+if (!callNowSession.Begin(assistanceRunning: false)
+    || !callNowSession.IsOneShot
+    || !callNowSession.EndTarget()
+    || callNowSession.IsOneShot)
+{
+    failures.Add("CALL NOW did not return to fully stopped after a one-station session started while assistance was off.");
+}
+
+if (callNowSession.Begin(assistanceRunning: true)
+    || callNowSession.IsOneShot
+    || callNowSession.EndTarget())
+{
+    failures.Add("CALL NOW did not preserve an assistance mode that was already running.");
+}
+
+callNowSession.Begin(assistanceRunning: false);
+callNowSession.PromoteToAutomation();
+if (callNowSession.EndTarget())
+    failures.Add("Starting an assistance mode during one-shot CALL NOW did not promote the session to continuing automation.");
+
 var bandCases = new (ulong Frequency, string Band)[]
 {
     (1_840_000, "160m"),
@@ -444,6 +466,20 @@ using (var viewModel = new MainViewModel())
     if (viewModel.CurrentBand != "20m" || viewModel.CurrentDigitalMode != "FT8")
         failures.Add("Main view model did not retain the initial 20m FT8 radio context.");
 
+    var mapOverlayStatus = new SimpleWorkedStatus { Id = "FN42", LoTWConfirmedAny = true };
+    mapOverlayStatus.LoTWConfirmedBands.UnionWith(["20m", "15m"]);
+    mapOverlayStatus.LoTWConfirmedModes.UnionWith(["FT8", "FT4"]);
+    var mapOverlayIndexes = new WorkedStatusIndexes();
+    mapOverlayIndexes.Grids["FN42"] = mapOverlayStatus;
+    SetPrivate(viewModel, "_adifMergeResult", new AdifMergeResult { Indexes = mapOverlayIndexes });
+    InvokePrivate(viewModel, "RefreshMapLotwConfirmedGrids");
+    viewModel.Map.ObserveDecode(new DecodeMessage
+    {
+        ContactableCall = "K1MAP",
+        Grid = "FN42",
+        ReceivedAt = DateTime.Now
+    });
+
     viewModel.DxAssist.RecentDecodes.Add(new DecodeMessage());
     viewModel.Wanted.WantedDxcc.Add(new WantedItem());
     var panel = new LocationPanelViewModel("EU", "Europe");
@@ -470,6 +506,12 @@ using (var viewModel = new MainViewModel())
     {
         failures.Add("Band change did not clear every tested live table/history.");
     }
+    if (viewModel.Map.StationCount != 0
+        || viewModel.Map.SelectedStation != null
+        || viewModel.Map.LotwConfirmedGridCount != 1)
+    {
+        failures.Add("Band change did not clear only live map stations while retaining permanent LoTW grid shading.");
+    }
 
     var decode = new DecodeMessage
     {
@@ -491,6 +533,12 @@ using (var viewModel = new MainViewModel())
         failures.Add("Radio context did not become ready after a settled current decode.");
 
     viewModel.DxAssist.RecentDecodes.Add(decode);
+    viewModel.Map.ObserveDecode(new DecodeMessage
+    {
+        ContactableCall = "K1MODE",
+        Grid = "FN31",
+        ReceivedAt = DateTime.Now
+    });
     InvokePrivate(viewModel, "HandleRadioContextStatus", new JtdxStatusMessage
     {
         ReceivedAt = DateTime.Now,
@@ -502,6 +550,8 @@ using (var viewModel = new MainViewModel())
     });
     if (viewModel.CurrentDigitalMode != "FT4" || viewModel.DxAssist.RecentDecodes.Count != 0)
         failures.Add("FT8-to-FT4 mode change did not clear the live table and update mode.");
+    if (viewModel.Map.StationCount != 1)
+        failures.Add("A mode-only change incorrectly cleared the band-specific live map.");
 
     SetPrivate(viewModel, "_adifMergeResult", new AdifMergeResult());
     PrivateLogbook(viewModel).Clear();
@@ -1164,6 +1214,23 @@ else
     }
 }
 
+var candidateOpportunityClass = typeof(MainViewModel).GetMethod(
+    "CandidateOpportunityClass",
+    BindingFlags.Static | BindingFlags.NonPublic)
+    ?? throw new InvalidOperationException("Missing DX Assist opportunity-colour classifier.");
+string CandidateColour(DxccCandidateStatus dxccStatus, int tier, string gridStatus, string stateStatus) =>
+    (string)(candidateOpportunityClass.Invoke(
+        null,
+        [new CandidateRanking { DxccStatus = dxccStatus, PriorityTier = tier }, gridStatus, stateStatus]) ?? "");
+if (CandidateColour(DxccCandidateStatus.NotWorked, 10, "New", "New") != "NewDxcc"
+    || CandidateColour(DxccCandidateStatus.WorkedUnconfirmed, 10, "New", "New") != "UnconfirmedDxcc"
+    || CandidateColour(DxccCandidateStatus.Confirmed, 80, "New", "Not USA") != "NewGrid"
+    || CandidateColour(DxccCandidateStatus.Confirmed, 80, "Worked", "New") != "NewState"
+    || CandidateColour(DxccCandidateStatus.Confirmed, 20, "Worked", "Worked") != "RareDxcc")
+{
+    failures.Add("DX Assist colour classification did not follow opportunity status independently of ranking tier.");
+}
+
 var sessionOrdering = new SessionHistoryViewModel();
 sessionOrdering.AllOpportunities.Add(new SessionDxOpportunity
 {
@@ -1210,13 +1277,97 @@ var orderedSessionCalls = sessionOrdering.Opportunities.Select(item => item.Call
 if (!orderedSessionCalls.SequenceEqual(new[] { "NEW2", "UNCONF5", "GRID1", "GRID3" }))
     failures.Add($"Session History did not keep new/unconfirmed DXCC first and then follow universal rank: {string.Join(",", orderedSessionCalls)}.");
 
+var archiveView = new SessionHistoryViewModel();
+var archiveEntries = new[]
+{
+    new SessionDxOpportunity
+    {
+        SessionId = "session-a",
+        SessionStartedUtc = DateTime.UtcNow.AddHours(-2),
+        OpportunityId = "13:DP0GVN:20M:FT8",
+        FirstSeenUtc = DateTime.UtcNow.AddHours(-2),
+        LastSeenUtc = DateTime.UtcNow.AddHours(-2).AddMinutes(3),
+        Call = "DP0GVN",
+        Entity = "Antarctica",
+        DxccNumber = "13",
+        DxccStatus = "Confirmed",
+        Category = "Heard",
+        Grid = "IB59",
+        Band = "20m",
+        Mode = "FT8",
+        SeenCount = 4,
+        AttemptCount = 2,
+        WasCalled = true,
+        Outcome = "Called",
+        RawMessages = ["CQ DP0GVN IB59"],
+        Timeline = ["20:00:00 Heard: CQ DP0GVN IB59"]
+    },
+    new SessionDxOpportunity
+    {
+        SessionId = "session-b",
+        SessionStartedUtc = DateTime.UtcNow,
+        OpportunityId = "339:JA6LCJ:15M:FT8",
+        FirstSeenUtc = DateTime.UtcNow,
+        LastSeenUtc = DateTime.UtcNow,
+        Call = "JA6LCJ",
+        Entity = "Japan",
+        DxccNumber = "339",
+        DxccStatus = "Confirmed",
+        Category = "Grid",
+        GridNeed = "New",
+        Grid = "PM52",
+        SeenCount = 1,
+        Outcome = "Seen only"
+    }
+};
+archiveView.LoadArchive(archiveEntries);
+archiveView.ToggleArchiveCommand.Execute(null);
+archiveView.SearchText = "Antarctica";
+if (archiveView.Opportunities.Count != 1
+    || archiveView.Opportunities[0].Call != "DP0GVN"
+    || archiveView.Opportunities[0].SeenCount != 4
+    || archiveView.Opportunities[0].AttemptCount != 2)
+{
+    failures.Add("Full Archive search did not retain/search an ordinary heard-and-called station with its seen and attempt counts.");
+}
+if (archiveEntries[1].OpportunityClass != "NewGrid")
+    failures.Add("Session History did not apply the usual new-grid colour class independently of DX Assist priority settings.");
+
+var archiveTestFolder = Path.Combine(Path.GetTempPath(), $"DXPilot-session-archive-test-{Guid.NewGuid():N}");
+try
+{
+    var archiveStore = new SessionHistoryArchiveStore(archiveTestFolder);
+    if (!archiveStore.Save(archiveEntries, out var archiveSaveError))
+        failures.Add($"Full Archive could not be saved: {archiveSaveError}");
+    else
+    {
+        var restoredArchive = archiveStore.Load(out var archiveLoadWarning);
+        var restoredAntarctica = restoredArchive.SingleOrDefault(item => item.Call == "DP0GVN");
+        if (!string.IsNullOrWhiteSpace(archiveLoadWarning)
+            || restoredArchive.Count != 2
+            || restoredAntarctica == null
+            || restoredAntarctica.SeenCount != 4
+            || restoredAntarctica.AttemptCount != 2
+            || restoredAntarctica.RawMessages.SingleOrDefault() != "CQ DP0GVN IB59"
+            || restoredAntarctica.Timeline.Count != 1)
+        {
+            failures.Add($"Full Archive JSON round-trip lost station history data: {archiveLoadWarning}");
+        }
+    }
+}
+finally
+{
+    if (Directory.Exists(archiveTestFolder))
+        Directory.Delete(archiveTestFolder, recursive: true);
+}
+
 if (failures.Count > 0)
 {
     Console.Error.WriteLine(string.Join(Environment.NewLine, failures));
     return 1;
 }
 
-Console.WriteLine($"PASS: configurable 5-200 row geometry/model/settings, secure settings/scheduler export-import validation, WAS-only state indexing with Alaska/Hawaii and optional DC, personal 52-row default migration, {bandCases.Length} band mappings, FT8/FT4 timing and Reply markers, binary JTDX parsing, stale-target policy, InQso CQ contradiction and no-progress safety, blank-status verification, band/mode resets, context inheritance, row-settling gate, optional scoped DXCC and new-grid priorities with normal-DX fallback, and Session History DXCC-first universal-rank ordering.");
+Console.WriteLine($"PASS: CALL NOW one-shot/resume policy, configurable 5-200 row geometry/model/settings, secure settings/scheduler export-import validation, WAS-only state indexing with Alaska/Hawaii and optional DC, personal 52-row default migration, {bandCases.Length} band mappings, FT8/FT4 timing and Reply markers, binary JTDX parsing, stale-target policy, InQso CQ contradiction and no-progress safety, blank-status verification, band/mode resets, context inheritance, row-settling gate, optional scoped DXCC and new-grid priorities with normal-DX fallback, DX Assist opportunity colours independent of ranking tier, Session History DXCC-first universal-rank ordering, Full Archive search, semantic new-grid classification, and archive persistence round-trip.");
 return 0;
 
 static byte[] BuildDecodePacket(string modeMarker, string message)

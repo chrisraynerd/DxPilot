@@ -104,6 +104,10 @@ public sealed class CallsignLocationCache
         public string? Country { get; set; }
         public int? Dxcc { get; set; }
         public string? Iota { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public string? GeoLocationSource { get; set; }
+        public int PrecisionVersion { get; set; }
         public CallsignLookupStatus Status { get; set; }
         public CallsignDataSource Source { get; set; }
         public DateTimeOffset RetrievedAt { get; set; }
@@ -120,6 +124,10 @@ public sealed class CallsignLocationCache
                 Country = result.Country,
                 Dxcc = result.Dxcc,
                 Iota = result.Iota,
+                Latitude = result.Latitude,
+                Longitude = result.Longitude,
+                GeoLocationSource = result.GeoLocationSource,
+                PrecisionVersion = result.PrecisionVersion,
                 Status = result.Status,
                 Source = result.Source,
                 RetrievedAt = result.RetrievedAt,
@@ -130,7 +138,9 @@ public sealed class CallsignLocationCache
 
         public CallsignLocationResult ToResult()
         {
-            return new CallsignLocationResult(Callsign, State, Grid, Country, Dxcc, Status, Source, RetrievedAt, ErrorMessage, Iota);
+            return new CallsignLocationResult(
+                Callsign, State, Grid, Country, Dxcc, Status, Source, RetrievedAt,
+                ErrorMessage, Iota, Latitude, Longitude, GeoLocationSource, PrecisionVersion);
         }
     }
 }

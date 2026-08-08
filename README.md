@@ -4,9 +4,38 @@
 FT8/FT4 decodes and can select wanted DXCC entities, grids, US states and
 configured geographical areas.
 
-The current release is **v3.1.1**, restoring DX Assist's normal DX ranking by
-default and adding optional new-grid priority with automatic fallback. It also
-includes the v3.1.0 guided setup wizard and Configurable Rows Fix17 safety baseline.
+The current release is **v3.4.1**, adding a remembered 5%-50% opacity slider to
+the LoTW-confirmed Grid4 overlay, with a more visible 25% default, plus separate
+all-time, current-band and current-mode fill scopes. It also automatically clears
+live map stations when JTDX changes band. Confirmation shading remains visible across band changes and
+updates whenever the merged ADIF logbook is rebuilt. It also includes the v3.3.1
+map-marker double-click CALL NOW and disabled unable-to-contact state, plus the
+v3.3.0 event-led Current Session history
+and permanent searchable Full Archive. Every valid station heard is retained,
+whether wanted or ordinary, together with real decode counts, verified transmit
+attempts, selection method, outcome and worked status. New/unconfirmed DXCC,
+grid and state records use the same semantic colours as the live views. The
+release also includes the interactive OpenStreetMap-based
+Maidenhead grid map with colour-coded stations, age fading, home paths, pan/zoom
+and the existing safety-checked CALL NOW workflow. Cached QRZ coordinates can
+refine a four-character locator when both sources agree, using a paced background
+refresh for legacy cache entries. Map colours can be viewed by overall, band, mode
+or band-plus-mode status, while Grid6 positions are matched to Grid4 worked status
+in the same way as Wanted. Detailed squares gain faint, viewport-limited Grid4
+labels. The red active-call override is isolated so every other marker retains its
+DXCC/grid/state colour throughout TX. Retained, throttled map layers keep live
+decode bursts responsive. It also includes the v3.1.1 ranking behaviour, guided
+setup wizard and Configurable Rows Fix17 safety baseline.
+
+When all assistance is off, **CALL NOW** now runs as a one-station session and
+returns to fully stopped after that station succeeds, fails, times out or is
+released. If DX Assist, Wanted Sniper or Location Hunt was already active, its
+existing mode is preserved and resumes after the manual station.
+Map grid colours now classify the same effective/transmitted/ADIF/QRZ locator
+used to plot each station, preventing wanted or unconfirmed grids from reverting
+to orange after a later gridless decode. Map confirmation colours also use the
+same LoTW confirmation sets as Wanted, so paper/eQSL-only grids remain visibly
+unconfirmed rather than incorrectly appearing as ordinary orange stations.
 
 ## Download
 
@@ -31,6 +60,12 @@ computer or display configuration.
 
 ## Current capabilities
 
+- Interactive live OpenStreetMap with Maidenhead field/square overlays, session
+  station history, adjustable stale time, colour-coded wanted status and CALL NOW.
+  Map tiles require internet access; already fetched tiles are cached by the map engine.
+- QRZ latitude/longitude map refinement reuses the existing cached lookup pipeline;
+  it cannot override a transmitted six-character locator or a conflicting parent square,
+  and fixed QRZ coordinates are ignored for portable/mobile calls.
 - Universal ranking shared by DX Assist, Wanted and Location views.
 - DX Assist keeps needed DXCC at absolute priority and leaves new-grid promotion off by default. The optional **Give new grids priority** control promotes globally new grids, then automatically falls back to normal DX ranking when none are available.
 - Wanted Sniper remains a separate strict wanted-item mode; its grid choices do not change DX Assist ranking.
@@ -42,7 +77,8 @@ computer or display configuration.
 - Wanted DXCC, grid and US-state tracking independent of sniper checkboxes.
 - LoTW-aware DXCC confirmation handling.
 - Worked-callsign display and temporary/permanent suppression controls.
-- Manual CALL NOW override.
+- Manual CALL NOW override, with one-station operation when assistance was off
+  and automatic continuation only when a hunting mode was already active.
 - `ALL.TXT` monitoring for transmitted-message and wrong-target recovery.
 - Settings export/import with QRZ passwords excluded from portable exports.
 - Guided setup for station identity, adaptive JTDX/GridTracker/logger UDP paths,
@@ -71,6 +107,7 @@ dotnet build -c Release
 ```powershell
 dotnet run -c Release --project Tests\ConfigurableRows.SmokeTests\JtdxAutoResume.ConfigurableRows.SmokeTests.csproj
 dotnet run -c Release --project Tests\SetupWizard.SmokeTests\SetupWizard.SmokeTests.csproj
+dotnet run -c Release --project Tests\Map.SmokeTests\Map.SmokeTests.csproj
 ```
 
 ## Configuration and credentials

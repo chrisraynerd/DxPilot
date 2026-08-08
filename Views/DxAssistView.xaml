@@ -145,7 +145,6 @@
 
                             <DataGrid ItemsSource="{Binding DxAssist.CandidateRows}"
                                       SelectedItem="{Binding DxAssist.SelectedCandidate}"
-                                      RowStyle="{StaticResource SemanticStationRowStyle}"
                                       AutoGenerateColumns="False"
                                       IsReadOnly="True"
                                       CanUserAddRows="False"
@@ -153,6 +152,26 @@
                                       ScrollViewer.VerticalScrollBarVisibility="Auto"
                                       CanUserSortColumns="True"
                                       PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
+                                <DataGrid.RowStyle>
+                                    <Style TargetType="DataGridRow" BasedOn="{StaticResource SemanticStationRowStyle}">
+                                        <!-- Keep semantic row fills, but suppress the shared action stripe:
+                                             WPF can render it as detached boxes at the far edge of this grid. -->
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ActionStateClass}" Value="Failed">
+                                                <Setter Property="BorderThickness" Value="0" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ActionStateClass}" Value="Calling">
+                                                <Setter Property="BorderThickness" Value="0" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ActionStateClass}" Value="InProgress">
+                                                <Setter Property="BorderThickness" Value="0" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ActionStateClass}" Value="Worked">
+                                                <Setter Property="BorderThickness" Value="0" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGrid.RowStyle>
                                 <DataGrid.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="CALL NOW" Command="{Binding PlacementTarget.DataContext.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
@@ -197,6 +216,20 @@
                                 <DataGrid.RowStyle>
                                     <Style TargetType="DataGridRow" BasedOn="{StaticResource SemanticStationRowStyle}">
                                         <Setter Property="ToolTip" Value="{Binding ParserInterpretation}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ActionStateClass}" Value="Failed">
+                                                <Setter Property="BorderThickness" Value="0" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ActionStateClass}" Value="Calling">
+                                                <Setter Property="BorderThickness" Value="0" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ActionStateClass}" Value="InProgress">
+                                                <Setter Property="BorderThickness" Value="0" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ActionStateClass}" Value="Worked">
+                                                <Setter Property="BorderThickness" Value="0" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
                                     </Style>
                                 </DataGrid.RowStyle>
                                 <DataGrid.Columns>

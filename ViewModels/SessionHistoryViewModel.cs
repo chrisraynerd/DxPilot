@@ -6,6 +6,7 @@ namespace JtdxAutoResume.V3.ViewModels;
 
 public sealed class SessionHistoryViewModel : ObservableObject
 {
+    private readonly Dictionary<string, int> _archiveIndexes = new(StringComparer.OrdinalIgnoreCase);
     private SessionDxOpportunity? _selectedOpportunity;
     private string _status = "Session DX history will track meaningful DX opportunities.";
     private bool _showNewUnconfirmed = true;
@@ -19,9 +20,18 @@ public sealed class SessionHistoryViewModel : ObservableObject
     private bool _showSeenOnly = true;
     private bool _showSuppressed = true;
     private bool _showFailedMismatch = true;
+    private bool _showHeard = true;
     private bool _showCurrentSessionOnly = true;
+    private bool _isViewingArchive;
+    private string _searchText = "";
+
+    public SessionHistoryViewModel()
+    {
+        ToggleArchiveCommand = new RelayCommand(ToggleArchive);
+    }
 
     public ObservableCollection<SessionDxOpportunity> AllOpportunities { get; } = new();
+    public ObservableCollection<SessionDxOpportunity> ArchiveOpportunities { get; } = new();
     public ObservableCollection<SessionDxOpportunity> Opportunities { get; } = new();
 
     public SessionDxOpportunity? SelectedOpportunity
@@ -108,13 +118,82 @@ public sealed class SessionHistoryViewModel : ObservableObject
         set { if (SetProperty(ref _showCurrentSessionOnly, value)) Refresh(); }
     }
 
+    public bool ShowHeard
+    {
+        get => _showHeard;
+        set { if (SetProperty(ref _showHeard, value)) Refresh(); }
+    }
+
+    public bool IsViewingArchive
+    {
+        get => _isViewingArchive;
+        private set
+        {
+            if (!SetProperty(ref _isViewingArchive, value))
+                return;
+            OnPropertyChanged(nameof(ViewHeading));
+            OnPropertyChanged(nameof(ArchiveButtonText));
+            Refresh();
+        }
+    }
+
+    public string SearchText
+    {
+        get => _searchText;
+        set { if (SetProperty(ref _searchText, value ?? "")) Refresh(); }
+    }
+
+    public string ViewHeading => IsViewingArchive ? "Full Archive" : "Current Session";
+    public string ArchiveButtonText => IsViewingArchive ? "Current Session" : "Full Archive";
+
     public ICommand? ExportCommand { get; set; }
     public ICommand? ClearCommand { get; set; }
+    public ICommand ToggleArchiveCommand { get; }
+
+    public IReadOnlyList<SessionDxOpportunity> RowsForExport() =>
+        (IsViewingArchive ? ArchiveOpportunities : AllOpportunities).ToList();
+
+    public void LoadArchive(IEnumerable<SessionDxOpportunity> entries)
+    {
+        _archiveIndexes.Clear();
+        ArchiveOpportunities.Clear();
+        foreach (var entry in entries.OrderBy(entry => entry.SessionStartedUtc).ThenBy(entry => entry.FirstSeenUtc))
+        {
+            _archiveIndexes[ArchiveKey(entry)] = ArchiveOpportunities.Count;
+            ArchiveOpportunities.Add(entry);
+        }
+        Refresh();
+    }
+
+    public void UpsertArchive(SessionDxOpportunity current)
+    {
+        var archiveId = ArchiveKey(current);
+        var snapshot = current.Snapshot();
+        if (!_archiveIndexes.TryGetValue(archiveId, out var index))
+        {
+            _archiveIndexes[archiveId] = ArchiveOpportunities.Count;
+            ArchiveOpportunities.Add(snapshot);
+        }
+        else
+            ArchiveOpportunities[index] = snapshot;
+
+        if (IsViewingArchive)
+            Refresh();
+    }
+
+    private void ToggleArchive()
+    {
+        IsViewingArchive = !IsViewingArchive;
+    }
+
+    private static string ArchiveKey(SessionDxOpportunity item) => $"{item.SessionId}|{item.OpportunityId}";
 
     public void Refresh()
     {
-        var rows = AllOpportunities
+        var source = IsViewingArchive ? ArchiveOpportunities : AllOpportunities;
+        var rows = source
             .Where(PassesFilter)
+            .Where(PassesSearch)
             .OrderBy(NewOrUnconfirmedDxccSort)
             .ThenBy(o => o.UniversalRank ?? int.MaxValue)
             .ThenBy(o => o.PriorityTier)
@@ -132,7 +211,9 @@ public sealed class SessionHistoryViewModel : ObservableObject
         else
             OnPropertyChanged(nameof(SelectedOpportunity));
 
-        Status = $"{Opportunities.Count} shown / {AllOpportunities.Count} tracked session DX opportunities.";
+        Status = IsViewingArchive
+            ? $"{Opportunities.Count} shown / {ArchiveOpportunities.Count} permanently archived records. Search by call, country, DXCC, grid, state or reason."
+            : $"{Opportunities.Count} shown / {AllOpportunities.Count} stations heard or acted on this session. {ArchiveOpportunities.Count} records in Full Archive.";
     }
 
     private bool PassesFilter(SessionDxOpportunity item)
@@ -141,10 +222,12 @@ public sealed class SessionHistoryViewModel : ObservableObject
         var isGrid = item.Category.Equals("Grid", StringComparison.OrdinalIgnoreCase);
         var isState = item.Category.Equals("USA State", StringComparison.OrdinalIgnoreCase);
         var isRareConfirmed = item.Category.Equals("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase);
+        var isHeard = item.Category is "Heard" or "General" or "Band/mode";
         var passesType = (ShowDxcc && isDxcc)
             || (ShowGrids && isGrid)
             || (ShowUsaStates && isState)
-            || (ShowRareConfirmed && isRareConfirmed);
+            || (ShowRareConfirmed && isRareConfirmed)
+            || (ShowHeard && isHeard);
 
         var isMissed = item.Outcome.Contains("Missed", StringComparison.OrdinalIgnoreCase)
             || item.Outcome.Contains("TX mismatch", StringComparison.OrdinalIgnoreCase);
@@ -163,6 +246,22 @@ public sealed class SessionHistoryViewModel : ObservableObject
             || (ShowFailedMismatch && isFailedMismatch)
             || (ShowSeenOnly && isSeenOnly)
             || (ShowCalledOnly && item.WasCalled);
+    }
+
+    private bool PassesSearch(SessionDxOpportunity item)
+    {
+        var search = SearchText.Trim();
+        if (string.IsNullOrWhiteSpace(search))
+            return true;
+
+        return item.Call.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || item.Entity.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || item.DxccNumber.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || item.Grid.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || item.State.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || item.PrimaryReason.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || item.Category.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || item.Outcome.Contains(search, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int OutcomeSort(string outcome)

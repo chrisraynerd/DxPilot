@@ -1,0 +1,187 @@
+<UserControl x:Class="JtdxAutoResume.V3.Views.MapView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="clr-namespace:JtdxAutoResume.V3.Views">
+    <Grid Margin="0,12,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,10" Padding="12,9">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Live Grid Map" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Map.Status}" Foreground="#526577" TextWrapping="Wrap" />
+                </StackPanel>
+                <WrapPanel Grid.Column="1" VerticalAlignment="Center" Margin="18,0,0,0">
+                    <CheckBox Content="Paths" IsChecked="{Binding Map.ShowPaths}" VerticalAlignment="Center" />
+                    <CheckBox Content="Labels" IsChecked="{Binding Map.ShowLabels}" VerticalAlignment="Center" />
+                    <CheckBox Content="Detailed squares + Grid4 refs" IsChecked="{Binding Map.ShowGridSquares}" VerticalAlignment="Center"
+                              ToolTip="Shows faint four-character Maidenhead references when the map is zoomed in far enough for them to remain readable." />
+                    <CheckBox Content="LoTW confirmed grids" IsChecked="{Binding Map.ShowLotwConfirmedGrids}" VerticalAlignment="Center"
+                              ToolTip="Adds a very light red fill to four-character Maidenhead squares confirmed through LoTW. This permanent logbook overlay is not cleared when the band changes." />
+                    <TextBlock Text="Fill" VerticalAlignment="Center" Margin="5,0,4,7" />
+                    <Slider Minimum="5" Maximum="50" Width="72" Value="{Binding Map.LotwConfirmedGridOpacityPercent}"
+                            TickFrequency="5" IsSnapToTickEnabled="True" AutoToolTipPlacement="BottomRight"
+                            ToolTip="Adjust the opacity of the LoTW-confirmed Grid4 fill from 5% to 50%."
+                            VerticalAlignment="Center" Margin="0,0,4,7" />
+                    <TextBlock Text="{Binding Map.LotwConfirmedGridOpacityPercent, StringFormat={}{0:0}%}" Width="34" VerticalAlignment="Center" Margin="0,0,5,7" />
+                    <TextBlock Text="Fill scope" VerticalAlignment="Center" Margin="3,0,4,7" />
+                    <ComboBox ItemsSource="{Binding Map.LotwGridScopeOptions}"
+                              DisplayMemberPath="Label" SelectedValuePath="Scope"
+                              SelectedValue="{Binding Map.LotwConfirmedGridScope, Mode=TwoWay}"
+                              Width="132" VerticalAlignment="Center" Margin="0,0,5,7"
+                              ToolTip="Choose whether red Grid4 shading represents all-time LoTW confirmations, confirmations on the current band, or confirmations on the current mode." />
+                    <TextBlock Text="Hide if not heard for" VerticalAlignment="Center" Margin="5,0,5,7"
+                               ToolTip="Map display window only. DX Assist and Wanted continue to use their own target-staleness safety settings." />
+                    <Slider Minimum="1" Maximum="12" Width="90" Value="{Binding Map.AgeLimitMinutes}"
+                            TickFrequency="1" IsSnapToTickEnabled="True" AutoToolTipPlacement="BottomRight"
+                            ToolTip="Hide a marker when this station has not been heard again for the selected number of minutes. This does not change DX Assist or Wanted target staleness."
+                            VerticalAlignment="Center" Margin="0,0,5,7" />
+                    <TextBlock Text="{Binding Map.AgeLimitMinutes, StringFormat={}{0:0} min}" Width="48" VerticalAlignment="Center" Margin="0,0,8,7" />
+                    <Button Content="World view" Click="WorldView_Click" Padding="8,4" MinWidth="76" />
+                    <Button Content="Clear map" Command="{Binding Map.ClearCommand}" Padding="8,4" MinWidth="72" Margin="0" />
+                </WrapPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="520" />
+                <ColumnDefinition Width="330" />
+            </Grid.ColumnDefinitions>
+
+            <Border Background="#0C1F30" BorderBrush="#31485A" BorderThickness="1" CornerRadius="7" ClipToBounds="True">
+                <Grid>
+                    <views:GridMapControl x:Name="LiveMap" Model="{Binding Map}" StationDoubleClicked="LiveMap_StationDoubleClicked" />
+                    <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="9" Padding="8,5" CornerRadius="4" Background="#D905111C">
+                        <TextBlock Foreground="#D7E7F0" FontSize="11" Text="Wheel to zoom · drag to pan · click to select · double-click to call" />
+                    </Border>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Column="1" Margin="10,0,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Style="{StaticResource PanelBorder}" Padding="10" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="Map key" FontWeight="SemiBold" Margin="0,0,0,5" />
+                        <WrapPanel>
+                            <Ellipse Fill="#A855F7" Width="11" Height="11" Margin="0,2,5,0" /><TextBlock Text="New DXCC" Margin="0,0,10,2" />
+                            <Ellipse Fill="#D8B4FE" Width="11" Height="11" Margin="0,2,5,0" /><TextBlock Text="Unconfirmed" Margin="0,0,10,2" />
+                            <Ellipse Fill="#3B82F6" Width="11" Height="11" Margin="0,2,5,0" /><TextBlock Text="Wanted grid (new/unconfirmed)" Margin="0,0,10,2" />
+                            <Ellipse Fill="#14B8A6" Width="11" Height="11" Margin="0,2,5,0" /><TextBlock Text="New state" Margin="0,0,10,2" />
+                            <Ellipse Fill="#F59E0B" Width="11" Height="11" Margin="0,2,5,0" /><TextBlock Text="Heard" />
+                            <Ellipse Fill="#EF4444" Width="11" Height="11" Margin="10,2,5,0" /><TextBlock Text="Currently calling" />
+                            <Grid Width="13" Height="13" Margin="10,1,5,0">
+                                <Ellipse Fill="#F59E0B" />
+                                <Ellipse Fill="#05080C" Width="7" Height="7" />
+                            </Grid><TextBlock Text="Not contactable" />
+                            <Rectangle Fill="#22EF4444" Stroke="#88EF4444" Width="13" Height="10" Margin="10,2,5,0" />
+                            <TextBlock Text="LoTW confirmed Grid4" />
+                        </WrapPanel>
+                        <WrapPanel Margin="0,7,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="Colour scope:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,5,0" />
+                            <ComboBox ItemsSource="{Binding Map.ColourScopeOptions}"
+                                      DisplayMemberPath="Label" SelectedValuePath="Scope"
+                                      SelectedValue="{Binding Map.ColourScope, Mode=TwoWay}"
+                                      Width="122" Margin="0,0,10,0"
+                                      ToolTip="Map display only. Overall matches the main logbook status; scoped choices show needs on each station's heard band and/or mode." />
+                            <CheckBox Content="DXCC" IsChecked="{Binding Map.ColourDxcc, Mode=TwoWay}" Margin="0,0,8,0"
+                                      ToolTip="Use purple DXCC colours in the selected map scope." />
+                            <CheckBox Content="Grid" IsChecked="{Binding Map.ColourGrid, Mode=TwoWay}" Margin="0,0,8,0"
+                                      ToolTip="Use blue grid colours in the selected map scope. Status is matched by four-character grid, consistent with Wanted." />
+                            <CheckBox Content="State" IsChecked="{Binding Map.ColourState, Mode=TwoWay}"
+                                      ToolTip="Use teal USA-state colours in the selected map scope." />
+                        </WrapPanel>
+                        <TextBlock Margin="0,5,0,0" Foreground="#526577" FontSize="11" TextWrapping="Wrap"
+                                   Text="Display only — these controls do not change DX Assist or Wanted targeting." />
+                        <TextBlock Margin="0,5,0,0" Foreground="#526577" TextWrapping="Wrap">
+                            <Run Text="Visible stations: " /><Run Text="{Binding Map.VisibleStationCount, Mode=OneWay}" />
+                            <Run Text=" · Blue grid squares: " /><Run Text="{Binding Map.VisibleNeededGridCount, Mode=OneWay}" />
+                            <Run Text=" · Session stations: " /><Run Text="{Binding Map.StationCount, Mode=OneWay}" />
+                            <Run Text=" · LoTW confirmed Grid4: " /><Run Text="{Binding Map.LotwConfirmedGridCount, Mode=OneWay}" />
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="1" Padding="10" Margin="0,0,0,8">
+                    <Border.Style>
+                        <Style TargetType="Border" BasedOn="{StaticResource PanelBorder}">
+                            <Setter Property="Visibility" Value="Visible" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Map.SelectedStation}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <DockPanel>
+                            <TextBlock Text="{Binding Map.SelectedStation.Callsign}" FontSize="18" FontWeight="Bold" />
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding Map.SelectedStation.Snr, StringFormat={}{0:+0;-0;0} dB}" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock Foreground="#526577" Margin="0,2,0,6">
+                            <Run Text="{Binding Map.SelectedStation.Country}" /><Run Text=" · " /><Run Text="{Binding Map.SelectedStation.Grid}" /><Run Text=" · " /><Run Text="{Binding Map.SelectedStation.Band}" /><Run Text=" " /><Run Text="{Binding Map.SelectedStation.Mode}" />
+                        </TextBlock>
+                        <TextBlock Text="Unable to contact — this station is stale or no longer has a live selectable JTDX reply source."
+                                   Foreground="#991B1B" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,6">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Map.SelectedStation.IsContactable}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <Button Command="{Binding CallNowCommand}" CommandParameter="{Binding Map.SelectedStation}" FontWeight="SemiBold" Margin="0">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Content" Value="CALL NOW" />
+                                    <Setter Property="Background" Value="#22C55E" />
+                                    <Setter Property="Foreground" Value="Black" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Map.SelectedStation.IsContactable}" Value="False">
+                                            <Setter Property="Content" Value="UNABLE TO CONTACT" />
+                                            <Setter Property="Background" Value="#CBD5E1" />
+                                            <Setter Property="Foreground" Value="#64748B" />
+                                            <Setter Property="IsEnabled" Value="False" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="2" Style="{StaticResource PanelBorder}" Padding="0">
+                    <DataGrid ItemsSource="{Binding Map.Stations}"
+                              SelectedItem="{Binding Map.SelectedStation}"
+                              RowStyle="{StaticResource SemanticStationRowStyle}"
+                              AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                              HeadersVisibility="Column" BorderThickness="0" RowHeaderWidth="0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Call" Binding="{Binding Callsign}" Width="*" />
+                            <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="58" />
+                            <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="44" />
+                            <DataGridTextColumn Header="Reply" Binding="{Binding ContactabilityText}" Width="42" />
+                            <DataGridTextColumn Header="Age" Binding="{Binding Age}" Width="48" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

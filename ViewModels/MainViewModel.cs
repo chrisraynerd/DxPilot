@@ -82,6 +82,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly DispatcherTimer _candidateRefreshTimer;
     private readonly DispatcherTimer _adifReloadTimer;
     private readonly DispatcherTimer _wantedRefreshTimer;
+    private readonly DispatcherTimer _sessionArchiveSaveTimer;
+    private readonly SessionHistoryArchiveStore _sessionArchiveStore;
+    private readonly string _sessionId = $"{DateTime.UtcNow:yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}";
+    private readonly DateTime _sessionStartedUtc = DateTime.UtcNow;
+    private bool _sessionArchiveDirty;
     private bool _huntTickRunning;
     private BandScheduleItem? _selectedScheduleItem;
     private DxTarget? _selectedIntendedTarget;
@@ -172,7 +177,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _targetSelectionInProgress;
     private CancellationTokenSource? _targetSelectionCancellation;
     private HuntingOperatingMode _operatingMode = HuntingOperatingMode.DxAssist;
+    private readonly CallNowSessionState _callNowSession = new();
+    private bool _endingManualCallNowOneShot;
     private DateTime _lastWantedSniperNoTargetLogAt = DateTime.MinValue;
+    private DateTime _lastMapContactabilityRefreshUtc = DateTime.MinValue;
     private string _targetSource = "None";
     private string _wantedReason = "";
     private string _wantedSourceBlock = "";
@@ -208,6 +216,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _adifReader = new AdifLogbookReader();
         _adifStatusBuilder = new AdifWorkedStatusBuilder();
         Settings = new SettingsViewModel { Settings = _settingsService.LoadSettings() };
+        _sessionArchiveStore = new SessionHistoryArchiveStore(_settingsService.AppFolder);
         _gridOverlayButtonText = $"Show {Settings.Settings.JtdxBandVisibleRowCount}-Row Grid";
         _permanentlySuppressedCallsigns.UnionWith(Settings.Settings.PermanentlySuppressedCallsigns);
         _dxccResolver = new DxccResolver(Settings.Settings.CountryFilePath);
@@ -223,8 +232,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         DxAssist = new DxAssistViewModel();
         Wanted = new WantedViewModel();
         Location = new LocationViewModel();
+        Map = new MapViewModel(
+            Settings.Settings.HomeGrid,
+            Settings.Settings.MapStaleMinutes,
+            Settings.Settings.MapShowPaths,
+            Settings.Settings.MapShowLabels,
+            Settings.Settings.MapShowGridSquares,
+            Settings.Settings.MapColourScope,
+            Settings.Settings.MapColourDxcc,
+            Settings.Settings.MapColourGrid,
+            Settings.Settings.MapColourState,
+            Settings.Settings.MapShowLotwConfirmedGrids,
+            Settings.Settings.MapLotwConfirmedGridOpacityPercent,
+            Settings.Settings.MapLotwConfirmedGridScope);
+        Map.PropertyChanged += OnMapPropertyChanged;
         Location.SetSelectedAreas(Settings.Settings.LocationHuntAreas ?? new List<string>());
         SessionHistory = new SessionHistoryViewModel();
+        SessionHistory.LoadArchive(_sessionArchiveStore.Load(out var archiveWarning));
         Scheduler = new SchedulerViewModel();
         DxAssist.AutoSelectBestCq = Settings.Settings.AutoSelectBestCq;
 
@@ -302,10 +326,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             RefreshWantedTimeColumns();
             CompleteRadioContextSettlingIfReady();
+            if (DateTime.UtcNow - _lastMapContactabilityRefreshUtc >= TimeSpan.FromSeconds(5))
+                RefreshMapContactability();
         };
         _wantedRefreshTimer.Start();
+        _sessionArchiveSaveTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(2)
+        };
+        _sessionArchiveSaveTimer.Tick += (_, _) =>
+        {
+            _sessionArchiveSaveTimer.Stop();
+            SaveSessionArchive();
+        };
 
         WireEvents();
+        if (!string.IsNullOrWhiteSpace(archiveWarning))
+            AddAction(archiveWarning);
         Dashboard.OverallStatus = "DX Pilot ready. Start UDP and select a hunting mode when JTDX is open.";
         ResolverDiagnostics = _dxccResolver.Diagnostics;
         RarityDiagnostics = _rarityService.Diagnostics.Summary;
@@ -334,6 +371,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public DxAssistViewModel DxAssist { get; }
     public WantedViewModel Wanted { get; }
     public LocationViewModel Location { get; }
+    public MapViewModel Map { get; }
     public SessionHistoryViewModel SessionHistory { get; }
     public SchedulerViewModel Scheduler { get; }
     public SettingsViewModel Settings { get; }
@@ -623,7 +661,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    public bool IsDxAssistActive => _autoResume.IsRunning && _operatingMode == HuntingOperatingMode.DxAssist;
+    public bool IsDxAssistActive => _autoResume.IsRunning
+        && !_callNowSession.IsOneShot
+        && _operatingMode == HuntingOperatingMode.DxAssist;
     public bool IsWantedSniperActive => _autoResume.IsRunning && _operatingMode == HuntingOperatingMode.WantedSniper;
     public bool IsLocationHuntActive => _autoResume.IsRunning && _operatingMode == HuntingOperatingMode.LocationHunt;
 
@@ -655,10 +695,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             while (_decodeHistory.Count > 500)
                 _decodeHistory.RemoveAt(_decodeHistory.Count - 1);
             _visibleRowModel.Rebuild(_decodeHistory, JtdxBandActivityGridCalibration.FromSettings(Settings.Settings));
+            Map.ObserveDecode(decode, MapOpportunityClassifier.Classify(decode, _adifMergeResult.Indexes));
+            RefreshMapContactability();
 
             DxAssist.RecentDecodes.Insert(0, decode);
             TrimLiveDecodeDisplay();
             UpdateWantedItems(decode);
+            TrackDecodeSeen(decode);
             RequestNextBestTargetsUpdate();
 
             ProcessDecodeForCurrentQso(decode);
@@ -773,6 +816,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _radioContextHasDecode = false;
         _radioContextSettleUntil = DateTime.MaxValue;
         RefreshRadioContextDisplay();
+        RefreshMapLotwConfirmedGrids();
 
         if (firstContext)
         {
@@ -790,6 +834,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ClearLockedTarget($"Radio context changed from {previousDisplay} to {_radioContext.Display}; active target released without suppression.");
 
         ClearLiveRadioTables();
+        if (bandChanged)
+            Map.ClearForBandChange(previous.BandDisplay, _radioContext.BandDisplay);
         RadioContextStatus = $"Changed from {previousDisplay} to {_radioContext.Display}. Waiting for the first complete decode batch.";
         Dashboard.OverallStatus = RadioContextStatus;
         AddAction($"Radio context changed: {previousDisplay} -> {_radioContext.Display}. All live station tables, ranks and JTDX row positions were cleared.");
@@ -888,6 +934,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _guiSelectionClickCounts.Clear();
         _guiSelectionLastClickAt.Clear();
         _visibleRowModel.Rebuild(Array.Empty<DecodeMessage>(), JtdxBandActivityGridCalibration.FromSettings(Settings.Settings));
+        Map.SetContactableCallsigns(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
         DxAssist.RecentDecodes.Clear();
         DxAssist.NextBestTargets.Clear();
@@ -912,6 +959,26 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Location.Status = "Live Location tables cleared; waiting for the current radio context to settle.";
         CallNowCommand.RaiseCanExecuteChanged();
         UpdateHuntStateDisplay();
+    }
+
+    private void RefreshMapContactability()
+    {
+        _lastMapContactabilityRefreshUtc = DateTime.UtcNow;
+        if (!_udpListener.IsRunning)
+        {
+            Map.SetContactableCallsigns(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            CallNowCommand.RaiseCanExecuteChanged();
+            return;
+        }
+
+        var contactableCalls = _decodeHistory
+            .Where(IsFreshDecode)
+            .Where(IsSelectableDecodeForAcquisition)
+            .Select(DecodeTargetCall)
+            .Where(call => !string.IsNullOrWhiteSpace(call))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Map.SetContactableCallsigns(contactableCalls);
+        CallNowCommand.RaiseCanExecuteChanged();
     }
 
     private bool RadioContextReadyForSelection()
@@ -961,6 +1028,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (cached != null)
             {
                 ApplyCallsignLocationUpdate(cached);
+                if (ShouldRefreshLegacyMapLocation(cached, decode))
+                {
+                    _callsignLocationService.QueueLookup(
+                        call,
+                        CallsignLookupPriority.Background,
+                        LastHeardUtc(call, decode),
+                        forceRefresh: true);
+                }
                 return;
             }
 
@@ -1009,6 +1084,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         return needsGrid || needsState || needsIota;
     }
 
+    private bool ShouldRefreshLegacyMapLocation(CallsignLocationResult cached, DecodeMessage decode)
+    {
+        if (!Settings.Settings.EnableQrzGridEnrichment
+            || cached.Status != CallsignLookupStatus.Resolved
+            || cached.PrecisionVersion >= 2
+            || CallsignNormalizer.IsPotentiallyPortable(DecodeTargetCall(decode)))
+        {
+            return false;
+        }
+
+        // Older DX Pilot caches retained only four locator characters. Refresh
+        // those entries gently in the normal background worker so the map can
+        // gain QRZ coordinates without invalidating the whole cache at startup.
+        var cachedGrid = MaidenheadGrid.Normalize(cached.Grid ?? "");
+        return cachedGrid.IsValid && string.IsNullOrWhiteSpace(cachedGrid.Grid6);
+    }
+
     private void ApplyCallsignLocationUpdate(CallsignLocationResult result)
     {
         QrzStatus = result.Status == CallsignLookupStatus.Error
@@ -1021,7 +1113,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         foreach (var decode in _decodeHistory.Where(d => DecodeTargetCall(d).Equals(result.Callsign, StringComparison.OrdinalIgnoreCase)).ToList())
         {
             if (ApplyCallsignLocationToDecode(decode, result))
+            {
                 updated++;
+                Map.ObserveDecode(decode, MapOpportunityClassifier.Classify(decode, _adifMergeResult.Indexes));
+                RefreshTrackedDecodeDetails(decode);
+            }
         }
 
         if (updated == 0)
@@ -1080,17 +1176,39 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var normalizedGrid = MaidenheadGrid.Normalize(result.Grid ?? "");
         if (Settings.Settings.EnableQrzGridEnrichment && normalizedGrid.IsValid)
         {
-            decode.QrzGrid = normalizedGrid.Grid4;
+            var qrzGrid = string.IsNullOrWhiteSpace(normalizedGrid.Grid6)
+                ? normalizedGrid.Grid4
+                : normalizedGrid.Grid6;
+            if (!decode.QrzGrid.Equals(qrzGrid, StringComparison.OrdinalIgnoreCase))
+            {
+                decode.QrzGrid = qrzGrid;
+                changed = true;
+            }
             var portable = CallsignNormalizer.IsPotentiallyPortable(DecodeTargetCall(decode));
             var canPromoteQrzGrid = string.IsNullOrWhiteSpace(decode.Grid)
                 && (!portable || !Settings.Settings.IgnoreQrzTargetingForPotentiallyPortableCalls)
                 && (Settings.Settings.UseQrzGridsForNewGridTargeting || Settings.Settings.UseQrzGridsForUnconfirmedGridTargeting);
             if (canPromoteQrzGrid)
             {
-                decode.Grid = normalizedGrid.Grid4;
+                decode.Grid = qrzGrid;
                 decode.GridSource = "QRZ";
-                decode.EffectiveGrid = normalizedGrid.Grid4;
+                decode.EffectiveGrid = qrzGrid;
                 decode.EffectiveGridSource = DecodeGridSource.Qrz;
+                changed = true;
+            }
+        }
+
+        if (Settings.Settings.EnableQrzGridEnrichment
+            && result.Latitude is >= -90 and <= 90
+            && result.Longitude is >= -180 and <= 180)
+        {
+            if (decode.QrzLatitude != result.Latitude
+                || decode.QrzLongitude != result.Longitude
+                || !decode.QrzGeoLocationSource.Equals(result.GeoLocationSource ?? "", StringComparison.OrdinalIgnoreCase))
+            {
+                decode.QrzLatitude = result.Latitude;
+                decode.QrzLongitude = result.Longitude;
+                decode.QrzGeoLocationSource = result.GeoLocationSource ?? "";
                 changed = true;
             }
         }
@@ -1194,8 +1312,41 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsLocationHuntActive));
     }
 
+    private void PromoteManualCallNowToAutomation(string modeName)
+    {
+        if (!_callNowSession.IsOneShot)
+            return;
+
+        _callNowSession.PromoteToAutomation();
+        AddAction($"Manual CALL NOW promoted to {modeName}; automatic hunting will continue after this station is released.");
+    }
+
+    private void EndManualCallNowSession(string reason)
+    {
+        if (!_callNowSession.IsOneShot || _endingManualCallNowOneShot)
+            return;
+
+        _endingManualCallNowOneShot = true;
+        try
+        {
+            _callNowSession.EndTarget();
+            _autoResume.Stop();
+            _huntTimer.Stop();
+            _postQsoTransitionUntil = DateTime.MinValue;
+            EnsureEnableTxOff("Manual CALL NOW ended");
+            Dashboard.OverallStatus = "Manual CALL NOW ended. DX Assist, Wanted Sniper and Location Hunt are off.";
+            AddAction($"Manual CALL NOW session ended ({reason}). All assistance remains off.");
+            RefreshModeIndicators();
+        }
+        finally
+        {
+            _endingManualCallNowOneShot = false;
+        }
+    }
+
     private async void StartDxAssist()
     {
+        PromoteManualCallNowToAutomation("DX Assist");
         _operatingMode = HuntingOperatingMode.DxAssist;
         RefreshModeIndicators();
         AddAction("Mode selected: DX Assist. Wanted Sniper and Location Hunt stopped.");
@@ -1204,6 +1355,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async void StartWantedSniper()
     {
+        PromoteManualCallNowToAutomation("Wanted Sniper");
         _operatingMode = HuntingOperatingMode.WantedSniper;
         RefreshModeIndicators();
         AddAction("Mode selected: Wanted Sniper active. DX Assist and Location Hunt paused.");
@@ -1212,6 +1364,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async void StartLocationHunt()
     {
+        PromoteManualCallNowToAutomation("Location Hunt");
         _operatingMode = HuntingOperatingMode.LocationHunt;
         RefreshModeIndicators();
         AddAction($"Mode selected: Location Hunt active ({Location.SelectedAreasDisplay}). DX Assist and Wanted Sniper paused.");
@@ -1255,6 +1408,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async void StopAll()
     {
+        _callNowSession.Reset();
         _autoResume.Stop();
         _huntTimer.Stop();
         _operatingMode = HuntingOperatingMode.DxAssist;
@@ -1270,6 +1424,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _udpListener.Stop();
         if (_autoResume.IsRunning)
         {
+            _callNowSession.Reset();
             _autoResume.Stop();
             _huntTimer.Stop();
             _operatingMode = HuntingOperatingMode.DxAssist;
@@ -1371,6 +1526,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void SaveAll()
     {
         Settings.Settings.AutoSelectBestCq = DxAssist.AutoSelectBestCq;
+        Settings.Settings.MapStaleMinutes = (int)Map.AgeLimitMinutes;
+        Settings.Settings.MapShowPaths = Map.ShowPaths;
+        Settings.Settings.MapShowLabels = Map.ShowLabels;
+        Settings.Settings.MapShowGridSquares = Map.ShowGridSquares;
+        Settings.Settings.MapShowLotwConfirmedGrids = Map.ShowLotwConfirmedGrids;
+        Settings.Settings.MapLotwConfirmedGridOpacityPercent = (int)Map.LotwConfirmedGridOpacityPercent;
+        Settings.Settings.MapLotwConfirmedGridScope = Map.LotwConfirmedGridScope.ToString();
+        Settings.Settings.MapColourScope = Map.ColourScope.ToString();
+        Settings.Settings.MapColourDxcc = Map.ColourDxcc;
+        Settings.Settings.MapColourGrid = Map.ColourGrid;
+        Settings.Settings.MapColourState = Map.ColourState;
+        Map.HomeGrid = Settings.Settings.HomeGrid;
         Settings.Settings.AdifFilePath = Settings.Settings.LiveJtdxAdifPath;
         Settings.Settings.JtdxAllTxtPath = JtdxAllTxtMonitor.ResolveCurrentPath(Settings.Settings.JtdxAllTxtPath);
         _rarityService.Load(Settings.Settings.DxccRarityFilePath, _dxccResolver);
@@ -1380,6 +1547,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         StartAllTxtMonitor();
         UpdateAdifDiagnostics();
         AddAction("Settings saved.");
+    }
+
+    private void OnMapPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (!string.Equals(e.PropertyName, nameof(MapViewModel.ShowLotwConfirmedGrids), StringComparison.Ordinal)
+            && !string.Equals(e.PropertyName, nameof(MapViewModel.LotwConfirmedGridOpacityPercent), StringComparison.Ordinal)
+            && !string.Equals(e.PropertyName, nameof(MapViewModel.LotwConfirmedGridScope), StringComparison.Ordinal))
+            return;
+
+        Settings.Settings.MapShowLotwConfirmedGrids = Map.ShowLotwConfirmedGrids;
+        Settings.Settings.MapLotwConfirmedGridOpacityPercent = (int)Map.LotwConfirmedGridOpacityPercent;
+        Settings.Settings.MapLotwConfirmedGridScope = Map.LotwConfirmedGridScope.ToString();
+        if (string.Equals(e.PropertyName, nameof(MapViewModel.LotwConfirmedGridScope), StringComparison.Ordinal))
+            RefreshMapLotwConfirmedGrids();
+        _settingsService.SaveSettings(Settings.Settings);
     }
 
     private async Task OpenSetupWizardAsync()
@@ -1670,6 +1852,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _huntTickRunning = true;
         try
         {
+        if (!_autoResume.IsRunning)
+            return;
+
         ReloadAdifIfChanged();
         ExpireSuppressedTargets();
         UpdateNextBestTargets();
@@ -1684,6 +1869,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (_lockedTarget != null && HasFreshLiveQso(_lockedTarget.Callsign))
         {
             CompleteLockedTarget($"QSO released: ADIF confirmed {_lockedTarget.Callsign}.");
+        }
+
+        // CALL NOW can temporarily run the monitoring engine while every normal
+        // assistance mode remains off. Never let the same timer tick acquire a
+        // replacement after that one target has completed or been released.
+        if (!_autoResume.IsRunning)
+            return;
+
+        if (_callNowSession.IsOneShot)
+        {
+            if (_huntState is HuntState.Calling or HuntState.InQso)
+                await MaintainLockedTargetAsync();
+            else
+                UpdateHuntStateDisplay();
+            return;
         }
 
         if (_huntState == HuntState.Calling && await TryPreemptForFreshNewDxccAsync())
@@ -2539,6 +2739,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         _selectedIntendedTarget = target;
         _lockedTarget = target;
+        Map.ActiveCallsign = target.Callsign;
         _targetSelectionCancellation?.Cancel();
         _targetSelectionCancellation?.Dispose();
         _targetSelectionCancellation = new CancellationTokenSource();
@@ -3753,6 +3954,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         _lockedTarget = _targetScorer.Score(adoptedDecode, _logbook, _adifMergeResult.Indexes, _decodeHistory, Settings.Settings);
+        Map.ActiveCallsign = _lockedTarget.Callsign;
         _selectedIntendedTarget = null;
         _huntState = HuntState.InQso;
         _targetSource = "Adopted from JTDX";
@@ -4191,6 +4393,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var sourceTarget = _targetScorer.Score(decode, _logbook, _adifMergeResult.Indexes, _decodeHistory, Settings.Settings);
         _selectedIntendedTarget = null;
         _lockedTarget = sourceTarget;
+        Map.ActiveCallsign = sourceTarget.Callsign;
         _huntState = HuntState.InQso;
         _targetStartedAt = DateTime.Now;
         _targetStartedUtc = DateTime.UtcNow;
@@ -4333,6 +4536,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void CompleteLockedTarget(string reason)
     {
         var completedCall = _lockedTarget?.Callsign ?? "";
+        var completesManualCallNow = _callNowSession.IsOneShot;
         var adifConfirmed = reason.Contains("ADIF confirmed", StringComparison.OrdinalIgnoreCase)
             || reason.Contains("newly logged", StringComparison.OrdinalIgnoreCase);
         if (_lockedTarget != null)
@@ -4346,6 +4550,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         ClearLockedTarget(reason);
         _selectedIntendedTarget = null;
+        if (completesManualCallNow)
+            return;
+
         _postQsoTransitionUntil = DateTime.Now.AddSeconds(8);
         _recoveryMode = "PostQsoTransition";
         if (!string.IsNullOrWhiteSpace(completedCall))
@@ -4361,6 +4568,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         _lockedTarget = null;
         _selectedIntendedTarget = null;
+        Map.ActiveCallsign = "";
         _huntState = HuntState.Idle;
         _targetConfirmedInFeed = false;
         _targetConfirmedInJtdx = false;
@@ -4410,6 +4618,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             _stuckReason = "";
         }
+        EndManualCallNowSession(string.IsNullOrWhiteSpace(reason) ? "target released" : reason);
         UpdateHuntStateDisplay();
     }
 
@@ -4568,6 +4777,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void RebuildCombinedAdifIndex(string reason)
     {
         _adifMergeResult = _adifStatusBuilder.Build(_fullLogbook, _liveLogbook, Settings.Settings);
+        RefreshMapLotwConfirmedGrids();
         _logbook.Clear();
         _logbook.AddRange(_adifMergeResult.UniqueQsos);
         RebuildWorkedCallDisplayIndex();
@@ -4581,6 +4791,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         AddAction($"Confirmation modes applied: DXCC {Settings.Settings.DxccConfirmationMode}, grid {Settings.Settings.GridConfirmationMode}, state {Settings.Settings.StateConfirmationMode}, IOTA {Settings.Settings.IotaConfirmationMode}.");
         ExpireWantedItems();
         UpdateNextBestTargets();
+    }
+
+    private void RefreshMapLotwConfirmedGrids()
+    {
+        Map.SetLotwConfirmedGrids(MapOpportunityClassifier.LotwConfirmedGridsForScope(
+            _adifMergeResult.Indexes,
+            Map.LotwConfirmedGridScope,
+            _radioContext?.Band ?? "",
+            _radioContext?.Mode ?? ""));
     }
 
     private void ReloadAdifIfChanged()
@@ -4891,6 +5110,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var target = _lockedTarget ?? _selectedIntendedTarget;
         var operatingMode = !_autoResume.IsRunning
             ? "Stopped"
+            : _callNowSession.IsOneShot
+                ? "Manual CALL NOW"
             : _huntState == HuntState.InQso
                 ? "QSO In Progress"
                 : _operatingMode switch
@@ -4908,7 +5129,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         CurrentTargetStatus.WantedReason = target == null
             ? "Reason unavailable - check diagnostics"
             : TargetReasonFormatter.FormatGeneral(string.IsNullOrWhiteSpace(_wantedReason) ? target.PrimaryReason : _wantedReason);
-        CurrentTargetStatus.WantedCategory = target == null ? "None" : SessionCategory(target);
+        if (target == null)
+        {
+            CurrentTargetStatus.WantedCategory = "None";
+        }
+        else
+        {
+            var (_, gridNeed) = SessionGridAndNeed(target.Decode);
+            CurrentTargetStatus.WantedCategory = SessionCategory(target, gridNeed, SessionStateNeed(target.Decode));
+        }
         CurrentTargetStatus.WantedScope = ScopeDisplay(target?.Ranking.WantedScope ?? WantedScope.Overall);
         CurrentTargetStatus.NeedStatus = NeedStatusDisplay(target);
         CurrentTargetStatus.TierName = target?.Ranking.PriorityTierName ?? "";
@@ -5069,7 +5298,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         UpdateSharedDisplayRanks(displayRanked);
         UpdateSessionStationFields();
 
-        TrackOpportunitiesSeen(displayRanked);
         DxAssist.NextBestTargets.Clear();
         foreach (var target in ranked.Take(8))
             DxAssist.NextBestTargets.Add(target);
@@ -5450,7 +5678,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var gridStatus = GridStatus(decode);
         var stateStatus = StateStatus(decode);
         var targetStatus = TargetStatus(target, decode, age);
-        var opportunityClass = CandidateOpportunityClass(ranking);
+        var opportunityClass = CandidateOpportunityClass(ranking, gridStatus, stateStatus);
         var wantedReason = string.IsNullOrWhiteSpace(ranking.PrimaryWantedReason)
             ? FriendlyWantedReason(target, dxccStatus, gridStatus, stateStatus)
             : ranking.PrimaryWantedReason;
@@ -5570,17 +5798,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         return target.PrimaryReason;
     }
 
-    private static string CandidateOpportunityClass(CandidateRanking ranking)
+    private static string CandidateOpportunityClass(CandidateRanking ranking, string gridStatus, string stateStatus)
     {
+        if (ranking.DxccStatus == DxccCandidateStatus.NotWorked)
+            return "NewDxcc";
+        if (ranking.DxccStatus == DxccCandidateStatus.WorkedUnconfirmed)
+            return "UnconfirmedDxcc";
+        if (gridStatus.Equals("New", StringComparison.OrdinalIgnoreCase))
+            return "NewGrid";
+        if (stateStatus.Equals("New", StringComparison.OrdinalIgnoreCase))
+            return "NewState";
+
         return ranking.PriorityTier switch
         {
-            10 => "NewDxcc",
             12 or 13 or 14 => "BandMode",
-            15 => "UnconfirmedDxcc",
             20 => "RareDxcc",
-            30 or 34 => "NewGrid",
             31 or 32 or 33 => "BandMode",
-            40 or 44 => "NewState",
             41 or 42 or 43 => "BandMode",
             60 => "BandMode",
             _ => ""
@@ -5635,24 +5868,45 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             + $"Why: {string.Join("; ", target.Reasons)}";
     }
 
-    private void TrackOpportunitiesSeen(IEnumerable<DxTarget> targets)
+    private void TrackDecodeSeen(DecodeMessage decode)
+    {
+        if (!Settings.Settings.EnableSessionDxHistory
+            || string.IsNullOrWhiteSpace(DecodeTargetCall(decode))
+            || string.IsNullOrWhiteSpace(decode.RawText)
+            || decode.ParseConfidence == ParseConfidence.Low)
+        {
+            return;
+        }
+
+        ExpireSessionHistory();
+        var target = _targetScorer.Score(decode, _logbook, _adifMergeResult.Indexes, _decodeHistory, Settings.Settings);
+        var item = UpsertSessionOpportunity(target);
+        var observationId = $"{DecodeSeenUtc(decode).Ticks}|{decode.AudioOffset?.ToString() ?? ""}|{decode.RawText}";
+        if (!item.LastCountedObservationId.Equals(observationId, StringComparison.Ordinal))
+        {
+            item.LastCountedObservationId = observationId;
+            item.SeenCount++;
+            item.DirectlyHeardCount++;
+            if (!item.WasCalled && !item.WasWorked)
+                item.Outcome = "Seen only";
+            AddSessionTimeline(item, $"Heard: {decode.RawText}");
+        }
+
+        ArchiveSessionItem(item);
+        SessionHistory.Refresh();
+    }
+
+    private void RefreshTrackedDecodeDetails(DecodeMessage decode)
     {
         if (!Settings.Settings.EnableSessionDxHistory)
             return;
 
-        ExpireSessionHistory();
-        foreach (var target in targets)
-        {
-            if (!ShouldTrackOpportunity(target, selectedOrCalled: false, worked: false))
-                continue;
+        var target = _targetScorer.Score(decode, _logbook, _adifMergeResult.Indexes, _decodeHistory, Settings.Settings);
+        var key = SessionOpportunityKey(target);
+        if (!SessionHistory.AllOpportunities.Any(item => item.OpportunityId.Equals(key, StringComparison.OrdinalIgnoreCase)))
+            return;
 
-            var item = UpsertSessionOpportunity(target);
-            item.SeenCount = item.SeenCount <= 0 ? 1 : item.SeenCount + 1;
-            item.DirectlyHeardCount++;
-            item.Outcome = item.WasCalled ? item.Outcome : "Seen only";
-            AddSessionTimeline(item, $"Seen: {target.Decode.RawText}");
-        }
-
+        ArchiveSessionItem(UpsertSessionOpportunity(target));
         SessionHistory.Refresh();
     }
 
@@ -5667,12 +5921,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         item.WasCalled = true;
         item.WasAutoSelected |= !manual;
         item.WasManuallySelected |= manual;
-        item.AttemptCount++;
-        item.LastAttemptUtc = DateTime.UtcNow;
         item.Outcome = "Called";
-        item.OutcomeReason = manual ? "Manual Wanted target selected" : "DX Pilot selected target";
+        item.OutcomeReason = manual ? "Manual CALL NOW/target selection" : "DX Pilot selected target";
         AddSessionTimeline(item, manual ? "Manual-selected" : "Auto-selected");
-        AddSessionTimeline(item, "UDP Reply sent");
+        AddSessionTimeline(item, "Target selection requested");
+        ArchiveSessionItem(item);
         SessionHistory.Refresh();
     }
 
@@ -5685,11 +5938,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (item.SeenCount <= 0)
             item.SeenCount = 1;
         item.WasCalled = true;
-        item.AttemptCount = Math.Max(item.AttemptCount + 1, _callAttemptCount);
+        item.AttemptCount++;
         item.LastAttemptUtc = DateTime.UtcNow;
         item.Outcome = _huntState == HuntState.InQso ? "In progress" : "Called";
         item.OutcomeReason = $"Call attempt {CallAttemptProgressText()}";
         AddSessionTimeline(item, item.OutcomeReason);
+        ArchiveSessionItem(item);
         SessionHistory.Refresh();
     }
 
@@ -5705,6 +5959,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         item.Outcome = "Worked/logged";
         item.OutcomeReason = reason;
         AddSessionTimeline(item, $"Worked: {reason}");
+        ArchiveSessionItem(item);
         SessionHistory.Refresh();
     }
 
@@ -5721,6 +5976,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         item.OutcomeReason = reason;
         item.SuppressedUntilUtc = until.ToUniversalTime();
         AddSessionTimeline(item, $"Suppressed until {until:HH:mm:ss}: {reason}");
+        ArchiveSessionItem(item);
         SessionHistory.Refresh();
     }
 
@@ -5772,25 +6028,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         AddSessionTimeline(item, $"{item.Outcome}: {reason}");
+        ArchiveSessionItem(item);
         SessionHistory.Refresh();
-    }
-
-    private bool ShouldTrackOpportunity(DxTarget target, bool selectedOrCalled, bool worked)
-    {
-        if (worked || selectedOrCalled)
-            return true;
-
-        var ranking = target.Ranking;
-        if (ranking.DxccStatus is DxccCandidateStatus.NotWorked or DxccCandidateStatus.WorkedUnconfirmed)
-            return true;
-
-        if (ranking.RarityRank.HasValue && ranking.RarityRank.Value <= Math.Max(1, Settings.Settings.RareDxccRankThreshold))
-            return true;
-
-        return ranking.PriorityTier <= 44
-            || ranking.PriorityTier == 60
-            || (ranking.WantedScope != WantedScope.Overall
-                && ranking.NeedStatus is NeedStatus.NeverWorked or NeedStatus.WorkedNotLoTWConfirmed);
     }
 
     private SessionDxOpportunity UpsertSessionOpportunity(DxTarget target)
@@ -5803,6 +6042,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             item = new SessionDxOpportunity
             {
+                SessionId = _sessionId,
+                SessionStartedUtc = _sessionStartedUtc,
                 OpportunityId = key,
                 FirstSeenUtc = sourceSeenUtc,
                 LastSeenUtc = lastHeardUtc,
@@ -5828,8 +6069,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         item.Entity = string.IsNullOrWhiteSpace(decode.EntityName) ? ranking.Entity : decode.EntityName;
         item.DxccNumber = decode.Dxcc;
         item.DxccStatus = FormatSessionDxccStatus(ranking.DxccStatus);
-        item.Category = SessionCategory(target);
-        item.Need = SessionNeed(target);
+        var (sessionGrid, gridNeed) = SessionGridAndNeed(decode);
+        var stateNeed = SessionStateNeed(decode);
+        item.GridNeed = SessionNeedLabel(gridNeed);
+        item.StateNeed = SessionNeedLabel(stateNeed);
+        item.Category = SessionCategory(target, gridNeed, stateNeed);
+        item.Need = item.Category switch
+        {
+            "DXCC" => SessionNeed(target),
+            "Grid" => item.GridNeed,
+            "USA State" => item.StateNeed,
+            "Rare confirmed DXCC" => "Confirmed",
+            "Band/mode" => ranking.NeedStatus == NeedStatus.WorkedNotLoTWConfirmed ? "Unconfirmed" : "New",
+            _ => "Heard"
+        };
         item.Scope = ScopeDisplay(ranking.WantedScope);
         item.Band = decode.Band;
         item.Mode = decode.Mode;
@@ -5844,7 +6097,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         item.BestDistance = item.BestDistance.HasValue && decode.DistanceMiles.HasValue
             ? Math.Max(item.BestDistance.Value, decode.DistanceMiles.Value)
             : decode.DistanceMiles ?? item.BestDistance;
-        item.Grid = decode.Grid;
+        item.Grid = sessionGrid;
         item.State = decode.State;
         item.GridSource = decode.GridSource;
         item.SourceRawMessage = decode.RawText;
@@ -5858,6 +6111,35 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         return item;
+    }
+
+    private (string Grid, NeedStatus Need) SessionGridAndNeed(DecodeMessage decode)
+    {
+        var values = new[] { decode.EffectiveGrid, decode.TransmittedGrid, decode.Grid, decode.AdifGrid, decode.QrzGrid };
+        foreach (var value in values)
+        {
+            var normalized = MaidenheadGrid.Normalize(value);
+            if (!normalized.IsValid)
+                continue;
+
+            var status = _adifMergeResult.Indexes.Grids.GetValueOrDefault(normalized.Grid4);
+            return (string.IsNullOrWhiteSpace(normalized.Grid6) ? normalized.Grid4 : normalized.Grid6,
+                EvaluateSimpleNeed(status, decode.Band, decode.Mode, WantedScope.Overall));
+        }
+
+        return ("", NeedStatus.Unknown);
+    }
+
+    private NeedStatus SessionStateNeed(DecodeMessage decode)
+    {
+        if (!WasStateEligibility.IsEligible(decode) || string.IsNullOrWhiteSpace(decode.State))
+            return NeedStatus.Unknown;
+
+        return EvaluateSimpleNeed(
+            _adifMergeResult.Indexes.States.GetValueOrDefault(decode.State),
+            decode.Band,
+            decode.Mode,
+            WantedScope.Overall);
     }
 
     private static DateTime DecodeSeenUtc(DecodeMessage decode)
@@ -5899,9 +6181,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         var dxcc = string.IsNullOrWhiteSpace(target.Decode.Dxcc) ? "UNKNOWN" : target.Decode.Dxcc;
         var radioContext = $"{target.Decode.Band}:{target.Decode.Mode}".ToUpperInvariant();
-        return Settings.Settings.SessionHistoryGroupMode.Equals("ByDXCC", StringComparison.OrdinalIgnoreCase)
-            ? $"{dxcc}:{radioContext}"
-            : $"{dxcc}:{target.Callsign.ToUpperInvariant()}:{radioContext}";
+        // Keep the stored record station-specific. Grouping by DXCC used to merge
+        // different callsigns and could make an attempted/worked station disappear.
+        return $"{dxcc}:{target.Callsign.ToUpperInvariant()}:{radioContext}";
     }
 
     private static string FormatSessionDxccStatus(DxccCandidateStatus status) => status switch
@@ -5912,22 +6194,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _ => "Unknown"
     };
 
-    private static string SessionCategory(DxTarget target)
+    private static string SessionCategory(DxTarget target, NeedStatus gridNeed, NeedStatus stateNeed)
     {
         var reason = target.Ranking.PrimaryWantedReason;
         if (target.Ranking.DxccStatus is DxccCandidateStatus.NotWorked or DxccCandidateStatus.WorkedUnconfirmed)
             return "DXCC";
+        if (gridNeed is NeedStatus.NeverWorked or NeedStatus.WorkedNotLoTWConfirmed)
+            return "Grid";
+        if (stateNeed is NeedStatus.NeverWorked or NeedStatus.WorkedNotLoTWConfirmed)
+            return "USA State";
         if (target.Ranking.PriorityTier == 20
             || reason.Contains("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase)
             || reason.Contains("Rare country (already confirmed)", StringComparison.OrdinalIgnoreCase))
             return "Rare confirmed DXCC";
-        if (reason.Contains("DXCC", StringComparison.OrdinalIgnoreCase))
-            return "DXCC";
-        if (reason.Contains("grid", StringComparison.OrdinalIgnoreCase))
-            return "Grid";
-        if (reason.Contains("USA state", StringComparison.OrdinalIgnoreCase) || reason.Contains("state", StringComparison.OrdinalIgnoreCase))
-            return "USA State";
-        return "General";
+        if (target.Ranking.PriorityTier == 60)
+            return "Band/mode";
+        return "Heard";
     }
 
     private static string SessionNeed(DxTarget target)
@@ -5942,6 +6224,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         return "Unknown";
     }
 
+    private static string SessionNeedLabel(NeedStatus need) => need switch
+    {
+        NeedStatus.NeverWorked => "New",
+        NeedStatus.WorkedNotLoTWConfirmed => "Unconfirmed",
+        NeedStatus.LoTWConfirmed => "Confirmed",
+        _ => "Unknown"
+    };
+
     private static void AddSessionTimeline(SessionDxOpportunity item, string text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -5952,6 +6242,28 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             item.Timeline.Add(line);
         while (item.Timeline.Count > 40)
             item.Timeline.RemoveAt(0);
+    }
+
+    private void ArchiveSessionItem(SessionDxOpportunity item)
+    {
+        SessionHistory.UpsertArchive(item);
+        _sessionArchiveDirty = true;
+        if (!_sessionArchiveSaveTimer.IsEnabled)
+            _sessionArchiveSaveTimer.Start();
+    }
+
+    private void SaveSessionArchive()
+    {
+        if (!_sessionArchiveDirty)
+            return;
+
+        if (_sessionArchiveStore.Save(SessionHistory.ArchiveOpportunities, out var error))
+        {
+            _sessionArchiveDirty = false;
+            return;
+        }
+
+        SessionHistory.Status = $"Full Archive save failed: {error}";
     }
 
     private void ExpireSessionHistory()
@@ -5973,41 +6285,58 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
-            FileName = $"DXPilot-Session-History-{DateTime.Now:yyyyMMdd-HHmmss}.csv"
+            FileName = $"DXPilot-{(SessionHistory.IsViewingArchive ? "Full-Archive" : "Current-Session")}-{DateTime.Now:yyyyMMdd-HHmmss}.csv"
         };
         if (dialog.ShowDialog() != true)
             return;
 
         var sb = new StringBuilder();
-        sb.AppendLine("FirstSeen,LastSeen,Age,Call,Country,DXCC,DXCCStatus,Band,Mode,DialFrequencyHz,Scope,RarityRank,RarityScore,Reason,BestSNR,LastSNR,Grid,SeenCount,Attempts,Outcome,OutcomeReason,Worked,WorkedSource,SourceType,SourceRawMessage");
-        foreach (var item in SessionHistory.AllOpportunities.OrderBy(o => o.FirstSeenUtc))
+        sb.AppendLine("SessionDate,SessionId,FirstSeen,LastSeen,SeenFor,Age,Call,Country,DXCC,DXCCStatus,Category,Need,GridNeed,StateNeed,Band,Mode,DialFrequencyHz,Scope,RarityRank,RarityScore,PriorityTier,PriorityTierName,Reason,BestSNR,LastSNR,Grid,State,GridSource,SeenCount,CallAttempts,Selection,Called,Worked,WorkedAt,WorkedSource,Outcome,OutcomeReason,SuppressedUntil,SourceType,SourceRawMessage,RecentRawMessages,Timeline");
+        foreach (var item in SessionHistory.RowsForExport().OrderBy(o => o.FirstSeenUtc))
         {
             sb.AppendLine(string.Join(",",
+                Csv(item.SessionDateText),
+                Csv(item.SessionId),
                 Csv(item.FirstSeenText),
                 Csv(item.LastSeenText),
+                Csv(item.SeenForText),
                 Csv(item.AgeText),
                 Csv(item.Call),
                 Csv(item.Entity),
                 Csv(item.DxccNumber),
                 Csv(item.DxccStatus),
+                Csv(item.Category),
+                Csv(item.Need),
+                Csv(item.GridNeed),
+                Csv(item.StateNeed),
                 Csv(item.Band),
                 Csv(item.Mode),
                 Csv(item.DialFrequencyHz.ToString()),
                 Csv(item.Scope),
                 Csv(item.RarityRankText),
                 Csv(item.RarityScore.ToString()),
+                Csv(item.PriorityTier.ToString()),
+                Csv(item.PriorityTierName),
                 Csv(item.PrimaryReason),
                 Csv(item.BestSnrText),
                 Csv(item.LastSnr.ToString()),
                 Csv(item.Grid),
+                Csv(item.State),
+                Csv(item.GridSource),
                 Csv(item.SeenCount.ToString()),
                 Csv(item.AttemptCount.ToString()),
+                Csv(item.SelectionText),
+                Csv(item.CalledText),
+                Csv(item.WorkedText),
+                Csv(item.WorkedUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? ""),
+                Csv(item.WorkedSource),
                 Csv(item.Outcome),
                 Csv(item.OutcomeReason),
-                Csv(item.WorkedText),
-                Csv(item.WorkedSource),
+                Csv(item.SuppressedUntilUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? ""),
                 Csv(item.SourceType),
-                Csv(item.SourceRawMessage)));
+                Csv(item.SourceRawMessage),
+                Csv(string.Join(" | ", item.RawMessages)),
+                Csv(string.Join(" | ", item.Timeline))));
         }
 
         File.WriteAllText(dialog.FileName, sb.ToString(), Encoding.UTF8);
@@ -6237,6 +6566,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private string OperatingModeLabel()
     {
+        if (_callNowSession.IsOneShot)
+            return "Manual CALL NOW";
+
         return _operatingMode switch
         {
             HuntingOperatingMode.WantedSniper => "Wanted Sniper",
@@ -6566,6 +6898,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             item.JtdxRow = JtdxRowText(item.SourceDecode);
             item.RefreshTimeFields();
         }
+
+        SessionHistory.Refresh();
     }
 
     private string JtdxRowText(DecodeMessage decode)
@@ -6647,7 +6981,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private bool CanCallNow(object? row)
     {
-        return RadioContextReadyForSelection() && !string.IsNullOrWhiteSpace(RowCallsign(row));
+        return RadioContextReadyForSelection()
+            && row is not MapStationViewModel { IsContactable: false }
+            && !string.IsNullOrWhiteSpace(RowCallsign(row));
     }
 
     private async Task CallNowAsync(object? row)
@@ -6655,6 +6991,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var call = RowCallsign(row);
         if (string.IsNullOrWhiteSpace(call))
             return;
+
+        if (row is MapStationViewModel { IsContactable: false } station)
+        {
+            Map.ReportContactUnavailable(station);
+            AddAction($"CALL NOW rejected for {call}: map station is stale or has no live selectable JTDX reply source.");
+            return;
+        }
 
         if (!_udpListener.IsRunning)
         {
@@ -6693,12 +7036,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _manualSuppressionOverrideCall = call;
         ClearReplySourceBlocks(call);
 
-        if (!_autoResume.IsRunning)
+        var assistanceWasRunning = _autoResume.IsRunning;
+        var isOneShot = _callNowSession.Begin(assistanceWasRunning);
+        if (!assistanceWasRunning)
         {
             _autoResume.Start(Settings.Settings, Scheduler.ScheduleItems);
             _huntTimer.Start();
             RefreshModeIndicators();
-            AddAction("CALL NOW started DX Pilot target monitoring.");
+            AddAction("CALL NOW started one-station target monitoring. Normal assistance remains off and will stay off when this target is released.");
+        }
+        else if (!isOneShot)
+        {
+            AddAction($"CALL NOW will return to {OperatingModeLabel()} after {call} is released.");
         }
 
         var target = _targetScorer.Score(decode, _logbook, _adifMergeResult.Indexes, _decodeHistory, Settings.Settings);
@@ -6709,9 +7058,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         AddAction(suppressionBypassed
             ? $"CALL NOW override selected suppressed target {call}; suppression is bypassed for this manual call only."
             : $"CALL NOW override selected {call}; all previous target priority checks are bypassed for this call.");
-        await LockAndReplyAsync(target, "Manual CALL NOW", "Manual absolute-priority selection", "Manual override");
-        if (_lockedTarget?.Callsign.Equals(call, StringComparison.OrdinalIgnoreCase) != true)
-            _manualSuppressionOverrideCall = "";
+        try
+        {
+            await LockAndReplyAsync(target, "Manual CALL NOW", "Manual absolute-priority selection", "Manual override");
+        }
+        finally
+        {
+            if (_lockedTarget?.Callsign.Equals(call, StringComparison.OrdinalIgnoreCase) != true)
+            {
+                _manualSuppressionOverrideCall = "";
+                EndManualCallNowSession($"{call} could not be locked or had already been released");
+            }
+        }
     }
 
     private bool CanPermanentlySuppressCallsign(object? row)
@@ -6837,6 +7195,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             DecodeMessage decode => DecodeTargetCall(decode),
             SessionDxOpportunity opportunity => opportunity.Call,
             DxTarget target => target.Callsign,
+            MapStationViewModel station => station.Callsign,
             _ => ""
         });
     }
@@ -7328,6 +7687,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        _sessionArchiveSaveTimer.Stop();
+        SaveSessionArchive();
         _allTxtMonitor.Dispose();
         StopAdifWatcher();
         _targetSelectionCancellation?.Cancel();
@@ -7348,6 +7709,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         _callsignLocationService.Dispose();
+        Map.PropertyChanged -= OnMapPropertyChanged;
+        Map.Dispose();
     }
 
     private void SaveOverlayCalibration(JtdxBandActivityGridCalibration calibration)

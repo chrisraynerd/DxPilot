@@ -6,7 +6,7 @@ namespace JtdxAutoResume.V3.Services;
 public interface ICallsignLocationService : IDisposable
 {
     ValueTask<CallsignLocationResult?> GetCachedAsync(string callsign, CancellationToken cancellationToken);
-    bool QueueLookup(string callsign, CallsignLookupPriority priority, DateTime lastHeardUtc);
+    bool QueueLookup(string callsign, CallsignLookupPriority priority, DateTime lastHeardUtc, bool forceRefresh = false);
     Task<string> TestQrzConnectionAsync(CancellationToken cancellationToken);
     void ClearCache();
     event EventHandler<CallsignLocationUpdatedEventArgs>? LocationUpdated;
@@ -41,7 +41,7 @@ public sealed class CallsignLocationService : ICallsignLocationService
         return _cache.GetAsync(callsign, cancellationToken);
     }
 
-    public bool QueueLookup(string callsign, CallsignLookupPriority priority, DateTime lastHeardUtc)
+    public bool QueueLookup(string callsign, CallsignLookupPriority priority, DateTime lastHeardUtc, bool forceRefresh = false)
     {
         var normal = CallsignNormalizer.Normalize(callsign);
         if (!_settings.EnableQrzCallsignLookup || !CallsignNormalizer.IsValidLookupCallsign(normal))
@@ -55,7 +55,8 @@ public sealed class CallsignLocationService : ICallsignLocationService
             var updated = existing with
             {
                 LastHeardUtc = heardUtc > existing.LastHeardUtc ? heardUtc : existing.LastHeardUtc,
-                Priority = promoted ? CallsignLookupPriority.DecisionCritical : existing.Priority
+                Priority = promoted ? CallsignLookupPriority.DecisionCritical : existing.Priority,
+                ForceRefresh = existing.ForceRefresh || forceRefresh
             };
             if (!_queued.TryUpdate(normal, updated, existing))
                 continue;
@@ -68,9 +69,9 @@ public sealed class CallsignLocationService : ICallsignLocationService
         if (_queued.Count >= Math.Max(100, _settings.QrzLookupQueueLimit))
             return false;
 
-        var request = new LookupRequest(normal, heardUtc, priority);
+        var request = new LookupRequest(normal, heardUtc, priority, forceRefresh);
         if (!_queued.TryAdd(normal, request))
-            return QueueLookup(normal, priority, heardUtc);
+            return QueueLookup(normal, priority, heardUtc, forceRefresh);
 
         Enqueue(request);
         return true;
@@ -116,7 +117,7 @@ public sealed class CallsignLocationService : ICallsignLocationService
                         continue;
                     }
 
-                    await ProcessAsync(current.Callsign, _cts.Token);
+                    await ProcessAsync(current, _cts.Token);
                 }
                 catch (OperationCanceledException) when (_cts.IsCancellationRequested)
                 {
@@ -138,27 +139,32 @@ public sealed class CallsignLocationService : ICallsignLocationService
         }
     }
 
-    private async Task ProcessAsync(string callsign, CancellationToken cancellationToken)
+    private async Task ProcessAsync(LookupRequest request, CancellationToken cancellationToken)
     {
-        var cached = await _cache.GetAsync(callsign, cancellationToken);
-        if (cached != null)
+        if (!request.ForceRefresh)
         {
-            LocationUpdated?.Invoke(this, new CallsignLocationUpdatedEventArgs(cached));
-            return;
+            var cached = await _cache.GetAsync(request.Callsign, cancellationToken);
+            if (cached != null)
+            {
+                LocationUpdated?.Invoke(this, new CallsignLocationUpdatedEventArgs(cached));
+                return;
+            }
         }
 
         if (DateTimeOffset.UtcNow < _circuitOpenUntil)
         {
-            PublishTerminalResult(callsign, CallsignLookupStatus.Error,
+            PublishTerminalResult(request.Callsign, CallsignLookupStatus.Error,
                 $"QRZ lookups are paused until {_circuitOpenUntil.LocalDateTime:HH:mm:ss} after repeated connection failures.");
             return;
         }
 
         var delay = Math.Clamp(_settings.QrzDelayBetweenLookupsMs, 0, 5000);
+        if (request.ForceRefresh && request.Priority == CallsignLookupPriority.Background)
+            delay = Math.Max(delay, 1500);
         if (delay > 0)
             await Task.Delay(delay, cancellationToken);
 
-        var result = await _client.LookupAsync(callsign, _settings, cancellationToken);
+        var result = await _client.LookupAsync(request.Callsign, _settings, cancellationToken);
         if (result.Status == CallsignLookupStatus.Error)
         {
             _failureCount++;
@@ -221,5 +227,6 @@ public sealed class CallsignLocationService : ICallsignLocationService
     private sealed record LookupRequest(
         string Callsign,
         DateTime LastHeardUtc,
-        CallsignLookupPriority Priority);
+        CallsignLookupPriority Priority,
+        bool ForceRefresh);
 }

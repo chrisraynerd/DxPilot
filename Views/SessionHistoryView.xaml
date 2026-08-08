@@ -5,12 +5,21 @@
         <Border DockPanel.Dock="Top" Style="{StaticResource PanelBorder}" Margin="0,0,0,10">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="{Binding SessionHistory.ArchiveButtonText}" Command="{Binding SessionHistory.ToggleArchiveCommand}" />
                     <Button Content="Export CSV" Command="{Binding SessionHistory.ExportCommand}" />
-                    <Button Content="Clear" Command="{Binding SessionHistory.ClearCommand}" />
+                    <Button Content="Clear Current Session" Command="{Binding SessionHistory.ClearCommand}" />
                 </StackPanel>
                 <StackPanel>
-                    <TextBlock Text="Session History" FontWeight="SemiBold" FontSize="16" />
+                    <TextBlock Text="{Binding SessionHistory.ViewHeading}" FontWeight="SemiBold" FontSize="16" />
                     <TextBlock Text="{Binding SessionHistory.Status}" Foreground="#526577" Margin="0,2,0,8" />
+                    <DockPanel Margin="0,0,0,8" LastChildFill="False">
+                        <TextBlock Text="Search:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBox Text="{Binding SessionHistory.SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Width="250" Margin="0,0,10,0"
+                                 ToolTip="Search callsign, country, DXCC number, grid, state, wanted reason or outcome." />
+                        <TextBlock Text="Full Archive is stored permanently; Current Session remains the default after startup."
+                                   VerticalAlignment="Center" Foreground="#526577" TextWrapping="Wrap" />
+                    </DockPanel>
                     <Border BorderBrush="#D8E0E8" BorderThickness="0,0,0,1" Padding="0,0,0,8" Margin="0,0,0,8">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -35,6 +44,16 @@
                         <CheckBox Content="Rare country (DXCC already confirmed)"
                                   IsChecked="{Binding SessionHistory.ShowRareConfirmed}"
                                   ToolTip="An optional repeat contact with a country you have already confirmed, because it ranks highly in the rarity list. It does not outrank a needed DXCC." />
+                        <CheckBox Content="Other heard" IsChecked="{Binding SessionHistory.ShowHeard}"
+                                  ToolTip="Ordinary stations heard during the session, including stations that were not wanted." />
+                    </WrapPanel>
+                    <WrapPanel Margin="0,2,0,4">
+                        <Border Style="{StaticResource SemanticLegendSwatch}" Background="{StaticResource SemanticNewDxccBackground}" /><TextBlock Text="New DXCC" Margin="0,0,10,0" />
+                        <Border Style="{StaticResource SemanticLegendSwatch}" Background="{StaticResource SemanticUnconfirmedDxccBackground}" /><TextBlock Text="Unconfirmed DXCC" Margin="0,0,10,0" />
+                        <Border Style="{StaticResource SemanticLegendSwatch}" Background="{StaticResource SemanticNewGridBackground}" /><TextBlock Text="Wanted grid" Margin="0,0,10,0" />
+                        <Border Style="{StaticResource SemanticLegendSwatch}" Background="{StaticResource SemanticNewStateBackground}" /><TextBlock Text="Wanted state" Margin="0,0,10,0" />
+                        <Border Style="{StaticResource SemanticLegendSwatch}" Background="{StaticResource SemanticRareDxccBackground}" /><TextBlock Text="Rare DXCC" Margin="0,0,10,0" />
+                        <Border Style="{StaticResource SemanticLegendSwatch}" Background="{StaticResource SemanticHeardBackground}" /><TextBlock Text="Other heard" />
                     </WrapPanel>
                     <TextBlock Text="Outcome" FontWeight="SemiBold" Margin="0,6,0,0" />
                     <WrapPanel>
@@ -80,6 +99,34 @@
                     <!-- Live tables use a four-pixel action stripe. In Session History it
                          renders as disconnected dots, so retain category fills without it. -->
                     <Style.Triggers>
+                        <DataTrigger Binding="{Binding OpportunityClass}" Value="NewDxcc">
+                            <Setter Property="Background" Value="{StaticResource SemanticNewDxccBackground}" />
+                            <Setter Property="Foreground" Value="{StaticResource SemanticNewDxccForeground}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding OpportunityClass}" Value="UnconfirmedDxcc">
+                            <Setter Property="Background" Value="{StaticResource SemanticUnconfirmedDxccBackground}" />
+                            <Setter Property="Foreground" Value="{StaticResource SemanticUnconfirmedDxccForeground}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding OpportunityClass}" Value="NewGrid">
+                            <Setter Property="Background" Value="{StaticResource SemanticNewGridBackground}" />
+                            <Setter Property="Foreground" Value="{StaticResource SemanticNewGridForeground}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding OpportunityClass}" Value="NewState">
+                            <Setter Property="Background" Value="{StaticResource SemanticNewStateBackground}" />
+                            <Setter Property="Foreground" Value="{StaticResource SemanticNewStateForeground}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding OpportunityClass}" Value="RareDxcc">
+                            <Setter Property="Background" Value="{StaticResource SemanticRareDxccBackground}" />
+                            <Setter Property="Foreground" Value="{StaticResource SemanticRareDxccForeground}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding OpportunityClass}" Value="BandMode">
+                            <Setter Property="Background" Value="{StaticResource SemanticBandModeBackground}" />
+                            <Setter Property="Foreground" Value="{StaticResource SemanticBandModeForeground}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding OpportunityClass}" Value="Heard">
+                            <Setter Property="Background" Value="{StaticResource SemanticHeardBackground}" />
+                            <Setter Property="Foreground" Value="{StaticResource SemanticHeardForeground}" />
+                        </DataTrigger>
                         <DataTrigger Binding="{Binding ActionStateClass}" Value="Failed">
                             <Setter Property="BorderThickness" Value="0" />
                         </DataTrigger>
@@ -92,6 +139,14 @@
                         <DataTrigger Binding="{Binding ActionStateClass}" Value="Worked">
                             <Setter Property="BorderThickness" Value="0" />
                         </DataTrigger>
+                        <DataTrigger Binding="{Binding ActionStateClass}" Value="Suppressed">
+                            <Setter Property="Background" Value="{StaticResource SemanticSuppressedBackground}" />
+                            <Setter Property="Foreground" Value="{StaticResource SemanticDarkForeground}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding ActionStateClass}" Value="PermanentlySuppressed">
+                            <Setter Property="Background" Value="{StaticResource SemanticPermanentSuppressedBackground}" />
+                            <Setter Property="Foreground" Value="{StaticResource SemanticDarkForeground}" />
+                        </DataTrigger>
                     </Style.Triggers>
                 </Style>
             </DataGrid.RowStyle>
@@ -103,6 +158,7 @@
                 </ContextMenu>
             </DataGrid.ContextMenu>
             <DataGrid.Columns>
+                <DataGridTextColumn Header="Session" Binding="{Binding SessionDateText}" Width="76" />
                 <DataGridTextColumn Header="Rank" Binding="{Binding RankText}" Width="48" />
                 <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignCallTemplate}" SortMemberPath="Call" Width="88" />
                 <DataGridTextColumn Header="Country" Binding="{Binding Entity}" Width="135" />
@@ -110,8 +166,15 @@
                 <DataGridTextColumn Header="State" Binding="{Binding State}" Width="52" />
                 <DataGridTextColumn Header="Band" Binding="{Binding Band}" Width="52" />
                 <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="52" />
-                <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="54" />
-                <DataGridTextColumn Header="SNR" Binding="{Binding LastSnr}" Width="46" />
+                <DataGridTextColumn Header="First" Binding="{Binding FirstSeenText, Mode=OneWay}" Width="64" />
+                <DataGridTextColumn Header="Last" Binding="{Binding LastSeenText, Mode=OneWay}" Width="64" />
+                <DataGridTextColumn Header="Seen For" Binding="{Binding SeenForText, Mode=OneWay}" Width="70" />
+                <DataGridTextColumn Header="Last Heard" Binding="{Binding AgeText, Mode=OneWay}" Width="72" />
+                <DataGridTextColumn Header="Times Seen" Binding="{Binding SeenCount}" Width="72" />
+                <DataGridTextColumn Header="Call Tries" Binding="{Binding AttemptCount}" Width="66" />
+                <DataGridTextColumn Header="Best SNR" Binding="{Binding BestSnrText}" Width="64" />
+                <DataGridTextColumn Header="Last SNR" Binding="{Binding LastSnr}" Width="64" />
+                <DataGridTextColumn Header="Selected" Binding="{Binding SelectionText}" Width="68" />
                 <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="70" />
                 <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedReasonDisplay}" Width="*" MinWidth="170" />
                 <DataGridTextColumn Header="Status" Binding="{Binding StationStatusDisplay}" Width="125" />

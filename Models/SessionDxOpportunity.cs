@@ -2,6 +2,8 @@ namespace JtdxAutoResume.V3.Models;
 
 public sealed class SessionDxOpportunity
 {
+    public string SessionId { get; set; } = "";
+    public DateTime SessionStartedUtc { get; set; }
     public string OpportunityId { get; set; } = "";
     public DateTime FirstSeenUtc { get; set; }
     public DateTime LastSeenUtc { get; set; }
@@ -18,6 +20,8 @@ public sealed class SessionDxOpportunity
     public string DxccStatus { get; set; } = "";
     public string Category { get; set; } = "";
     public string Need { get; set; } = "";
+    public string GridNeed { get; set; } = "";
+    public string StateNeed { get; set; } = "";
     public string Scope { get; set; } = "";
     public string Band { get; set; } = "";
     public string Mode { get; set; } = "";
@@ -35,6 +39,7 @@ public sealed class SessionDxOpportunity
     public string GridSource { get; set; } = "";
     public string SourceRawMessage { get; set; } = "";
     public string SourceType { get; set; } = "";
+    public string LastCountedObservationId { get; set; } = "";
     public int SeenCount { get; set; }
     public int DirectlyHeardCount { get; set; }
     public int AttemptCount { get; set; }
@@ -49,9 +54,10 @@ public sealed class SessionDxOpportunity
     public string OutcomeReason { get; set; } = "";
     public DateTime? SuppressedUntilUtc { get; set; }
     public string Notes { get; set; } = "";
-    public List<string> RawMessages { get; } = new();
-    public List<string> Timeline { get; } = new();
+    public List<string> RawMessages { get; set; } = new();
+    public List<string> Timeline { get; set; } = new();
 
+    public string SessionDateText => SessionStartedUtc == DateTime.MinValue ? "" : SessionStartedUtc.ToLocalTime().ToString("dd MMM yy");
     public string FirstSeenText => FirstSeenUtc.ToLocalTime().ToString("HH:mm:ss");
     public string LastSeenText => LastSeenUtc.ToLocalTime().ToString("HH:mm:ss");
     public string AgeText => LastSeenAgeSeconds < 60 ? $"{(int)LastSeenAgeSeconds}s" : $"{(int)(LastSeenAgeSeconds / 60)}m {((int)LastSeenAgeSeconds % 60):00}s";
@@ -72,6 +78,7 @@ public sealed class SessionDxOpportunity
     public string SourceText => WasWorked ? WorkedSource : SourceType;
     public string BestSnrText => BestSnr == int.MinValue ? "" : BestSnr.ToString();
     public string RarityRankText => RarityRank.HasValue ? $"#{RarityRank}" : "";
+    public string SelectionText => WasManuallySelected ? "Manual" : WasAutoSelected ? "Auto" : "";
     public string OutcomeClass =>
         WasWorked ? "Worked" :
         Outcome.Contains("Missed", StringComparison.OrdinalIgnoreCase) || Outcome.Contains("TX mismatch", StringComparison.OrdinalIgnoreCase) ? "Missed" :
@@ -82,10 +89,10 @@ public sealed class SessionDxOpportunity
     public string OpportunityClass =>
         DxccStatus == "New DXCC" ? "NewDxcc" :
         DxccStatus == "Worked unconfirmed" ? "UnconfirmedDxcc" :
-        Category.Equals("Grid", StringComparison.OrdinalIgnoreCase) ? "NewGrid" :
-        Category.Equals("USA State", StringComparison.OrdinalIgnoreCase) ? "NewState" :
+        GridNeed is "New" or "Unconfirmed" ? "NewGrid" :
+        StateNeed is "New" or "Unconfirmed" ? "NewState" :
         Category.Equals("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase) ? "RareDxcc" :
-        PriorityTier == 60 ? "BandMode" : "";
+        PriorityTier == 60 ? "BandMode" : "Heard";
     public string ActionStateClass =>
         IsPermanentlySuppressed ? "PermanentlySuppressed" :
         Outcome.Contains("Suppressed", StringComparison.OrdinalIgnoreCase) ? "Suppressed" :
@@ -98,10 +105,11 @@ public sealed class SessionDxOpportunity
     public string WantedReasonDisplay =>
         DxccStatus == "New DXCC" ? "New DXCC" :
         DxccStatus == "Worked unconfirmed" ? "Unconfirmed DXCC" :
-        Category.Equals("Grid", StringComparison.OrdinalIgnoreCase) ? $"{Need} grid {Grid}".Trim() :
-        Category.Equals("USA State", StringComparison.OrdinalIgnoreCase) ? $"{Need} state {State}".Trim() :
+        GridNeed is "New" or "Unconfirmed" ? $"{GridNeed} grid {Grid}".Trim() :
+        StateNeed is "New" or "Unconfirmed" ? $"{StateNeed} state {State}".Trim() :
         Category.Equals("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase) ? "Rare country (already confirmed)" :
-        PrimaryReason;
+        Category.Equals("Band/mode", StringComparison.OrdinalIgnoreCase) ? PrimaryReason :
+        "Heard / general";
     public string StationStatusDisplay => Outcome;
 
     public string Details =>
@@ -125,6 +133,7 @@ public sealed class SessionDxOpportunity
         + "\n\nAdvanced/debug\n"
         + $"- DXCC: {DxccNumber}  Status: {DxccStatus}\n"
         + $"- Category: {Category}  Need: {Need}  Scope: {Scope}\n"
+        + $"- Grid need: {GridNeed}  State need: {StateNeed}\n"
         + $"- Radio: {Band} {Mode}  Dial frequency: {(DialFrequencyHz == 0 ? "Unknown" : $"{DialFrequencyHz / 1_000_000d:0.000000} MHz")}\n"
         + $"- Tier: {PriorityTierName}  Rarity: {RarityRankText}  Score: {RarityScore}\n"
         + $"- Grid/state: {GridStateText}  Grid source: {GridSource}\n"
@@ -133,4 +142,12 @@ public sealed class SessionDxOpportunity
         + $"- Source decode: {SourceRawMessage}\n\n"
         + "Recent raw messages\n"
         + string.Join("\n", RawMessages.TakeLast(8));
+
+    public SessionDxOpportunity Snapshot()
+    {
+        var copy = (SessionDxOpportunity)MemberwiseClone();
+        copy.RawMessages = new List<string>(RawMessages);
+        copy.Timeline = new List<string>(Timeline);
+        return copy;
+    }
 }

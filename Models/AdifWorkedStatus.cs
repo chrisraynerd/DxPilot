@@ -32,6 +32,7 @@ public sealed class DxccWorkedStatus
     public HashSet<string> ConfirmedBands { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> WorkedModes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> ConfirmedModes { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> ConfirmedBandModes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> LoTWConfirmedBands { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> LoTWConfirmedModes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> LoTWConfirmedBandModes { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -54,6 +55,8 @@ public sealed class SimpleWorkedStatus
     public HashSet<string> WorkedModes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> WorkedBandModes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> ConfirmedBands { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> ConfirmedModes { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> ConfirmedBandModes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> LoTWConfirmedBands { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> LoTWConfirmedModes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> LoTWConfirmedBandModes { get; } = new(StringComparer.OrdinalIgnoreCase);

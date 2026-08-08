@@ -18,6 +18,29 @@ public static class MaidenheadGrid
         return new NormalizedGrid(grid4, grid6);
     }
 
+    public static bool TryGetCentre(string value, out double latitude, out double longitude)
+    {
+        latitude = 0;
+        longitude = 0;
+        var normalized = Normalize(value);
+        if (!normalized.IsValid)
+            return false;
+
+        var grid = string.IsNullOrWhiteSpace(normalized.Grid6)
+            ? normalized.Grid4
+            : normalized.Grid6;
+        longitude = (grid[0] - 'A') * 20 - 180 + (grid[2] - '0') * 2 + 1;
+        latitude = (grid[1] - 'A') * 10 - 90 + (grid[3] - '0') + 0.5;
+
+        if (grid.Length >= 6)
+        {
+            longitude += (grid[4] - 'A') * (5.0 / 60.0) - 1 + (2.5 / 60.0);
+            latitude += (grid[5] - 'A') * (2.5 / 60.0) - 0.5 + (1.25 / 60.0);
+        }
+
+        return true;
+    }
+
     private static bool IsValidGrid4(string grid)
     {
         return grid.Length >= 4

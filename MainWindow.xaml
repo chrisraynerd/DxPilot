@@ -150,6 +150,9 @@
             <TabItem Header="Location">
                 <views:LocationView />
             </TabItem>
+            <TabItem Header="Map">
+                <views:MapView />
+            </TabItem>
             <TabItem Header="Session History">
                 <views:SessionHistoryView />
             </TabItem>

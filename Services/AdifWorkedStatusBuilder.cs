@@ -188,8 +188,15 @@ public sealed class AdifWorkedStatusBuilder
             status.WorkedModes.Add(qso.EffectiveMode);
         if (!string.IsNullOrWhiteSpace(qso.Band) && !string.IsNullOrWhiteSpace(qso.EffectiveMode))
             status.WorkedBandModes.Add(BandModeKey(qso.Band, qso.EffectiveMode));
-        if (IsConfirmedForMode(qso, mode) && !string.IsNullOrWhiteSpace(qso.Band))
-            status.ConfirmedBands.Add(qso.Band);
+        if (IsConfirmedForMode(qso, mode))
+        {
+            if (!string.IsNullOrWhiteSpace(qso.Band))
+                status.ConfirmedBands.Add(qso.Band);
+            if (!string.IsNullOrWhiteSpace(qso.EffectiveMode))
+                status.ConfirmedModes.Add(qso.EffectiveMode);
+            if (!string.IsNullOrWhiteSpace(qso.Band) && !string.IsNullOrWhiteSpace(qso.EffectiveMode))
+                status.ConfirmedBandModes.Add(BandModeKey(qso.Band, qso.EffectiveMode));
+        }
         if (qso.LotwConfirmed)
         {
             if (!string.IsNullOrWhiteSpace(qso.Band))
@@ -217,6 +224,8 @@ public sealed class AdifWorkedStatusBuilder
             status.ConfirmedBands.Add(qso.Band);
         if (!string.IsNullOrWhiteSpace(qso.EffectiveMode))
             status.ConfirmedModes.Add(qso.EffectiveMode);
+        if (!string.IsNullOrWhiteSpace(qso.Band) && !string.IsNullOrWhiteSpace(qso.EffectiveMode))
+            status.ConfirmedBandModes.Add(BandModeKey(qso.Band, qso.EffectiveMode));
     }
 
     private static void AddLotwBandMode(DxccWorkedStatus status, AdifQso qso)

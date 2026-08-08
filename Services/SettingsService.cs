@@ -411,6 +411,30 @@ public sealed class SettingsService
         if (settings.ManualWantedMaxAgeSeconds <= 0)
             settings.ManualWantedMaxAgeSeconds = settings.CandidateMaxAgeSeconds;
 
+        if (settings.MapDefaultsVersion < 2)
+        {
+            settings.MapStaleMinutes = 2;
+            settings.MapDefaultsVersion = 2;
+        }
+        else if (settings.MapStaleMinutes <= 0)
+        {
+            settings.MapStaleMinutes = 2;
+        }
+
+        if (settings.MapLotwConfirmedGridOpacityPercent is < 5 or > 50)
+            settings.MapLotwConfirmedGridOpacityPercent = 25;
+
+        if (!Enum.TryParse<JtdxAutoResume.V3.Models.WantedScope>(settings.MapLotwConfirmedGridScope, true, out var lotwGridScope)
+            || lotwGridScope is not (JtdxAutoResume.V3.Models.WantedScope.Overall
+                or JtdxAutoResume.V3.Models.WantedScope.CurrentBand
+                or JtdxAutoResume.V3.Models.WantedScope.CurrentMode))
+        {
+            settings.MapLotwConfirmedGridScope = JtdxAutoResume.V3.Models.WantedScope.Overall.ToString();
+        }
+
+        if (!Enum.TryParse<JtdxAutoResume.V3.Models.WantedScope>(settings.MapColourScope, true, out _))
+            settings.MapColourScope = JtdxAutoResume.V3.Models.WantedScope.Overall.ToString();
+
         if (settings.QrzLookupTimeoutSeconds <= 0)
             settings.QrzLookupTimeoutSeconds = 3;
 

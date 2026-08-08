@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Globalization;
 using System.Xml.Linq;
 using JtdxAutoResume.V3.Models;
 
@@ -119,10 +120,19 @@ public sealed class QrzCallsignClient : IQrzCallsignClient, IDisposable
         var country = EmptyToNull(ElementValue(doc, "country"));
         var state = EmptyToNull(ElementValue(doc, "state"));
         var grid = EmptyToNull(ElementValue(doc, "grid"));
+        var latitude = ParseCoordinate(ElementValue(doc, "lat"), -90, 90);
+        var longitude = ParseCoordinate(ElementValue(doc, "lon"), -180, 180);
+        var geoLocationSource = EmptyToNull(ElementValue(doc, "geoloc"))
+            ?? EmptyToNull(ElementValue(doc, "locref"));
         var iota = EmptyToNull(ElementValue(doc, "iota"));
         var dxccRaw = EmptyToNull(ElementValue(doc, "dxcc")) ?? EmptyToNull(ElementValue(doc, "ccode"));
         int? dxcc = int.TryParse(dxccRaw, out var parsedDxcc) ? parsedDxcc : null;
-        var validGrid = MaidenheadGrid.Normalize(grid ?? "").IsValid ? MaidenheadGrid.Normalize(grid ?? "").Grid4 : null;
+        var normalizedGrid = MaidenheadGrid.Normalize(grid ?? "");
+        var validGrid = !normalizedGrid.IsValid
+            ? null
+            : string.IsNullOrWhiteSpace(normalizedGrid.Grid6)
+                ? normalizedGrid.Grid4
+                : normalizedGrid.Grid6;
 
         return new CallsignLocationResult(
             callsign,
@@ -133,7 +143,24 @@ public sealed class QrzCallsignClient : IQrzCallsignClient, IDisposable
             string.IsNullOrWhiteSpace(country) ? CallsignLookupStatus.NotFound : CallsignLookupStatus.Resolved,
             CallsignDataSource.Qrz,
             DateTimeOffset.UtcNow,
-            Iota: iota);
+            Iota: iota,
+            Latitude: latitude,
+            Longitude: longitude,
+            GeoLocationSource: geoLocationSource,
+            PrecisionVersion: 2);
+    }
+
+    private static double? ParseCoordinate(string value, double minimum, double maximum)
+    {
+        if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var coordinate)
+            || !double.IsFinite(coordinate)
+            || coordinate < minimum
+            || coordinate > maximum)
+        {
+            return null;
+        }
+
+        return coordinate;
     }
 
     private static string ElementValue(XDocument doc, string localName)

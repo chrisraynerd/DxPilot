@@ -18,6 +18,8 @@
         <SolidColorBrush x:Key="SemanticRareDxccForeground" Color="#78350F" />
         <SolidColorBrush x:Key="SemanticBandModeBackground" Color="#FFEDD5" />
         <SolidColorBrush x:Key="SemanticBandModeForeground" Color="#7C2D12" />
+        <SolidColorBrush x:Key="SemanticHeardBackground" Color="#FFF7ED" />
+        <SolidColorBrush x:Key="SemanticHeardForeground" Color="#9A3412" />
         <SolidColorBrush x:Key="SemanticMutedBackground" Color="#E2E8F0" />
         <SolidColorBrush x:Key="SemanticMutedForeground" Color="#475569" />
         <SolidColorBrush x:Key="SemanticNotContactableBackground" Color="#475569" />
@@ -95,6 +97,10 @@
                 <DataTrigger Binding="{Binding OpportunityClass}" Value="BandMode">
                     <Setter Property="Background" Value="{StaticResource SemanticBandModeBackground}" />
                     <Setter Property="Foreground" Value="{StaticResource SemanticBandModeForeground}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding OpportunityClass}" Value="Heard">
+                    <Setter Property="Background" Value="{StaticResource SemanticHeardBackground}" />
+                    <Setter Property="Foreground" Value="{StaticResource SemanticHeardForeground}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding ActionStateClass}" Value="Muted">
                     <Setter Property="Background" Value="{StaticResource SemanticMutedBackground}" />

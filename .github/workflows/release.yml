@@ -30,6 +30,9 @@ jobs:
       - name: Run application smoke tests
         run: dotnet run -c Release --project Tests\ConfigurableRows.SmokeTests\JtdxAutoResume.ConfigurableRows.SmokeTests.csproj
 
+      - name: Run map smoke tests
+        run: dotnet run -c Release --project Tests\Map.SmokeTests\Map.SmokeTests.csproj
+
       - name: Shut down build servers
         run: dotnet build-server shutdown
 
@@ -54,6 +57,8 @@ jobs:
             Write-Output "::error title=dotnet publish failed::$diagnostic"
             exit $publishExitCode
           }
+          Get-ChildItem -LiteralPath "$env:RUNNER_TEMP\dxpilot-publish" -Filter *.pdb -File -Recurse |
+            Remove-Item -Force
 
       - name: Create release ZIP
         shell: pwsh

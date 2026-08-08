@@ -17,16 +17,21 @@
     <Authors>G1CEC</Authors>
     <Company>G1CEC</Company>
     <Copyright>Copyright © G1CEC 2026</Copyright>
-    <Version>3.1.1</Version>
-    <AssemblyVersion>3.1.1.0</AssemblyVersion>
-    <FileVersion>3.1.1.0</FileVersion>
+    <Version>3.4.1</Version>
+    <AssemblyVersion>3.4.1.0</AssemblyVersion>
+    <FileVersion>3.4.1.0</FileVersion>
     <DefaultItemExcludes>$(DefaultItemExcludes);Tests\**</DefaultItemExcludes>
+    <NoWarn>$(NoWarn);NU1701</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <Content Include="AutoResume.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Data\cty.csv" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Data\DXCC-UK-Desirability-G1CEC.csv" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Mapsui.Wpf" Version="5.1.0" />
   </ItemGroup>
 
 </Project>

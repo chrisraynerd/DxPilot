@@ -72,6 +72,9 @@ public sealed class DecodeMessage
     public string SessionObservedGrid { get; set; } = "";
     public string AdifGrid { get; set; } = "";
     public string QrzGrid { get; set; } = "";
+    public double? QrzLatitude { get; set; }
+    public double? QrzLongitude { get; set; }
+    public string QrzGeoLocationSource { get; set; } = "";
     public string EffectiveGrid { get; set; } = "";
     public DecodeGridSource EffectiveGridSource { get; set; } = DecodeGridSource.Unknown;
     public CallsignLookupStatus CallsignLookupStatus { get; set; } = CallsignLookupStatus.Pending;

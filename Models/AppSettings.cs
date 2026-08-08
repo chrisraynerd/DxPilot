@@ -51,6 +51,18 @@ public sealed class AppSettings
     public int MaxUdpReplyNudgesBeforeConfirmed { get; set; } = 2;
     public string MyCallsign { get; set; } = "G1CEC";
     public string HomeGrid { get; set; } = "";
+    public int MapStaleMinutes { get; set; } = 2;
+    public int MapDefaultsVersion { get; set; } = 2;
+    public string MapColourScope { get; set; } = "Overall";
+    public bool MapColourDxcc { get; set; } = true;
+    public bool MapColourGrid { get; set; } = true;
+    public bool MapColourState { get; set; } = true;
+    public bool MapShowPaths { get; set; } = true;
+    public bool MapShowLabels { get; set; } = true;
+    public bool MapShowGridSquares { get; set; }
+    public bool MapShowLotwConfirmedGrids { get; set; }
+    public int MapLotwConfirmedGridOpacityPercent { get; set; } = 25;
+    public string MapLotwConfirmedGridScope { get; set; } = "Overall";
     public string AdifFilePath { get; set; } = @"C:\Users\Chris\AppData\Local\JTDX\wsjtx_log.adi";
     public string FullAdifPath { get; set; } = "";
     public string LiveJtdxAdifPath { get; set; } = @"C:\Users\Chris\AppData\Local\JTDX\wsjtx_log.adi";

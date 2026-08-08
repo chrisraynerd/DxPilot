@@ -115,8 +115,9 @@ public sealed class DxTargetScorer
         var dxccStatus = DetermineDxccStatus(decode, indexes);
         decode.IsNewDxcc = dxccStatus == DxccCandidateStatus.NotWorked;
         decode.IsUnconfirmedDxcc = dxccStatus == DxccCandidateStatus.WorkedUnconfirmed;
-        decode.IsNewGrid = !string.IsNullOrWhiteSpace(decode.Grid)
-            && (!indexes.Grids.TryGetValue(decode.Grid, out var gridStatus) || !gridStatus.ConfirmedAny);
+        var normalizedGrid = MaidenheadGrid.Normalize(decode.Grid);
+        decode.IsNewGrid = normalizedGrid.IsValid
+            && (!indexes.Grids.TryGetValue(normalizedGrid.Grid4, out var gridStatus) || !gridStatus.ConfirmedAny);
         decode.IsNewState = !string.IsNullOrWhiteSpace(decode.State)
             && WasStateEligibility.IsEligible(decode)
             && (!indexes.States.TryGetValue(decode.State, out var stateStatus) || !stateStatus.ConfirmedAny);
@@ -249,7 +250,8 @@ public sealed class DxTargetScorer
             return;
         }
 
-        indexes.Grids.TryGetValue(decode.Grid, out var gridStatus);
+        var rankingGrid = MaidenheadGrid.Normalize(decode.Grid);
+        indexes.Grids.TryGetValue(rankingGrid.Grid4, out var gridStatus);
         if (settings.PrioritizeNewGridsInDxAssist
             && !string.IsNullOrWhiteSpace(decode.Grid)
             && (gridStatus == null || !gridStatus.WorkedAny))

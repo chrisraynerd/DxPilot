@@ -274,11 +274,11 @@
                         <CheckBox IsChecked="{Binding Settings.Settings.EnableSessionDxHistory, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Rare-country rank threshold" />
                         <TextBox Text="{Binding Settings.Settings.RareDxccRankThreshold, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Session history expiry minutes" />
+                        <TextBlock Text="Current Session retention minutes (0 = whole app run)" TextWrapping="Wrap" />
                         <TextBox Text="{Binding Settings.Settings.SessionHistoryExpiryMinutes, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Session history group mode" />
-                        <TextBox Text="{Binding Settings.Settings.SessionHistoryGroupMode, UpdateSourceTrigger=PropertyChanged}" />
                     </UniformGrid>
+                    <TextBlock Text="History is stored per callsign, band and mode so no attempted or worked station can be merged into another record. Expiry only affects Current Session; Full Archive remains permanent."
+                               TextWrapping="Wrap" Foreground="#526577" Margin="0,6,0,0" />
 
                     <TextBlock Text="DXCC Resolver Diagnostics" FontWeight="SemiBold" Margin="0,18,0,12" />
                     <TextBlock Text="{Binding ResolverDiagnostics}" TextWrapping="Wrap" Foreground="#263645" />
