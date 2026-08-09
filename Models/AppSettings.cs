@@ -154,4 +154,40 @@ public sealed class AppSettings
     public int JtdxCalibratedWindowWidth { get; set; }
     public int JtdxCalibratedWindowHeight { get; set; }
     public bool JtdxGuiSelectionEnabled { get; set; } = true;
+    public int JtdxBandButtonStripLeft { get; set; }
+    public int JtdxBandButtonStripTop { get; set; }
+    public int JtdxBandButtonStripRight { get; set; }
+    public int JtdxBandButtonStripBottom { get; set; }
+    public string JtdxBandButtonStripCalibrationVersion { get; set; } = "band-strip-v1";
+    public DateTime JtdxBandButtonStripCalibrationDate { get; set; } = DateTime.MinValue;
+    public List<string> BandAnalysisEnabledBands { get; set; } = ["40m", "30m", "20m", "17m", "15m"];
+    public int BandAnalysisDwellMinutes { get; set; } = 2;
+    public int BandAnalysisSurveyCycles { get; set; } = 1;
+    public bool BandAnalysisReturnToStartingBand { get; set; } = true;
+    public int PskPropagationProbeMinutes { get; set; } = 1;
+    public int JtdxTxEvenRelativeX { get; set; }
+    public int JtdxTxEvenRelativeY { get; set; }
+    public DateTime JtdxTxEvenCalibrationDate { get; set; } = DateTime.MinValue;
+    public int JtdxTx1RelativeX { get; set; }
+    public int JtdxTx1RelativeY { get; set; }
+    public DateTime JtdxTx1CalibrationDate { get; set; } = DateTime.MinValue;
+    // Defaults to true when upgrading from a release which could leave JTDX on
+    // Tx6. It is cleared only after a physical Tx1 reset has completed.
+    public bool PskStandaloneCleanupRequired { get; set; } = true;
+    public bool ConditionsSearchEnabled { get; set; }
+    public int ConditionsSearchCooldownMinutes { get; set; } = 45;
+    public int ConditionsSearchMinimumBandMinutes { get; set; } = 15;
+    public int ConditionsSearchMonitoringWindowMinutes { get; set; } = 5;
+    public int ConditionsSearchNoUsefulTargetMinutes { get; set; } = 10;
+    public int ConditionsSearchLowStationThreshold { get; set; } = 5;
+    public int ConditionsSearchLowActivityPersistMinutes { get; set; } = 3;
+    public int ConditionsSearchPoorReplyAttempts { get; set; } = 8;
+    public int ConditionsSearchPoorReplyDistinctStations { get; set; } = 3;
+    public int ConditionsSearchSilentMinutes { get; set; } = 4;
+    public int ConditionsSearchSwitchImprovementPercent { get; set; } = 20;
+    public bool ConditionsSearchUseQuickSurvey { get; set; } = true;
+    public bool ConditionsSearchFullSurveyWhenAmbiguous { get; set; } = true;
+    public bool ConditionsSearchMoveToBestBand { get; set; } = true;
+    public bool ConditionsSearchSurveyOnStartup { get; set; }
+    public string ConditionsSearchScheduleUtc { get; set; } = "";
 }

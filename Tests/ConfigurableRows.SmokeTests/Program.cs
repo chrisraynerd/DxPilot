@@ -9,6 +9,42 @@ using JtdxAutoResume.V3.ViewModels;
 
 var failures = new List<string>();
 
+var validOnAirCallsigns = new[] { "G1CEC", "4U1UN", "3D2USU", "EA8/G4ABC", "MM/F4MFS" };
+foreach (var callsign in validOnAirCallsigns)
+{
+    if (!CallsignNormalizer.IsValidOnAirCallsign(callsign))
+        failures.Add($"Valid on-air callsign '{callsign}' was rejected by the PSK survey priority guard.");
+}
+
+var invalidOnAirCallsigns = new[] { "AH4DCKZXJYR", "RR73", "IO83", "CQ", "<...>" };
+foreach (var callsign in invalidOnAirCallsigns)
+{
+    if (CallsignNormalizer.IsValidOnAirCallsign(callsign))
+        failures.Add($"Malformed callsign '{callsign}' passed the PSK survey priority guard.");
+}
+
+if (args.Contains("--psk-live", StringComparer.OrdinalIgnoreCase))
+{
+    await using var pskClient = new PskReporterClient();
+    pskClient.StatusChanged += Console.WriteLine;
+    using var liveTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+    var connected = await pskClient.StartLiveAsync("G1CEC", liveTimeout.Token);
+    await pskClient.StopLiveAsync();
+    Console.WriteLine(connected ? "PASS: PSK Reporter MQTT live feed connected and subscribed." : "FAIL: PSK Reporter MQTT live feed was unavailable.");
+    return connected ? 0 : 1;
+}
+
+if (args.Contains("--psk-query", StringComparer.OrdinalIgnoreCase))
+{
+    await using var pskClient = new PskReporterClient();
+    var result = await pskClient.QueryRecentAsync("G1CEC", TimeSpan.FromHours(1), CancellationToken.None);
+    Console.WriteLine(result.Status);
+    Console.WriteLine(result.Retrieved && result.Reports.Count > 0
+        ? $"PASS: official PSK Reporter retrieval parsed {result.Reports.Count} reports."
+        : "FAIL: official PSK Reporter retrieval returned no usable reports.");
+    return result.Retrieved && result.Reports.Count > 0 ? 0 : 1;
+}
+
 var callNowSession = new CallNowSessionState();
 if (!callNowSession.Begin(assistanceRunning: false)
     || !callNowSession.IsOneShot
@@ -55,6 +91,17 @@ foreach (var (frequency, expectedBand) in bandCases)
 
 if (JtdxBandActivityGridCalibration.NormalizeRowCount(0) != 52)
     failures.Add("An unset visible-row count did not preserve the personal 52-row default.");
+var pskIsolationDefaults = new AppSettings();
+if (!pskIsolationDefaults.PskStandaloneCleanupRequired)
+    failures.Add("A newly upgraded installation did not require one Tx1 cleanup before normal hunting.");
+pskIsolationDefaults.JtdxTxEvenRelativeX = 100;
+pskIsolationDefaults.JtdxTxEvenRelativeY = 200;
+pskIsolationDefaults.JtdxTxEvenCalibrationDate = DateTime.Now;
+pskIsolationDefaults.JtdxTx1RelativeX = 300;
+pskIsolationDefaults.JtdxTx1RelativeY = 400;
+pskIsolationDefaults.JtdxTx1CalibrationDate = DateTime.Now;
+if (!BandAnalysisViewModel.HasPskTransmitCalibration(pskIsolationDefaults))
+    failures.Add("The standalone PSK sequence did not require both timing-selector and Tx1-reset mappings.");
 if (JtdxBandActivityGridCalibration.NormalizeRowCount(34) != 34)
     failures.Add("A valid user-selected 34-row count was not preserved.");
 if (JtdxBandActivityGridCalibration.NormalizeRowCount(4) != 5
@@ -455,6 +502,17 @@ if (!WasStateEligibility.IsEligible("6", "Alaska")
 
 using (var viewModel = new MainViewModel())
 {
+    var postPskCqTarget = new DecodeMessage
+    {
+        MessageType = Ft8MessageType.Cq,
+        IsCq = true,
+        ContactableCall = "SM7DXE",
+        Callsign = "SM7DXE",
+        RawText = "CQ SM7DXE JO89"
+    };
+    if (!(bool)(InvokePrivate(viewModel, "ShouldUseUdpReplyForSource", postPskCqTarget) ?? false))
+        failures.Add("A normal CQ target did not retain the stable v3.4.3 UDP Reply selection path.");
+
     var initialStatus = new JtdxStatusMessage
     {
         ReceivedAt = DateTime.Now.AddMilliseconds(-100),
@@ -1363,13 +1421,239 @@ finally
         Directory.Delete(archiveTestFolder, recursive: true);
 }
 
+var timingConfirmation = new DateTime(2026, 8, 9, 12, 0, 7, DateTimeKind.Utc);
+var firstFt8Slot = BandSurveyTiming.FirstEligibleSlotStart(timingConfirmation, TimeSpan.FromSeconds(15)).ToUniversalTime();
+var silentFt8Fallback = BandSurveyTiming.SilentBandFallbackAt(timingConfirmation, TimeSpan.FromSeconds(15)).ToUniversalTime();
+var firstFt4Slot = BandSurveyTiming.FirstEligibleSlotStart(timingConfirmation, TimeSpan.FromSeconds(7.5)).ToUniversalTime();
+if (firstFt8Slot != new DateTime(2026, 8, 9, 12, 0, 15, DateTimeKind.Utc)
+    || silentFt8Fallback != new DateTime(2026, 8, 9, 12, 0, 33, DateTimeKind.Utc)
+    || firstFt4Slot != new DateTime(2026, 8, 9, 12, 0, 7, 500, DateTimeKind.Utc))
+{
+    failures.Add("Band Analysis did not align its observation window to the next complete FT8/FT4 receive slot.");
+}
+
+var oneMinutePassive = PskPropagationProbeTiming.PassiveListenDuration(1, TimeSpan.FromSeconds(15));
+var fiveMinutePassive = PskPropagationProbeTiming.PassiveListenDuration(5, TimeSpan.FromSeconds(15));
+var estimatedOccupancy = PskPropagationProbeTiming.EstimatedBandOccupancy(1, TimeSpan.FromSeconds(15));
+if (oneMinutePassive != TimeSpan.FromSeconds(30)
+    || fiveMinutePassive != TimeSpan.FromSeconds(270)
+    || estimatedOccupancy != TimeSpan.FromSeconds(60)
+    || PskPropagationProbeTiming.CqPeriodsPerBand != 2)
+{
+    failures.Add("PSK propagation timing did not preserve two fixed CQ periods or the configured passive-listening window.");
+}
+var firstProbeSlot = PskPropagationProbeTiming.SlotNumber(
+    new DateTime(2026, 8, 9, 12, 0, 15, DateTimeKind.Utc),
+    TimeSpan.FromSeconds(15));
+if (!PskPropagationProbeTiming.AreImmediatelyConsecutive(firstProbeSlot, firstProbeSlot + 1)
+    || PskPropagationProbeTiming.AreImmediatelyConsecutive(firstProbeSlot, firstProbeSlot + 2))
+{
+    failures.Add("PSK propagation timing accepted a same-parity CQ 30 seconds later as an immediately consecutive FT8 transmission.");
+}
+
+const string pskLiveJson = "{\"sq\":71550000001,\"f\":7076106,\"md\":\"FT8\",\"rp\":-10,\"t\":1786281870,\"t_tx\":1786281855,\"sc\":\"G1CEC\",\"sl\":\"IO83up\",\"rc\":\"K1ABC\",\"rl\":\"FN42aa\",\"sa\":223,\"ra\":291,\"b\":\"40m\"}";
+const string pskQueryXml = "<receptionReports><receptionReport receiverCallsign=\"DL1ABC\" receiverLocator=\"JO31aa\" senderCallsign=\"G1CEC\" senderLocator=\"IO83up\" frequency=\"7076108\" flowStartSeconds=\"1786281870\" mode=\"FT8\" receiverDXCC=\"Fed. Rep. of Germany\" receiverDXCCCode=\"DL\" sNR=\"3\" /></receptionReports>";
+var parsedLive = PskReporterParser.TryParseLiveJson(pskLiveJson, out var liveSpot);
+var queriedSpots = PskReporterParser.ParseQueryXml(pskQueryXml);
+var probeWindow = new PskProbeWindow(
+    "40m",
+    DateTimeOffset.FromUnixTimeSeconds(1786281855).UtcDateTime,
+    DateTimeOffset.FromUnixTimeSeconds(1786281870).UtcDateTime);
+if (!parsedLive
+    || liveSpot.ReceiverCallsign != "K1ABC"
+    || liveSpot.SignalReportDb != -10
+    || queriedSpots.Count != 1
+    || queriedSpots[0].SignalReportDb != 3
+    || !probeWindow.Matches(liveSpot, TimeSpan.FromSeconds(6))
+    || !probeWindow.Matches(queriedSpots[0], TimeSpan.FromSeconds(6)))
+{
+    failures.Add("PSK Reporter live JSON/query XML parsing or exact CQ-window matching failed.");
+}
+var pskAnalyzer = new PskReporterAnalyzer(new GridDistanceCalculator(), resolver);
+var pskMetrics = pskAnalyzer.Analyze("40m", "IO83up", [liveSpot, queriedSpots[0]], measured: true);
+if (!pskMetrics.Measured
+    || pskMetrics.UniqueReceivers != 2
+    || pskMetrics.FarthestDistanceMiles < 2_500
+    || pskMetrics.StrongestSnr != 3
+    || pskMetrics.PropagationScore <= 0)
+{
+    failures.Add("PSK Reporter metrics did not calculate receiver count, outward distance, SNR and propagation score.");
+}
+
+var pskBandChoice = ConditionsSearchPolicy.ChoosePskSurveyBand(
+[
+    new PskSurveyBandCandidate("40m", 72, 0, 0, 68, 44, 30),
+    new PskSurveyBandCandidate("20m", 86, 0, 1, 54, 70, 60)
+],
+"40m");
+var pskNewDxccChoice = ConditionsSearchPolicy.ChoosePskSurveyBand(
+[
+    new PskSurveyBandCandidate("20m", 500, 0, 4, 90, 90, 90),
+    new PskSurveyBandCandidate("40m", 5, 1, 0, 0, 2, 3)
+],
+"20m");
+var pskNoEvidenceChoice = ConditionsSearchPolicy.ChoosePskSurveyBand(
+[
+    new PskSurveyBandCandidate("40m", 0, 0, 0, 0, 0, 0),
+    new PskSurveyBandCandidate("20m", 0, 0, 0, 0, 0, 0)
+],
+"20m");
+if (pskBandChoice?.Band != "20m"
+    || pskNewDxccChoice?.Band != "40m"
+    || pskNoEvidenceChoice?.Band != "20m")
+{
+    failures.Add("PSK survey selection did not combine evidence, preserve New DXCC priority, or stay on the current band when all evidence tied.");
+}
+
+var bandQualityAnalyzer = new BandQualityAnalyzer();
+var quietLongDx = Enumerable.Range(0, 9)
+    .Select(index => new DecodeMessage
+    {
+        Band = "17m",
+        Callsign = $"DX{index}AA",
+        ContactableCall = $"DX{index}AA",
+        IsCq = true,
+        Snr = -16 + index,
+        DistanceKm = (5_200 + index * 225) * 1.609344,
+        Continent = index % 3 == 0 ? "AS" : index % 3 == 1 ? "NA" : "OC",
+        IsNewGrid = index == 0
+    })
+    .ToList();
+quietLongDx.Add(new DecodeMessage
+{
+    Band = "17m",
+    Callsign = "DX0AA",
+    ContactableCall = "DX0AA",
+    Snr = -12,
+    DistanceKm = 5_200 * 1.609344,
+    Continent = "AS"
+});
+var busyRegional = Enumerable.Range(0, 34)
+    .Select(index => new DecodeMessage
+    {
+        Band = "20m",
+        Callsign = $"EU{index}AA",
+        ContactableCall = $"EU{index}AA",
+        IsCq = index % 2 == 0,
+        Snr = -8 + index % 10,
+        DistanceKm = (300 + index * 30) * 1.609344,
+        Continent = "EU"
+    })
+    .ToList();
+var quietLongDxQuality = bandQualityAnalyzer.Analyze("17m", quietLongDx);
+var busyRegionalQuality = bandQualityAnalyzer.Analyze("20m", busyRegional);
+if (quietLongDxQuality.UniqueStations != 9
+    || quietLongDxQuality.DxReachScore <= busyRegionalQuality.DxReachScore
+    || busyRegionalQuality.ActivityScore <= quietLongDxQuality.ActivityScore
+    || !quietLongDxQuality.Assessment.Contains("opening", StringComparison.OrdinalIgnoreCase)
+    || busyRegionalQuality.Assessment != "Busy regional")
+{
+    failures.Add("Band Analysis did not prefer quiet long-DX reach while separately recognizing the busier regional band.");
+}
+
+var conditionsSettings = new AppSettings();
+var silentTrigger = ConditionsSearchPolicy.DetectTrigger(
+    scheduledDue: false,
+    startupDue: false,
+    timeOnBand: TimeSpan.FromMinutes(5),
+    sinceAnyDecode: TimeSpan.FromMinutes(4),
+    sinceUsefulTarget: TimeSpan.FromMinutes(4),
+    uniqueStations: 0,
+    lowActivityDuration: TimeSpan.FromMinutes(3),
+    unansweredAttempts: 0,
+    distinctAttemptedStations: 0,
+    conditionsSettings);
+var oneHardTargetTrigger = ConditionsSearchPolicy.DetectTrigger(
+    false, false, TimeSpan.FromMinutes(15), TimeSpan.Zero, TimeSpan.Zero, 20, TimeSpan.Zero, 12, 1, conditionsSettings);
+var broadFailureTrigger = ConditionsSearchPolicy.DetectTrigger(
+    false, false, TimeSpan.FromMinutes(15), TimeSpan.Zero, TimeSpan.Zero, 20, TimeSpan.Zero, 8, 3, conditionsSettings);
+if (silentTrigger?.Priority != 80 || oneHardTargetTrigger != null || broadFailureTrigger?.Priority != 70)
+    failures.Add("Conditions Search trigger policy did not distinguish a silent band or broad calling failure from repeated calls to one difficult station.");
+
+var newDxccQuality = bandQualityAnalyzer.Analyze("30m",
+[
+    new DecodeMessage
+    {
+        Band = "30m", Callsign = "RARE1", ContactableCall = "RARE1", IsCq = true,
+        IsNewDxcc = true, DistanceKm = 1_000, Continent = "EU"
+    }
+]);
+var bandChoice = ConditionsSearchPolicy.ChooseBand(
+[
+    (busyRegionalQuality, 0),
+    (quietLongDxQuality, 5),
+    (newDxccQuality, -10)
+],
+    "20m",
+    HuntingOperatingMode.DxAssist,
+    20);
+if (!bandChoice.ShouldMove || bandChoice.Band != "30m" || newDxccQuality.NewDxccStations != 1)
+    failures.Add("Conditions Search did not give an observed New DXCC absolute band-choice priority.");
+
+var manualAssistanceDestination = ConditionsSearchPolicy.SurveyDestinationBand(
+    new ConditionsBandChoice("20m", 75, 60, false, "20m was stronger but below the automatic margin."),
+    "17m",
+    automatic: false,
+    automaticMovementEnabled: true);
+var tiedManualDestination = ConditionsSearchPolicy.SurveyDestinationBand(
+    new ConditionsBandChoice("20m", 0, 0, false, "No measured difference."),
+    "17m",
+    automatic: false,
+    automaticMovementEnabled: true);
+var disabledAutomaticDestination = ConditionsSearchPolicy.SurveyDestinationBand(
+    new ConditionsBandChoice("20m", 100, 40, true, "20m was stronger."),
+    "17m",
+    automatic: true,
+    automaticMovementEnabled: false);
+if (manualAssistanceDestination != "20m"
+    || tiedManualDestination != "17m"
+    || disabledAutomaticDestination != "17m")
+{
+    failures.Add("Band Analysis destination policy did not move a manual assistance survey to its stronger winner while preserving tie and automatic-control safeguards.");
+}
+
+var trendHistory = new List<BandAnalysisHistoryEntry>
+{
+    new() { Band = "17m", ObservedAtUtc = DateTime.UtcNow.AddHours(-2), SecondsObserved = 60, ActivityScore = 15, DxReachScore = 10 },
+    new() { Band = "17m", ObservedAtUtc = DateTime.UtcNow.AddHours(-1), SecondsObserved = 60, ActivityScore = 30, DxReachScore = 35 },
+    new()
+    {
+        SurveyId = "survey-test", Band = "17m", ObservedAtUtc = DateTime.UtcNow,
+        SecondsObserved = 60, ActivityScore = 55, DxReachScore = 70, StartingBand = "20m", SelectedBand = "17m",
+        Decision = "Moved to 17m because DX reach improved."
+    }
+};
+var emergingTrend = ConditionsSearchPolicy.Trend("17m", trendHistory);
+if (emergingTrend.Score <= 0 || !emergingTrend.Label.Contains("Emerging", StringComparison.OrdinalIgnoreCase))
+    failures.Add("Band Analysis history did not identify a strongly emerging band trend.");
+
+var bandHistoryTestFolder = Path.Combine(Path.GetTempPath(), $"DXPilot-band-history-test-{Guid.NewGuid():N}");
+try
+{
+    var bandHistoryStore = new BandAnalysisHistoryStore(bandHistoryTestFolder);
+    bandHistoryStore.Save(trendHistory);
+    var restoredBandHistory = bandHistoryStore.Load();
+    if (restoredBandHistory.Count != 3
+        || restoredBandHistory[^1].Band != "17m"
+        || restoredBandHistory[^1].SelectedBand != "17m"
+        || restoredBandHistory[^1].SurveyId != "survey-test"
+        || !File.Exists(bandHistoryStore.HistoryFile)
+        || !File.ReadAllText(bandHistoryStore.HistoryFile).Contains("Moved to 17m", StringComparison.Ordinal))
+        failures.Add("Band Analysis history JSON round-trip lost trend observations.");
+}
+finally
+{
+    if (Directory.Exists(bandHistoryTestFolder))
+        Directory.Delete(bandHistoryTestFolder, recursive: true);
+}
+
 if (failures.Count > 0)
 {
     Console.Error.WriteLine(string.Join(Environment.NewLine, failures));
     return 1;
 }
 
-Console.WriteLine($"PASS: CALL NOW one-shot/resume policy, configurable 5-200 row geometry/model/settings, secure settings/scheduler export-import validation, WAS-only state indexing with Alaska/Hawaii and optional DC, personal 52-row default migration, {bandCases.Length} band mappings, FT8/FT4 timing and Reply markers, binary JTDX parsing, stale-target policy, InQso CQ contradiction and no-progress safety, blank-status verification, band/mode resets, context inheritance, row-settling gate, optional scoped DXCC and new-grid priorities with normal-DX fallback, DX Assist opportunity colours independent of ranking tier, Session History DXCC-first universal-rank ordering, Full Archive search, semantic new-grid classification, and archive persistence round-trip.");
+Console.WriteLine($"PASS: CALL NOW one-shot/resume policy, configurable 5-200 row geometry/model/settings, secure settings/scheduler export-import validation, WAS-only state indexing with Alaska/Hawaii and optional DC, personal 52-row default migration, {bandCases.Length} band mappings, FT8/FT4 timing and Reply markers, binary JTDX parsing, stale-target policy, InQso CQ contradiction and no-progress safety, blank-status verification, band/mode resets, context inheritance, row-settling gate, receive-only Band Analysis full-cycle synchronisation, verified PSK Reporter parsing/probe matching/outward metrics, Conditions Search trigger/movement/New-DXCC priority, persistent emerging-band trends and quiet-long-DX scoring, optional scoped DXCC and new-grid priorities with normal-DX fallback, DX Assist opportunity colours independent of ranking tier, Session History DXCC-first universal-rank ordering, Full Archive search, semantic new-grid classification, and archive persistence round-trip.");
 return 0;
 
 static byte[] BuildDecodePacket(string modeMarker, string message)

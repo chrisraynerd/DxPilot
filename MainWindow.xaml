@@ -156,7 +156,7 @@
             <TabItem Header="Session History">
                 <views:SessionHistoryView />
             </TabItem>
-            <TabItem Header="Scheduler">
+            <TabItem Header="Band Analysis">
                 <views:SchedulerView />
             </TabItem>
             <TabItem Header="Settings">

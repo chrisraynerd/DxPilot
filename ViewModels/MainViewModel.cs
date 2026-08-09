@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
@@ -63,6 +64,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly DxccRarityService _rarityService;
     private readonly DxTargetScorer _targetScorer;
     private readonly TargetSelector _targetSelector;
+    private readonly BandQualityAnalyzer _bandQualityAnalyzer = new();
+    private readonly PskReporterClient _pskReporterClient = new();
+    private readonly PskReporterAnalyzer _pskReporterAnalyzer;
     private readonly ICallsignLocationService _callsignLocationService;
     private readonly List<DecodeMessage> _decodeHistory = new();
     private readonly List<AdifQso> _logbook = new();
@@ -85,6 +89,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly DispatcherTimer _wantedRefreshTimer;
     private readonly DispatcherTimer _sessionArchiveSaveTimer;
     private readonly SessionHistoryArchiveStore _sessionArchiveStore;
+    private readonly BandAnalysisHistoryStore _bandAnalysisHistoryStore;
+    private readonly PskReporterMapStore _pskReporterMapStore;
+    private readonly List<BandAnalysisHistoryEntry> _bandAnalysisHistory;
     private readonly string _sessionId = $"{DateTime.UtcNow:yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}";
     private readonly DateTime _sessionStartedUtc = DateTime.UtcNow;
     private bool _sessionArchiveDirty;
@@ -186,6 +193,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _wantedReason = "";
     private string _wantedSourceBlock = "";
     private JtdxBandActivityOverlay? _bandActivityOverlay;
+    private JtdxBandButtonStripOverlay? _bandButtonStripOverlay;
     private RadioContext? _radioContext;
     private long _radioContextGeneration;
     private bool _radioContextSettling;
@@ -194,6 +202,40 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _radioContextDisplay = "Radio: waiting for JTDX Status";
     private string _radioContextStatus = "Waiting for frequency and mode.";
     private string _settingsTransferStatus = "No settings file exported or imported in this session.";
+    private readonly Dictionary<string, List<DecodeMessage>> _bandSurveyDecodes = new(StringComparer.OrdinalIgnoreCase);
+    private CancellationTokenSource? _bandSurveyCancellation;
+    private bool _bandAnalysisOperationInProgress;
+    private string _bandSurveyActiveBand = "";
+    private DateTime _bandSurveyFirstEligibleSlotStart = DateTime.MaxValue;
+    private TaskCompletionSource<bool>? _bandSurveyFirstFullDecodeSignal;
+    private readonly List<DecodeMessage> _conditionsMonitorDecodes = [];
+    private readonly List<(DateTime AtUtc, string Callsign)> _conditionsCallAttempts = [];
+    private DateTime _conditionsBandEnteredAtUtc = DateTime.UtcNow;
+    private DateTime _conditionsLastDecodeAtUtc = DateTime.UtcNow;
+    private DateTime _conditionsLastUsefulTargetAtUtc = DateTime.UtcNow;
+    private DateTime _conditionsLastReplyOrProgressAtUtc = DateTime.UtcNow;
+    private DateTime _conditionsLowActivitySinceUtc = DateTime.MinValue;
+    private DateTime _conditionsLastSurveyCompletedAtUtc = DateTime.MinValue;
+    private DateTime _conditionsLastStatusUpdateAtUtc = DateTime.MinValue;
+    private readonly Dictionary<string, DateTime> _conditionsScheduleLastRunUtc = new(StringComparer.OrdinalIgnoreCase);
+    private string _conditionsPendingReason = "";
+    private bool _conditionsFullConfirmationPending;
+    private bool _conditionsEvaluationRunning;
+    private DxTarget? _bandSurveyPriorityNewDxcc;
+    private bool _bandSurveyAutomatic;
+    private bool _bandSurveyResumesAssistance;
+    private string _bandSurveyTriggerReason = "Manual survey";
+    private bool _pskProbeAuthorised;
+    private bool _pskPropagationSurveyRunning;
+    private int _pskProbeObservedCqCount;
+    private DateTime _pskProbeLastObservedCqAt = DateTime.MinValue;
+    private long _pskProbeLastObservedSlot = long.MinValue;
+    private long _pskProbeFirstConfirmedSlot = long.MinValue;
+    private TaskCompletionSource<DateTime>? _pskProbeFirstCqSignal;
+    private TaskCompletionSource<DateTime>? _pskProbeSecondCqSignal;
+    private TaskCompletionSource<string>? _pskProbeFailureSignal;
+    private DateTime _pskProbeFirstNonCqStatusAt = DateTime.MinValue;
+    private DateTime _pskLastEnableTxClickAt = DateTime.MinValue;
 
     public MainViewModel()
     {
@@ -222,12 +264,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _adifStatusBuilder = new AdifWorkedStatusBuilder();
         Settings = new SettingsViewModel { Settings = _settingsService.LoadSettings() };
         _sessionArchiveStore = new SessionHistoryArchiveStore(_settingsService.AppFolder);
+        _bandAnalysisHistoryStore = new BandAnalysisHistoryStore(_settingsService.AppFolder);
+        _pskReporterMapStore = new PskReporterMapStore(_settingsService.AppFolder);
+        _bandAnalysisHistory = _bandAnalysisHistoryStore.Load();
+        RestoreConditionsSearchHistoryState();
         _gridOverlayButtonText = $"Show {Settings.Settings.JtdxBandVisibleRowCount}-Row Grid";
         _permanentlySuppressedCallsigns.UnionWith(Settings.Settings.PermanentlySuppressedCallsigns);
         _dxccResolver = new DxccResolver(Settings.Settings.CountryFilePath);
         _rarityService = new DxccRarityService();
         _rarityService.Load(Settings.Settings.DxccRarityFilePath, _dxccResolver);
         _targetScorer = new DxTargetScorer(_dxccResolver, _rarityService, new GridDistanceCalculator());
+        _pskReporterAnalyzer = new PskReporterAnalyzer(new GridDistanceCalculator(), _dxccResolver);
         _targetSelector = new TargetSelector(_targetScorer);
         _callsignLocationService = new CallsignLocationService(Settings.Settings, _settingsService.AppFolder, new QrzCallsignClient());
         _autoResume.ShouldUseCqReset = ShouldUseIdleRecovery;
@@ -256,6 +303,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SessionHistory = new SessionHistoryViewModel();
         SessionHistory.LoadArchive(_sessionArchiveStore.Load(out var archiveWarning));
         Scheduler = new SchedulerViewModel();
+        BandAnalysis = new BandAnalysisViewModel(Settings.Settings);
+        RestoreLatestPskReporterMap();
+        RefreshBandAnalysisTrends();
         DxAssist.AutoSelectBestCq = Settings.Settings.AutoSelectBestCq;
 
         foreach (var item in _settingsService.LoadSchedule())
@@ -285,6 +335,32 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         PickEnableColorCommand = new RelayCommand(() => PickColorAsync("Enable TX off grey", rgb => Settings.Settings.EnableTxOffRgb = rgb));
         PickRxColorCommand = new RelayCommand(() => PickColorAsync("RX green", rgb => Settings.Settings.RxGreenRgb = rgb));
         TestScheduleClickCommand = new RelayCommand(TestScheduleClick);
+        MapBandButtonStripCommand = new RelayCommand(ShowBandButtonStripOverlay);
+        TestBandMovementCommand = new RelayCommand(TestSelectedBandMovementAsync);
+        StartBandSurveyCommand = new RelayCommand(StartBandSurveyAsync);
+        StartPskPropagationSurveyCommand = new RelayCommand(StartPskPropagationSurveyAsync);
+        MoveToPskSurveyBandCommand = new RelayCommand(MoveToPskSurveyBandAsync);
+        StopBandSurveyCommand = new RelayCommand(StopBandSurvey);
+        MapTxEvenSelectorCommand = new RelayCommand(async () => await PickWindowRelativePointAsync(
+            "JTDX Tx 15/45 (or Tx 00/30) timing button",
+            (x, y) =>
+            {
+                Settings.Settings.JtdxTxEvenRelativeX = x;
+                Settings.Settings.JtdxTxEvenRelativeY = y;
+                Settings.Settings.JtdxTxEvenCalibrationDate = DateTime.Now;
+                BandAnalysis.PskProbeStatus = $"JTDX Tx timing button mapped at window-relative X={x}, Y={y}.";
+            }));
+        MapTx1SelectorCommand = new RelayCommand(async () => await PickWindowRelativePointAsync(
+            "JTDX Tx1 button",
+            (x, y) =>
+            {
+                Settings.Settings.JtdxTx1RelativeX = x;
+                Settings.Settings.JtdxTx1RelativeY = y;
+                Settings.Settings.JtdxTx1CalibrationDate = DateTime.Now;
+                Settings.Settings.PskStandaloneCleanupRequired = true;
+                BandAnalysis.PskProbeStatus = $"JTDX Tx1 stable-mode reset mapped at window-relative X={x}, Y={y}.";
+            }));
+        OpenBandAnalysisHistoryCommand = new RelayCommand(OpenBandAnalysisHistory);
         CaptureJtdxWindowCommand = new RelayCommand(CaptureJtdxWindow);
         PickBandActivityTopLeftCommand = new RelayCommand(async () => await PickWindowRelativePointAsync("Band Activity top-left", ApplyBandActivityTopLeft));
         PickBandActivityBottomRightCommand = new RelayCommand(async () => await PickWindowRelativePointAsync("Band Activity bottom-right", ApplyBandActivityBottomRight));
@@ -334,6 +410,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             CompleteRadioContextSettlingIfReady();
             if (DateTime.UtcNow - _lastMapContactabilityRefreshUtc >= TimeSpan.FromSeconds(5))
                 RefreshMapContactability();
+            TrimConditionsEvidence(DateTime.UtcNow);
+            _ = EvaluateConditionsSearchAsync();
         };
         _wantedRefreshTimer.Start();
         _sessionArchiveSaveTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -380,6 +458,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public MapViewModel Map { get; }
     public SessionHistoryViewModel SessionHistory { get; }
     public SchedulerViewModel Scheduler { get; }
+    public BandAnalysisViewModel BandAnalysis { get; }
     public SettingsViewModel Settings { get; }
     public TargetStatusSummaryViewModel CurrentTargetStatus { get; } = new();
 
@@ -539,6 +618,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ICommand PickEnableColorCommand { get; }
     public ICommand PickRxColorCommand { get; }
     public ICommand TestScheduleClickCommand { get; }
+    public ICommand MapBandButtonStripCommand { get; }
+    public ICommand TestBandMovementCommand { get; }
+    public ICommand StartBandSurveyCommand { get; }
+    public ICommand StartPskPropagationSurveyCommand { get; }
+    public ICommand MoveToPskSurveyBandCommand { get; }
+    public ICommand StopBandSurveyCommand { get; }
+    public ICommand MapTxEvenSelectorCommand { get; }
+    public ICommand MapTx1SelectorCommand { get; }
+    public ICommand OpenBandAnalysisHistoryCommand { get; }
     public ICommand CaptureJtdxWindowCommand { get; }
     public ICommand PickBandActivityTopLeftCommand { get; }
     public ICommand PickBandActivityBottomRightCommand { get; }
@@ -689,6 +777,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             PrepareDecodeLocationFields(decode);
             _targetScorer.EnrichDecode(decode, _logbook, _adifMergeResult.Indexes, Settings.Settings);
+            ObserveConditionsSearchDecode(decode);
+            ObserveBandSurveyDecode(decode);
             RecordLastHeard(decode);
             decode.IsPermanentlySuppressed = IsPermanentlySuppressed(DecodeTargetCall(decode));
             if (!string.IsNullOrWhiteSpace(decode.Callsign)
@@ -719,7 +809,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _udpListener.StatusMessageReceived += status => Dispatch(() =>
         {
             HandleRadioContextStatus(status);
-            _ = ProcessJtdxStatusForCurrentTargetAsync(status);
+            if (_pskProbeAuthorised)
+                ObservePskProbeStatus(status);
+            else
+                _ = ProcessJtdxStatusForCurrentTargetAsync(status);
         });
 
         _allTxtMonitor.StatusChanged += message => Dispatch(() =>
@@ -729,7 +822,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         });
         _allTxtMonitor.TransmissionObserved += transmission => Dispatch(() =>
         {
-            _ = ProcessAllTxtTransmissionAsync(transmission);
+            if (_pskProbeAuthorised)
+            {
+                if (LooksLikeCq(transmission.Message))
+                    ObservePskProbeTransmission(transmission);
+                else
+                    FailPskProbe($"JTDX transmitted '{transmission.Message}' instead of the selected CQ message.");
+            }
+            else
+            {
+                _ = ProcessAllTxtTransmissionAsync(transmission);
+            }
         });
 
         _autoResume.StatusChanged += message => Dispatch(() =>
@@ -768,6 +871,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         _autoResume.ActionLogged += message => Dispatch(() => AddAction(message));
         _autoResume.Resumed += () => Dispatch(() => _ = NudgeLockedTargetAfterResumeAsync());
+        _pskReporterClient.StatusChanged += message => Dispatch(() =>
+        {
+            BandAnalysis.PskProbeStatus = message;
+            AddAction(message);
+        });
     }
 
     private void HandleRadioContextStatus(JtdxStatusMessage status)
@@ -818,6 +926,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Generation = _radioContextGeneration,
             StartedAt = status.ReceivedAt
         };
+        if (firstContext || bandChanged)
+            ResetConditionsBandMonitor(newBand, status.ReceivedAt.ToUniversalTime());
         _radioContextSettling = true;
         _radioContextHasDecode = false;
         _radioContextSettleUntil = DateTime.MaxValue;
@@ -1350,8 +1460,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    private bool RejectHuntingWhileBandSurveyRuns()
+    {
+        if (!BandAnalysis.IsRunning)
+            return false;
+
+        BandAnalysis.Status = "Stop Band Analysis before starting a hunting mode.";
+        Dashboard.OverallStatus = BandAnalysis.Status;
+        AddAction(BandAnalysis.Status);
+        return true;
+    }
+
     private async void StartDxAssist()
     {
+        if (RejectHuntingWhileBandSurveyRuns())
+            return;
         PromoteManualCallNowToAutomation("DX Assist");
         _operatingMode = HuntingOperatingMode.DxAssist;
         RefreshModeIndicators();
@@ -1361,6 +1484,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async void StartWantedSniper()
     {
+        if (RejectHuntingWhileBandSurveyRuns())
+            return;
         PromoteManualCallNowToAutomation("Wanted Sniper");
         _operatingMode = HuntingOperatingMode.WantedSniper;
         RefreshModeIndicators();
@@ -1370,6 +1495,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async void StartLocationHunt()
     {
+        if (RejectHuntingWhileBandSurveyRuns())
+            return;
         PromoteManualCallNowToAutomation("Location Hunt");
         _operatingMode = HuntingOperatingMode.LocationHunt;
         RefreshModeIndicators();
@@ -1386,6 +1513,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             await StartUdpAsync();
         else
             CaptureJtdxWindow(resetGrid: false, source: "DX Pilot start");
+        if (!await RestoreStableTargetAcquisitionAfterPskAsync(
+                "Before starting normal hunting",
+                CancellationToken.None))
+        {
+            Dashboard.OverallStatus = BandAnalysis.PskProbeStatus;
+            RefreshModeIndicators();
+            return;
+        }
         _autoResume.Start(Settings.Settings, Scheduler.ScheduleItems);
         AddAction(_operatingMode switch
         {
@@ -1414,6 +1549,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async void StopAll()
     {
+        _bandSurveyCancellation?.Cancel();
         _callNowSession.Reset();
         _autoResume.Stop();
         _huntTimer.Stop();
@@ -1427,6 +1563,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async void StopUdp()
     {
+        _bandSurveyCancellation?.Cancel();
         _udpListener.Stop();
         if (_autoResume.IsRunning)
         {
@@ -1531,6 +1668,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void SaveAll()
     {
+        BandAnalysis.SaveTo(Settings.Settings);
         Settings.Settings.AutoSelectBestCq = DxAssist.AutoSelectBestCq;
         Settings.Settings.MapStaleMinutes = (int)Map.AgeLimitMinutes;
         Settings.Settings.MapShowPaths = Map.ShowPaths;
@@ -2728,6 +2866,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task LockAndReplyAsync(DxTarget target, string source, string wantedReason, string sourceBlock)
     {
+        if (BandAnalysis.IsRunning)
+        {
+            AddAction($"{source} target {target.Callsign} ignored because receive-only Band Analysis is running.");
+            BandAnalysis.Status = "Target calling remains disabled during a receive-only band survey.";
+            return;
+        }
+
         if (!RadioContextReadyForSelection())
         {
             AddAction($"{source} target {target.Callsign} ignored while JTDX rows are settling after a frequency/band/mode change.");
@@ -2921,6 +3066,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         _callAttemptCount++;
         _lastCallAttemptAt = DateTime.Now;
+        if (_lockedTarget != null)
+            RecordConditionsCallAttempt(_lockedTarget.Callsign);
         TrackOpportunityAttempt(_lockedTarget);
         UpdateHuntStateDisplay();
         return true;
@@ -4174,6 +4321,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             _qsoStage = newStage;
             _lastQsoProgressAt = DateTime.Now;
+            RecordConditionsReplyOrProgress();
             _reportAttemptCount = 0;
             _lastReportRepeatCycleKey = cycleKey;
             _lastObservedQsoMessage = observedMessage;
@@ -4249,6 +4397,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _myFinal73SeenDuringCompletion = false;
         _completionPendingStartedAt = DateTime.Now;
         _lastQsoProgressAt = DateTime.Now;
+        RecordConditionsReplyOrProgress();
         _lastProgressMessageFromTarget = observedMessage;
         _lastProgressTime = DateTime.Now;
         _lastStageChangeAt = DateTime.Now;
@@ -4375,6 +4524,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _huntState = HuntState.InQso;
             _qsoStage = newStage > QsoStage.CallingInitial ? newStage : QsoStage.TargetReportSeen;
             _lastQsoProgressAt = DateTime.Now;
+            RecordConditionsReplyOrProgress();
             _reportAttemptCount = 0;
             _lastReportRepeatCycleKey = GetCycleKey(decode);
             _lastObservedQsoMessage = decode.RawText;
@@ -6999,7 +7149,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private bool CanCallNow(object? row)
     {
-        return RadioContextReadyForSelection()
+        return !BandAnalysis.IsRunning
+            && RadioContextReadyForSelection()
             && row is not MapStationViewModel { IsContactable: false }
             && !string.IsNullOrWhiteSpace(RowCallsign(row));
     }
@@ -7407,6 +7558,1815 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void ResetConditionsBandMonitor(string band, DateTime enteredAtUtc)
+    {
+        _conditionsBandEnteredAtUtc = enteredAtUtc;
+        _conditionsLastDecodeAtUtc = enteredAtUtc;
+        _conditionsLastUsefulTargetAtUtc = enteredAtUtc;
+        _conditionsLowActivitySinceUtc = DateTime.MinValue;
+        _conditionsMonitorDecodes.RemoveAll(decode =>
+            decode.Band.Equals(band, StringComparison.OrdinalIgnoreCase));
+        if (!_bandSurveyAutomatic)
+            _conditionsPendingReason = "";
+    }
+
+    private void ObserveConditionsSearchDecode(DecodeMessage decode)
+    {
+        var nowUtc = DateTime.UtcNow;
+        _conditionsLastDecodeAtUtc = nowUtc;
+        _conditionsMonitorDecodes.Add(decode);
+
+        if (decode.Targetable
+            && !string.IsNullOrWhiteSpace(DecodeTargetCall(decode))
+            && (decode.IsCq || decode.IsNewDxcc || decode.IsUnconfirmedDxcc || decode.IsNewGrid || decode.IsNewState))
+        {
+            _conditionsLastUsefulTargetAtUtc = nowUtc;
+        }
+
+        if (BandAnalysis.IsRunning
+            && (_bandSurveyAutomatic || _bandSurveyResumesAssistance || _pskPropagationSurveyRunning)
+            && decode.IsNewDxcc
+            && _bandSurveyPriorityNewDxcc == null
+            && decode.Targetable
+            && decode.ParseConfidence != ParseConfidence.Low
+            && CallsignNormalizer.IsValidOnAirCallsign(decode.ContactableCall))
+        {
+            var target = _targetSelector
+                .SelectRanked([decode], _logbook, _adifMergeResult.Indexes, Settings.Settings, 1, includeActiveQso: false)
+                .FirstOrDefault();
+            if (target != null
+                && CallsignNormalizer.IsValidOnAirCallsign(target.Callsign)
+                && IsUnconfirmedDxccStatus(target.Ranking.DxccStatus))
+            {
+                _bandSurveyPriorityNewDxcc = target;
+                _conditionsPendingReason = "";
+                BandAnalysis.Status = $"New DXCC priority: {target.Callsign} ({target.Decode.EntityName}) found on {target.Decode.Band}. Stopping analysis and handing over to calling.";
+                BandAnalysis.AutomaticStatus = BandAnalysis.Status;
+                AddAction(BandAnalysis.Status);
+                _bandSurveyCancellation?.Cancel();
+            }
+        }
+
+    }
+
+    private void RecordConditionsCallAttempt(string callsign)
+    {
+        _conditionsCallAttempts.Add((DateTime.UtcNow, callsign.Trim().ToUpperInvariant()));
+        TrimConditionsEvidence(DateTime.UtcNow);
+    }
+
+    private void RecordConditionsReplyOrProgress()
+    {
+        _conditionsLastReplyOrProgressAtUtc = DateTime.UtcNow;
+        TrimConditionsEvidence(DateTime.UtcNow);
+    }
+
+    private void TrimConditionsEvidence(DateTime nowUtc)
+    {
+        var retainMinutes = Math.Max(30,
+            Math.Max(Settings.Settings.ConditionsSearchNoUsefulTargetMinutes,
+                Settings.Settings.ConditionsSearchMonitoringWindowMinutes) * 2);
+        var cutoff = nowUtc.AddMinutes(-retainMinutes);
+        _conditionsMonitorDecodes.RemoveAll(decode => decode.ReceivedAt.ToUniversalTime() < cutoff);
+        _conditionsCallAttempts.RemoveAll(item => item.AtUtc < cutoff);
+    }
+
+    private async Task EvaluateConditionsSearchAsync()
+    {
+        BandAnalysis.SaveTo(Settings.Settings);
+        if (_conditionsEvaluationRunning
+            || !BandAnalysis.ConditionsSearchEnabled
+            || !_autoResume.IsRunning
+            || _callNowSession.IsOneShot
+            || BandAnalysis.IsRunning
+            || _bandAnalysisOperationInProgress)
+        {
+            if (!BandAnalysis.ConditionsSearchEnabled
+                && DateTime.UtcNow - _conditionsLastStatusUpdateAtUtc >= TimeSpan.FromSeconds(10))
+            {
+                BandAnalysis.AutomaticStatus = "Automatic Conditions Search is off.";
+                _conditionsLastStatusUpdateAtUtc = DateTime.UtcNow;
+            }
+            return;
+        }
+
+        _conditionsEvaluationRunning = true;
+        try
+        {
+            var nowUtc = DateTime.UtcNow;
+            var currentBand = CurrentReportedBand();
+            if (string.IsNullOrWhiteSpace(currentBand))
+                return;
+
+            var windowCutoff = nowUtc.AddMinutes(-Settings.Settings.ConditionsSearchMonitoringWindowMinutes);
+            var rolling = _conditionsMonitorDecodes
+                .Where(decode => decode.Band.Equals(currentBand, StringComparison.OrdinalIgnoreCase)
+                    && decode.ReceivedAt.ToUniversalTime() >= windowCutoff)
+                .ToList();
+            var rollingUniqueStations = rolling
+                .Select(DecodeTargetCall)
+                .Where(call => !string.IsNullOrWhiteSpace(call))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+            var lowActivity = nowUtc - _conditionsBandEnteredAtUtc
+                    >= TimeSpan.FromMinutes(Settings.Settings.ConditionsSearchMonitoringWindowMinutes)
+                && rollingUniqueStations < Settings.Settings.ConditionsSearchLowStationThreshold;
+            if (lowActivity)
+            {
+                if (_conditionsLowActivitySinceUtc == DateTime.MinValue)
+                    _conditionsLowActivitySinceUtc = nowUtc;
+            }
+            else
+            {
+                _conditionsLowActivitySinceUtc = DateTime.MinValue;
+            }
+
+            var attemptCutoff = new[]
+            {
+                nowUtc.AddMinutes(-Settings.Settings.ConditionsSearchNoUsefulTargetMinutes),
+                _conditionsLastReplyOrProgressAtUtc
+            }.Max();
+            var unanswered = _conditionsCallAttempts.Where(item => item.AtUtc >= attemptCutoff).ToList();
+            var scheduledReason = ScheduledConditionsReason(nowUtc);
+            var startupDue = Settings.Settings.ConditionsSearchSurveyOnStartup
+                && _conditionsLastSurveyCompletedAtUtc == DateTime.MinValue
+                && nowUtc - _sessionStartedUtc >= TimeSpan.FromSeconds(30);
+            var trigger = ConditionsSearchPolicy.DetectTrigger(
+                scheduledReason != null,
+                startupDue,
+                nowUtc - _conditionsBandEnteredAtUtc,
+                nowUtc - _conditionsLastDecodeAtUtc,
+                nowUtc - _conditionsLastUsefulTargetAtUtc,
+                rollingUniqueStations,
+                _conditionsLowActivitySinceUtc == DateTime.MinValue ? TimeSpan.Zero : nowUtc - _conditionsLowActivitySinceUtc,
+                unanswered.Count,
+                unanswered.Select(item => item.Callsign).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                Settings.Settings);
+            if (_conditionsFullConfirmationPending)
+                trigger = new ConditionsSearchTrigger("quick results were too close; full confirmation survey", true, 95);
+
+            if (trigger == null
+                && !string.IsNullOrWhiteSpace(_conditionsPendingReason)
+                && !_conditionsPendingReason.StartsWith("scheduled UTC", StringComparison.OrdinalIgnoreCase))
+            {
+                BandAnalysis.AutomaticStatus = $"Conditions recovered on {currentBand}; the pending automatic analysis was cancelled.";
+                _conditionsPendingReason = "";
+                return;
+            }
+
+            if (trigger == null && string.IsNullOrWhiteSpace(_conditionsPendingReason))
+            {
+                if (nowUtc - _conditionsLastStatusUpdateAtUtc >= TimeSpan.FromSeconds(10))
+                {
+                    var nextAllowed = NextConditionsSurveyAllowedAtUtc();
+                    var cooldownText = nextAllowed > nowUtc
+                        ? $" Next automatic survey allowed at {nextAllowed.ToLocalTime():HH:mm}."
+                        : " Automatic survey is available if conditions deteriorate.";
+                    BandAnalysis.AutomaticStatus = $"Monitoring {currentBand}: {rollingUniqueStations} unique stations in the rolling {Settings.Settings.ConditionsSearchMonitoringWindowMinutes}-minute trigger window.{cooldownText}";
+                    _conditionsLastStatusUpdateAtUtc = nowUtc;
+                }
+                return;
+            }
+
+            if (trigger != null)
+                _conditionsPendingReason = scheduledReason ?? trigger.Reason;
+            var reason = _conditionsPendingReason;
+            var fullSurvey = trigger?.FullSurvey == true
+                || scheduledReason != null
+                || startupDue
+                || reason.StartsWith("scheduled UTC", StringComparison.OrdinalIgnoreCase);
+            var nextSurveyAt = NextConditionsSurveyAllowedAtUtc();
+            var minimumBandUntil = trigger?.Priority >= 80
+                ? DateTime.MinValue
+                : _conditionsBandEnteredAtUtc.AddMinutes(Settings.Settings.ConditionsSearchMinimumBandMinutes);
+            var permittedAt = _conditionsFullConfirmationPending
+                ? DateTime.MinValue
+                : new[] { nextSurveyAt, minimumBandUntil }.Max();
+            if (nowUtc < permittedAt)
+            {
+                BandAnalysis.AutomaticStatus = $"Conditions Search pending: {reason}. Earliest safe automatic analysis {permittedAt.ToLocalTime():HH:mm}.";
+                return;
+            }
+
+            if (_huntState != HuntState.Idle
+                || _lockedTarget != null
+                || _udpListener.LastStatus?.Transmitting == true
+                || !RadioContextReadyForSelection())
+            {
+                BandAnalysis.AutomaticStatus = $"Conditions Search pending: {reason}. Waiting for the current contact and JTDX receive cycle to finish safely.";
+                return;
+            }
+
+            _conditionsPendingReason = "";
+            _conditionsFullConfirmationPending = false;
+            MarkScheduledConditionsRun(nowUtc, scheduledReason);
+            _bandAnalysisOperationInProgress = true;
+            try
+            {
+                var dwellOverride = Settings.Settings.ConditionsSearchUseQuickSurvey && !fullSurvey ? 1 : (int?)null;
+                await StartBandSurveyCoreAsync(automatic: true, triggerReason: reason, dwellMinutesOverride: dwellOverride);
+            }
+            finally
+            {
+                _bandAnalysisOperationInProgress = false;
+            }
+        }
+        finally
+        {
+            _conditionsEvaluationRunning = false;
+        }
+    }
+
+    private DateTime NextConditionsSurveyAllowedAtUtc()
+    {
+        return _conditionsLastSurveyCompletedAtUtc == DateTime.MinValue
+            ? DateTime.MinValue
+            : _conditionsLastSurveyCompletedAtUtc.AddMinutes(Settings.Settings.ConditionsSearchCooldownMinutes);
+    }
+
+    private string? ScheduledConditionsReason(DateTime nowUtc)
+    {
+        foreach (var token in (Settings.Settings.ConditionsSearchScheduleUtc ?? "")
+                     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!TimeSpan.TryParse(token, out var scheduled))
+                continue;
+            var scheduledAt = nowUtc.Date + scheduled;
+            if (nowUtc < scheduledAt || nowUtc - scheduledAt > TimeSpan.FromMinutes(30))
+                continue;
+            if (_conditionsScheduleLastRunUtc.TryGetValue(token, out var lastRun) && lastRun.Date == nowUtc.Date)
+                continue;
+            return $"scheduled UTC conditions check ({token})";
+        }
+
+        return null;
+    }
+
+    private void MarkScheduledConditionsRun(DateTime nowUtc, string? scheduledReason)
+    {
+        if (scheduledReason == null)
+            return;
+        var open = scheduledReason.LastIndexOf('(');
+        var close = scheduledReason.LastIndexOf(')');
+        if (open >= 0 && close > open)
+            _conditionsScheduleLastRunUtc[scheduledReason[(open + 1)..close]] = nowUtc;
+    }
+
+    private void RestoreLatestPskReporterMap()
+    {
+        var snapshot = _pskReporterMapStore.Load();
+        if (snapshot == null)
+            return;
+
+        var homeGrid = string.IsNullOrWhiteSpace(Settings.Settings.HomeGrid)
+            ? snapshot.HomeGrid
+            : Settings.Settings.HomeGrid;
+        foreach (var row in BandAnalysis.Bands)
+        {
+            var bandReports = snapshot.Reports
+                .Where(report => report.Band.Equals(row.Band, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (bandReports.Count == 0)
+                continue;
+
+            row.ApplyPsk(_pskReporterAnalyzer.Analyze(
+                row.Band,
+                homeGrid,
+                bandReports,
+                measured: true));
+        }
+
+        BandAnalysis.PskMap.Apply(snapshot.Reports, BandAnalysis.Bands, homeGrid);
+        BandAnalysis.PskMap.MarkRestored(snapshot.ObservedAtUtc);
+        AddAction($"Restored the latest saved PSK propagation map from {_pskReporterMapStore.MapFile} ({BandAnalysis.PskMap.Reports.Count} points).");
+    }
+
+    private void RefreshBandAnalysisTrends()
+    {
+        foreach (var row in BandAnalysis.Bands)
+        {
+            var trend = ConditionsSearchPolicy.Trend(row.Band, _bandAnalysisHistory);
+            row.Trend = trend.Label;
+            row.TrendScore = trend.Score;
+            row.ConditionsScore = CalculateConditionsScore(row, _operatingMode);
+        }
+
+        var latest = _bandAnalysisHistory.OrderByDescending(entry => entry.ObservedAtUtc).FirstOrDefault();
+        BandAnalysis.HistorySummary = latest == null
+            ? "No Band Analysis history yet. Trends appear after two observations of a band."
+            : $"History retained for 60 days. Latest sample: {latest.ObservedAtUtc.ToLocalTime():g}; {latest.TriggerReason}.";
+    }
+
+    private void RestoreConditionsSearchHistoryState()
+    {
+        var latestAutomatic = _bandAnalysisHistory
+            .Where(entry => entry.Automatic && entry.SecondsObserved > 0)
+            .OrderByDescending(entry => entry.ObservedAtUtc)
+            .FirstOrDefault();
+        if (latestAutomatic != null)
+            _conditionsLastSurveyCompletedAtUtc = latestAutomatic.ObservedAtUtc;
+
+        foreach (var entry in _bandAnalysisHistory.Where(entry =>
+                     entry.Automatic
+                     && entry.ObservedAtUtc.Date == DateTime.UtcNow.Date
+                     && entry.TriggerReason.StartsWith("scheduled UTC conditions check", StringComparison.OrdinalIgnoreCase)))
+        {
+            var open = entry.TriggerReason.LastIndexOf('(');
+            var close = entry.TriggerReason.LastIndexOf(')');
+            if (open >= 0 && close > open)
+                _conditionsScheduleLastRunUtc[entry.TriggerReason[(open + 1)..close]] = entry.ObservedAtUtc;
+        }
+    }
+
+    private void SaveBandAnalysisHistory(
+        string triggerReason,
+        bool automatic,
+        string startingBand,
+        string selectedBand,
+        string decision)
+    {
+        var observedAt = DateTime.UtcNow;
+        var surveyId = $"{observedAt:yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}";
+        var observedRows = BandAnalysis.Bands.Where(row => row.SecondsObserved > 0).ToList();
+        if (observedRows.Count == 0)
+        {
+            var auditRow = BandAnalysis.Bands.FirstOrDefault(row =>
+                    row.Band.Equals(selectedBand, StringComparison.OrdinalIgnoreCase))
+                ?? BandAnalysis.Bands.FirstOrDefault(row =>
+                    row.Band.Equals(startingBand, StringComparison.OrdinalIgnoreCase));
+            if (auditRow != null)
+                observedRows.Add(auditRow);
+        }
+
+        foreach (var row in observedRows)
+        {
+            var quality = row.Quality;
+            _bandAnalysisHistory.Add(new BandAnalysisHistoryEntry
+            {
+                SurveyId = surveyId,
+                ObservedAtUtc = observedAt,
+                Band = row.Band,
+                TriggerReason = triggerReason,
+                Automatic = automatic,
+                SecondsObserved = row.SecondsObserved,
+                UniqueStations = quality.UniqueStations,
+                CqCallers = quality.CqCallers,
+                NewDxccStations = quality.NewDxccStations,
+                WantedStations = quality.WantedStations,
+                ActivityScore = quality.ActivityScore,
+                DxReachScore = quality.DxReachScore,
+                EightiethPercentileDistanceMiles = quality.EightiethPercentileDistanceMiles,
+                MainArea = quality.MainArea,
+                Assessment = quality.Assessment,
+                PskMeasured = row.PskMeasured,
+                PskReports = row.PskMetrics.ReportCount,
+                PskUniqueReceivers = row.PskMetrics.UniqueReceivers,
+                PskUniqueCountries = row.PskMetrics.UniqueCountries,
+                PskFarthestDistanceMiles = row.PskMetrics.FarthestDistanceMiles,
+                PskMedianSnr = row.PskMetrics.MedianSnr,
+                PskPropagationScore = row.PskMetrics.PropagationScore,
+                PskMainArea = row.PskMetrics.MainArea,
+                PskAssessment = row.PskMetrics.Assessment,
+                StartingBand = startingBand,
+                SelectedBand = selectedBand,
+                Decision = decision
+            });
+        }
+        _bandAnalysisHistoryStore.Save(_bandAnalysisHistory);
+        RefreshBandAnalysisTrends();
+    }
+
+    private void OpenBandAnalysisHistory()
+    {
+        try
+        {
+            if (!_bandAnalysisHistory.Any())
+            {
+                BandAnalysis.HistorySummary = "No saved Band Analysis history exists yet. Complete a survey first.";
+                return;
+            }
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = _bandAnalysisHistoryStore.HistoryFile,
+                UseShellExecute = true
+            });
+            BandAnalysis.HistorySummary = $"Opened the Band Analysis audit log: {_bandAnalysisHistoryStore.HistoryFile}";
+        }
+        catch (Exception ex)
+        {
+            BandAnalysis.HistorySummary = $"Could not open the Band Analysis audit log: {ex.GetBaseException().Message}";
+        }
+    }
+
+    private void ShowBandButtonStripOverlay()
+    {
+        if (BandAnalysis.IsRunning || _bandAnalysisOperationInProgress)
+        {
+            BandAnalysis.Status = "Wait for the current band movement or stop the survey before changing the band-button mapping.";
+            return;
+        }
+
+        if (_bandButtonStripOverlay != null)
+        {
+            _bandButtonStripOverlay.Close();
+            return;
+        }
+
+        var window = _jtdxWindowLocator.FindMainWindow(Settings.Settings.JtdxWindowTitleMatch);
+        if (window == null || window.IsMinimized)
+        {
+            BandAnalysis.Status = "JTDX receive window was not found or is minimized.";
+            Dashboard.OverallStatus = BandAnalysis.Status;
+            AddAction(BandAnalysis.Status);
+            return;
+        }
+
+        var calibration = JtdxBandButtonStripCalibration.FromSettings(Settings.Settings);
+        if (!calibration.IsUsable)
+        {
+            calibration = JtdxBandButtonStripCalibration.CreateDefault(window);
+            SaveBandButtonStripCalibration(calibration);
+        }
+
+        _bandButtonStripOverlay = new JtdxBandButtonStripOverlay();
+        _bandButtonStripOverlay.CalibrationChanged += SaveBandButtonStripCalibration;
+        _bandButtonStripOverlay.Closed += (_, _) =>
+        {
+            _bandButtonStripOverlay = null;
+            BandAnalysis.Status = "Band-button mapping saved. Select a band row and use Test selected band.";
+            Dashboard.OverallStatus = BandAnalysis.Status;
+        };
+        if (System.Windows.Application.Current?.MainWindow != null)
+            _bandButtonStripOverlay.Owner = System.Windows.Application.Current.MainWindow;
+        _bandButtonStripOverlay.ShowCalibration(calibration, window.Left, window.Top);
+        BandAnalysis.Status = "Band mapping grid is open over JTDX. Drag it onto the 12 buttons; resize from the lower-right corner. Mouse wheel adjusts height, Shift+wheel adjusts width, and Escape closes it.";
+        Dashboard.OverallStatus = BandAnalysis.Status;
+        AddAction(BandAnalysis.Status);
+    }
+
+    private void SaveBandButtonStripCalibration(JtdxBandButtonStripCalibration calibration)
+    {
+        calibration.SaveTo(Settings.Settings);
+        _settingsService.SaveSettings(Settings.Settings);
+        Settings.Refresh();
+        BandAnalysis.RefreshCalibration(Settings.Settings);
+    }
+
+    private async Task TestSelectedBandMovementAsync()
+    {
+        if (_bandAnalysisOperationInProgress || BandAnalysis.IsRunning)
+        {
+            BandAnalysis.Status = "A band movement or survey is already in progress.";
+            return;
+        }
+
+        _bandAnalysisOperationInProgress = true;
+        try
+        {
+            await TestSelectedBandMovementCoreAsync();
+        }
+        finally
+        {
+            _bandAnalysisOperationInProgress = false;
+        }
+    }
+
+    private async Task TestSelectedBandMovementCoreAsync()
+    {
+        var row = BandAnalysis.SelectedBand;
+        if (row == null)
+        {
+            BandAnalysis.Status = "Select a band in the results table before testing movement.";
+            return;
+        }
+
+        if (!BandAnalysisViewModel.HasUsableCalibration(Settings.Settings))
+        {
+            BandAnalysis.Status = "Map the band button strip before testing movement.";
+            return;
+        }
+
+        _bandButtonStripOverlay?.Close();
+        await PrepareForReceiveOnlyBandAnalysisAsync();
+        if (!_udpListener.IsRunning)
+            await StartUdpAsync();
+
+        row.MovementStatus = "Testing";
+        BandAnalysis.Status = $"Testing movement to {row.Band}...";
+        var moved = await MoveToBandAndConfirmAsync(row, CancellationToken.None);
+        if (!moved)
+            return;
+
+        row.MovementStatus = $"Passed {DateTime.Now:HH:mm}";
+        BandAnalysis.Status = $"Movement to {row.Band} confirmed by JTDX UDP status. JTDX has been left on {row.Band}.";
+    }
+
+    private async Task MoveToPskSurveyBandAsync(object? parameter)
+    {
+        var band = parameter?.ToString()?.Trim() ?? "";
+        var row = BandAnalysis.Bands.FirstOrDefault(item => item.Band.Equals(band, StringComparison.OrdinalIgnoreCase));
+        if (row == null)
+        {
+            BandAnalysis.PskProbeStatus = "Select a plotted PSK receiver or a band legend before requesting movement.";
+            return;
+        }
+        if (_bandAnalysisOperationInProgress || BandAnalysis.IsRunning)
+        {
+            BandAnalysis.PskProbeStatus = "Wait for the current survey or band movement to finish before choosing a band.";
+            return;
+        }
+        if (_huntState != HuntState.Idle || _lockedTarget != null || _udpListener.LastStatus?.Transmitting == true)
+        {
+            BandAnalysis.PskProbeStatus = $"Movement to {row.Band} is waiting: finish or release the current call first.";
+            return;
+        }
+        if (!BandAnalysisViewModel.HasUsableCalibration(Settings.Settings))
+        {
+            BandAnalysis.PskProbeStatus = "Map and test the JTDX band button strip before choosing a PSK map band.";
+            return;
+        }
+
+        _bandAnalysisOperationInProgress = true;
+        var resumeAutomation = _autoResume.IsRunning;
+        var resumeMode = _operatingMode;
+        try
+        {
+            await PrepareForReceiveOnlyBandAnalysisAsync();
+            _operatingMode = resumeMode;
+            if (!_udpListener.IsRunning)
+                await StartUdpAsync();
+            BandAnalysis.PskProbeStatus = $"Moving to user-selected {row.Band}…";
+            if (await MoveToBandAndConfirmAsync(row, CancellationToken.None))
+            {
+                BandAnalysis.SelectedBand = row;
+                BandAnalysis.PskProbeStatus = $"User selected {row.Band}; movement was confirmed by JTDX.";
+                AddAction($"PSK propagation map: user selected {row.Band}; JTDX band movement confirmed.");
+            }
+        }
+        finally
+        {
+            _operatingMode = resumeMode;
+            _bandAnalysisOperationInProgress = false;
+            RefreshModeIndicators();
+            if (resumeAutomation)
+                await StartAutoResumeAsync();
+        }
+    }
+
+    private async Task StartBandSurveyAsync()
+    {
+        if (_bandAnalysisOperationInProgress || BandAnalysis.IsRunning)
+        {
+            BandAnalysis.Status = "A band movement or survey is already in progress.";
+            return;
+        }
+
+        _bandAnalysisOperationInProgress = true;
+        try
+        {
+            await StartBandSurveyCoreAsync(automatic: false, triggerReason: "Manual survey", dwellMinutesOverride: null);
+        }
+        finally
+        {
+            _bandAnalysisOperationInProgress = false;
+        }
+    }
+
+    private async Task StartPskPropagationSurveyAsync()
+    {
+        if (_bandAnalysisOperationInProgress || BandAnalysis.IsRunning)
+        {
+            BandAnalysis.PskProbeStatus = "A band movement or survey is already in progress.";
+            return;
+        }
+
+        if (!_udpListener.IsRunning)
+            await StartUdpAsync();
+        var udpStatusDeadline = DateTime.UtcNow.AddSeconds(6);
+        while (_udpListener.LastStatus == null && DateTime.UtcNow < udpStatusDeadline)
+            await Task.Delay(100);
+        if (_udpListener.LastStatus == null)
+        {
+            BandAnalysis.PskProbeStatus = "No live JTDX UDP status is available. Confirm JTDX is open and UDP reporting is enabled before transmitting a propagation survey.";
+            return;
+        }
+
+        if (_huntState != HuntState.Idle
+            || _lockedTarget != null
+            || _udpListener.LastStatus.Transmitting
+            || _udpListener.LastStatus.TxEnabled)
+        {
+            BandAnalysis.PskProbeStatus = "The PSK survey is waiting for the current call or QSO to finish and for JTDX Enable TX to be off.";
+            return;
+        }
+
+        if (!BandAnalysisViewModel.HasPskTransmitCalibration(Settings.Settings))
+        {
+            BandAnalysis.PskProbeStatus = "Map both JTDX's Tx timing selector and Tx1 reset button before starting a transmitted survey.";
+            return;
+        }
+
+        var enabledCount = BandAnalysis.Bands.Count(row => row.Enabled);
+        if (enabledCount == 0)
+        {
+            BandAnalysis.PskProbeStatus = "Select at least one band to survey.";
+            return;
+        }
+
+        var estimatedMinutes = enabledCount * BandAnalysis.PskPropagationProbeMinutes;
+        var answer = System.Windows.MessageBox.Show(
+            $"This PSK propagation survey will transmit exactly two CQ messages on each of {enabledCount} enabled bands.\n\n"
+            + $"Estimated minimum time: about {estimatedMinutes:0.#} minutes plus band-change synchronisation.\n\n"
+            + "DX Pilot will stop probing for an absolute-priority New DXCC. Start the transmitted survey?",
+            "Start PSK propagation survey",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning);
+        if (answer != System.Windows.MessageBoxResult.Yes)
+        {
+            BandAnalysis.PskProbeStatus = "PSK propagation survey cancelled before transmitting.";
+            return;
+        }
+
+        _bandAnalysisOperationInProgress = true;
+        try
+        {
+            await StartPskPropagationSurveyCoreAsync();
+        }
+        finally
+        {
+            _bandAnalysisOperationInProgress = false;
+        }
+    }
+
+    private async Task StartPskPropagationSurveyCoreAsync()
+    {
+        if (!BandAnalysisViewModel.HasUsableCalibration(Settings.Settings))
+        {
+            BandAnalysis.PskProbeStatus = "Map and test the band button strip before starting a PSK propagation survey.";
+            return;
+        }
+
+        var enabledBands = BandAnalysis.Bands.Where(row => row.Enabled).ToList();
+        var resumeAutomation = _autoResume.IsRunning;
+        var resumeMode = _operatingMode;
+        var startingBand = CurrentReportedBand();
+        var pskReports = new ConcurrentDictionary<string, PskReporterSpot>(StringComparer.OrdinalIgnoreCase);
+        var probeWindows = new Dictionary<string, PskProbeWindow>(StringComparer.OrdinalIgnoreCase);
+        void ObservePskReport(PskReporterSpot spot) => pskReports[PskReporterParser.DedupeKey(spot)] = spot;
+        var liveFeedConnected = false;
+        var stableHandoverReady = true;
+        BandAnalysis.SaveTo(Settings.Settings);
+        SaveAll();
+        _bandSurveyAutomatic = false;
+        _bandSurveyTriggerReason = "Manual PSK propagation survey";
+        _bandSurveyPriorityNewDxcc = null;
+        _pskPropagationSurveyRunning = true;
+        _bandButtonStripOverlay?.Close();
+        await PrepareForReceiveOnlyBandAnalysisAsync();
+        _operatingMode = resumeMode;
+        if (!_udpListener.IsRunning)
+            await StartUdpAsync();
+        if (_udpListener.LastStatus == null)
+        {
+            BandAnalysis.PskProbeStatus = "Waiting for JTDX UDP status. Confirm JTDX is open and UDP reporting is enabled, then start again.";
+            _pskPropagationSurveyRunning = false;
+            return;
+        }
+
+        _bandSurveyCancellation?.Cancel();
+        _bandSurveyCancellation?.Dispose();
+        _bandSurveyCancellation = new CancellationTokenSource();
+        var cancellationToken = _bandSurveyCancellation.Token;
+        _bandSurveyDecodes.Clear();
+        foreach (var row in BandAnalysis.Bands)
+        {
+            row.ResetSurvey();
+            _bandSurveyDecodes[row.Band] = new List<DecodeMessage>();
+        }
+        BandAnalysis.PskMap.BeginSurvey();
+
+        BandAnalysis.IsRunning = true;
+        BandAnalysis.PskProgress = "Starting PSK propagation survey";
+        BandAnalysis.OverallSummary = "PSK propagation survey in progress; passive received-band results update before each pair of CQ probes.";
+        BandAnalysis.PskProbeStatus = $"Transmitted survey started: {string.Join(", ", enabledBands.Select(row => row.Band))}.";
+        AddAction($"PSK propagation survey started: {string.Join(", ", enabledBands.Select(row => row.Band))}; {BandAnalysis.PskPropagationProbeMinutes} minute measurement; exactly two CQ probes per band.");
+
+        var decision = "PSK propagation survey started.";
+        try
+        {
+            _pskReporterClient.SpotReceived += ObservePskReport;
+            BandAnalysis.PskProbeStatus = $"Connecting to the PSK Reporter live feed for {Settings.Settings.MyCallsign}…";
+            liveFeedConnected = await _pskReporterClient.StartLiveAsync(Settings.Settings.MyCallsign, cancellationToken);
+
+            for (var bandIndex = 0; bandIndex < enabledBands.Count; bandIndex++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var row = enabledBands[bandIndex];
+                _bandSurveyActiveBand = "";
+                row.SurveyStatus = "Changing band";
+                BandAnalysis.PskProgress = $"PSK survey: moving to {row.Band} ({bandIndex + 1}/{enabledBands.Count})";
+                if (!await MoveToBandAndConfirmAsync(row, cancellationToken))
+                    throw new InvalidOperationException($"PSK survey stopped because movement to {row.Band} was not confirmed.");
+
+                var status = _udpListener.LastStatus;
+                var mode = AmateurBandMapper.NormalizeMode(status?.Mode ?? _radioContext?.Mode);
+                if (!mode.Equals("FT8", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException($"PSK propagation probing currently requires FT8; JTDX reports {mode} on {row.Band}.");
+
+                var period = AmateurBandMapper.ReceivePeriod(mode, status?.TrPeriodSeconds ?? 0);
+                await SynchronizeBandSurveyToFullDecodeCycleAsync(row, 1, cancellationToken);
+                var passiveDuration = PskPropagationProbeTiming.PassiveListenDuration(
+                    BandAnalysis.PskPropagationProbeMinutes,
+                    period);
+                var firstFullPeriodSeconds = Math.Max(1, (int)Math.Round(period.TotalSeconds));
+                var alreadyObserved = row.SecondsObserved;
+                row.SecondsObserved = alreadyObserved + firstFullPeriodSeconds;
+                var remainingPassiveSeconds = Math.Max(0, (int)Math.Round(passiveDuration.TotalSeconds) - firstFullPeriodSeconds);
+                row.SurveyStatus = "Passive listening";
+                for (var elapsed = 0; elapsed < remainingPassiveSeconds; elapsed++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    row.SecondsObserved = alreadyObserved + firstFullPeriodSeconds + elapsed + 1;
+                    BandAnalysis.PskProgress = $"PSK survey {row.Band}: listening in both FT8 periods · {remainingPassiveSeconds - elapsed - 1}s before two CQs";
+                    await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                }
+
+                _bandSurveyActiveBand = "";
+                RefreshBandAnalysisRow(row);
+                RefreshBandAnalysisOverview(inProgress: true);
+                var probeWindow = await RunTwoConsecutivePskCqsAsync(row, bandIndex + 1, enabledBands.Count, period, cancellationToken);
+                probeWindows[row.Band] = probeWindow;
+                row.SurveyStatus = "Probe complete";
+                AddAction($"PSK propagation probe {row.Band}: two consecutive CQs completed after {row.SecondsObserved}s passive listening. {row.Detail}");
+            }
+
+            BandAnalysis.PskProgress = "PSK survey: allowing immediate live reports to arrive · 8s";
+            await Task.Delay(TimeSpan.FromSeconds(8), cancellationToken);
+            var queryResult = await _pskReporterClient.QueryRecentAsync(
+                Settings.Settings.MyCallsign,
+                TimeSpan.FromMinutes(30),
+                cancellationToken);
+            AddAction(queryResult.Status);
+            foreach (var report in queryResult.Reports)
+                pskReports[PskReporterParser.DedupeKey(report)] = report;
+
+            var measurementAvailable = liveFeedConnected || queryResult.Retrieved;
+            var matchedReportCount = 0;
+            var allMatchedReports = new List<PskReporterSpot>();
+            foreach (var row in enabledBands)
+            {
+                if (!probeWindows.TryGetValue(row.Band, out var window))
+                    continue;
+                var matched = pskReports.Values
+                    .Where(report => window.Matches(report, TimeSpan.FromSeconds(6)))
+                    .OrderBy(report => report.TransmissionTimeUtc)
+                    .ToList();
+                matchedReportCount += matched.Count;
+                allMatchedReports.AddRange(matched);
+                var metrics = _pskReporterAnalyzer.Analyze(
+                    row.Band,
+                    Settings.Settings.HomeGrid,
+                    matched,
+                    measurementAvailable);
+                row.ApplyPsk(metrics);
+                row.ConditionsScore = CalculateConditionsScore(row, resumeMode);
+                AddAction($"PSK Reporter {row.Band}: {metrics.Detail}");
+            }
+            if (allMatchedReports.Any(report => MaidenheadGrid.TryGetCentre(report.ReceiverLocator, out _, out _)))
+            {
+                BandAnalysis.PskMap.Apply(allMatchedReports, enabledBands, Settings.Settings.HomeGrid);
+                _pskReporterMapStore.Save(Settings.Settings.HomeGrid, allMatchedReports);
+                AddAction($"PSK propagation map saved with {BandAnalysis.PskMap.Reports.Count} plotted receiver-and-band points.");
+            }
+            else
+            {
+                BandAnalysis.PskMap.RetainAfterEmptySurvey();
+                AddAction("PSK propagation map retained its previous result because the completed survey contained no locator-bearing matched reports.");
+            }
+
+            var bestCandidate = ConditionsSearchPolicy.ChoosePskSurveyBand(enabledBands.Select(row =>
+                new PskSurveyBandCandidate(
+                    row.Band,
+                    row.ConditionsScore,
+                    row.NewDxccStations,
+                    row.WantedStations,
+                    row.PskMetrics.PropagationScore,
+                    row.DxReachScore,
+                    row.ActivityScore)),
+                startingBand);
+            var bestRow = bestCandidate == null
+                ? null
+                : enabledBands.FirstOrDefault(row => row.Band.Equals(bestCandidate.Band, StringComparison.OrdinalIgnoreCase));
+            if (bestRow != null)
+                BandAnalysis.SelectedBand = bestRow;
+
+            BandAnalysis.PskProgress = "PSK survey complete";
+            RefreshBandAnalysisOverview(inProgress: false);
+            BandAnalysis.Status = measurementAvailable
+                ? $"PSK propagation survey completed safely; {matchedReportCount} reception reports matched the verified CQ probes."
+                : "CQ probes completed safely, but neither PSK Reporter source was reachable; no propagation result was inferred.";
+            BandAnalysis.PskProbeStatus = $"{BandAnalysis.Status} {queryResult.Status}";
+            decision = BandAnalysis.Status;
+
+            if (resumeAutomation && bestRow != null)
+            {
+                var moved = CurrentReportedBand().Equals(bestRow.Band, StringComparison.OrdinalIgnoreCase)
+                    || await MoveToBandAndConfirmAsync(bestRow, cancellationToken);
+                var selectionText = moved
+                    ? $"{OperatingModeLabel()} selected {bestRow.Band} with combined score {bestRow.ConditionsScore:0}; assistance will resume there."
+                    : $"{OperatingModeLabel()} selected {bestRow.Band}, but JTDX did not confirm movement; assistance will resume on {CurrentReportedBand()}.";
+                BandAnalysis.PskProbeStatus += $" {selectionText}";
+                decision += $" {selectionText}";
+                AddAction($"PSK survey assistance decision: {selectionText}");
+            }
+            else if (BandAnalysis.ReturnToStartingBand
+                && !string.IsNullOrWhiteSpace(startingBand)
+                && !CurrentReportedBand().Equals(startingBand, StringComparison.OrdinalIgnoreCase))
+            {
+                var returnRow = BandAnalysis.Bands.FirstOrDefault(row => row.Band.Equals(startingBand, StringComparison.OrdinalIgnoreCase));
+                if (returnRow != null)
+                    await MoveToBandAndConfirmAsync(returnRow, cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            if (_bandSurveyPriorityNewDxcc != null)
+                decision = $"Interrupted to call New DXCC {_bandSurveyPriorityNewDxcc.Callsign} on {_bandSurveyPriorityNewDxcc.Decode.Band}.";
+            else
+                decision = "PSK propagation survey stopped by the user.";
+            BandAnalysis.PskProgress = "PSK survey stopped";
+            BandAnalysis.PskProbeStatus = decision;
+            BandAnalysis.Status = decision;
+        }
+        catch (Exception ex)
+        {
+            decision = $"PSK propagation survey stopped safely: {ex.GetBaseException().Message}";
+            BandAnalysis.PskProgress = "PSK survey stopped after an error";
+            BandAnalysis.PskProbeStatus = decision;
+            BandAnalysis.Status = decision;
+            AddAction(decision);
+        }
+        finally
+        {
+            _pskReporterClient.SpotReceived -= ObservePskReport;
+            await _pskReporterClient.StopLiveAsync();
+            _pskProbeAuthorised = false;
+            try
+            {
+                await DisablePskEnableTxAndConfirmAsync(
+                    "PSK propagation survey final safety cleanup",
+                    CancellationToken.None);
+            }
+            catch (Exception cleanupException)
+            {
+                stableHandoverReady = false;
+                resumeAutomation = false;
+                var cleanupFailure = $"Normal hunting remains stopped: {cleanupException.GetBaseException().Message}";
+                BandAnalysis.PskProbeStatus = $"{BandAnalysis.PskProbeStatus} {cleanupFailure}".Trim();
+                AddAction(cleanupFailure);
+            }
+            _bandSurveyActiveBand = "";
+            _bandSurveyFirstEligibleSlotStart = DateTime.MaxValue;
+            _bandSurveyFirstFullDecodeSignal = null;
+            BandAnalysis.IsRunning = false;
+            _pskPropagationSurveyRunning = false;
+            if (stableHandoverReady)
+            {
+                stableHandoverReady = await RestoreStableTargetAcquisitionAfterPskAsync(
+                    "PSK reporting and final band selection completed",
+                    CancellationToken.None);
+            }
+            if (!stableHandoverReady)
+            {
+                resumeAutomation = false;
+                BandAnalysis.PskProbeStatus += " Normal hunting remains stopped because JTDX could not be restored to Tx1.";
+            }
+            SaveBandAnalysisHistory(
+                "Manual PSK propagation survey",
+                automatic: false,
+                startingBand,
+                CurrentReportedBand(),
+                decision);
+        }
+
+        _operatingMode = resumeMode;
+        RefreshModeIndicators();
+        if (stableHandoverReady && _bandSurveyPriorityNewDxcc != null && !resumeAutomation)
+        {
+            _callNowSession.Begin(assistanceRunning: false);
+            _autoResume.Start(Settings.Settings, Scheduler.ScheduleItems);
+            _huntTimer.Start();
+            RefreshModeIndicators();
+            await LockAndReplyAsync(
+                _bandSurveyPriorityNewDxcc,
+                "PSK survey New DXCC priority",
+                _bandSurveyPriorityNewDxcc.PrimaryReason,
+                "One-station priority handover");
+        }
+        else if (stableHandoverReady && resumeAutomation)
+        {
+            await StartAutoResumeAsync();
+            if (_bandSurveyPriorityNewDxcc != null)
+                await HuntTickAsync();
+        }
+        else if (stableHandoverReady)
+        {
+            BandAnalysis.PskProbeStatus += " Hunting remains off, as it was before the survey.";
+            Dashboard.OverallStatus = "PSK propagation survey finished. All hunting modes remain off.";
+            AddAction("Standalone PSK propagation survey finished; hunting remained off.");
+        }
+
+        _bandSurveyPriorityNewDxcc = null;
+    }
+
+    private async Task<PskProbeWindow> RunTwoConsecutivePskCqsAsync(
+        BandAnalysisBandViewModel row,
+        int bandNumber,
+        int bandCount,
+        TimeSpan period,
+        CancellationToken cancellationToken)
+    {
+        _pskProbeObservedCqCount = 0;
+        _pskProbeLastObservedCqAt = DateTime.MinValue;
+        _pskProbeLastObservedSlot = long.MinValue;
+        _pskProbeFirstConfirmedSlot = long.MinValue;
+        _pskProbeFirstCqSignal = new TaskCompletionSource<DateTime>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pskProbeSecondCqSignal = new TaskCompletionSource<DateTime>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pskProbeFailureSignal = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pskProbeFirstNonCqStatusAt = DateTime.MinValue;
+        _pskProbeAuthorised = true;
+        // Persist this before the first physical Tx6 click. If DX Pilot closes or
+        // the survey fails, the next normal start must restore Tx1 before the
+        // unchanged stable target-acquisition engine is allowed to run.
+        Settings.Settings.PskStandaloneCleanupRequired = true;
+        _settingsService.SaveSettings(Settings.Settings);
+        var parityWasToggled = false;
+        try
+        {
+            row.SurveyStatus = "Preparing two CQs";
+            BandAnalysis.PskProgress = $"PSK survey {row.Band} ({bandNumber}/{bandCount}): selecting CQ/TX6";
+            EnsureEnableTxOff("Preparing PSK propagation CQ", _udpListener.LastStatus?.TxEnabled == true);
+            await WaitForJtdxReceiveAsync(TimeSpan.FromSeconds(20), cancellationToken);
+            _clicker.MoveClickRestore(Settings.Settings.CqTx6X, Settings.Settings.CqTx6Y);
+
+            // JTDX commonly leaves UDP Status.TxMessage on the previous message while
+            // TX is disabled. The actual outgoing Status/ALL.TXT transmission is the
+            // reliable safety confirmation. Arm immediately before a real FT8 boundary
+            // so JTDX either starts a complete CQ there or waits for the following slot
+            // selected by its Tx 00/30 / Tx 15/45 control.
+            await Task.Delay(TimeSpan.FromMilliseconds(350), cancellationToken);
+            await WaitForPskSlotArmWindowAsync(period, cancellationToken);
+
+            if (_udpListener.LastStatus?.TxEnabled != true)
+                ArmPskEnableTx();
+            BandAnalysis.PskProgress = $"PSK survey {row.Band}: armed at an FT8 boundary; waiting for CQ 1";
+            var firstTimeout = TimeSpan.FromTicks(period.Ticks * 3);
+            var firstCqAt = await WaitForPskProbeCqAsync(
+                _pskProbeFirstCqSignal,
+                firstTimeout,
+                "first CQ",
+                cancellationToken);
+
+            // A transmitting Status packet is emitted at the start of the FT8 period.
+            // Do not click Enable TX off at that point: doing so truncates CQ 1. Wait
+            // for a fresh receive Status, then use the short inter-period gap to re-arm
+            // the opposite timing for the immediately adjacent slot.
+            BandAnalysis.PskProgress = $"PSK survey {row.Band}: CQ 1 started; waiting for its full transmission to finish";
+            await WaitForPskTransmissionToFinishAsync(
+                firstCqAt,
+                period,
+                "first CQ",
+                cancellationToken);
+            await DisablePskEnableTxAndConfirmAsync(
+                $"PSK propagation {row.Band}: first CQ finished",
+                cancellationToken,
+                TimeSpan.FromMilliseconds(1200));
+            await Task.Delay(TimeSpan.FromMilliseconds(75), cancellationToken);
+            if (!ClickMappedTxEvenSelector())
+                throw new InvalidOperationException("The mapped JTDX Tx 15/45 or Tx 00/30 timing button is unavailable.");
+            parityWasToggled = true;
+            await Task.Delay(TimeSpan.FromMilliseconds(75), cancellationToken);
+            _clicker.MoveClickRestore(Settings.Settings.CqTx6X, Settings.Settings.CqTx6Y);
+            await Task.Delay(TimeSpan.FromMilliseconds(75), cancellationToken);
+            ArmPskEnableTx();
+            AddAction($"PSK propagation {row.Band}: CQ 1 finished; switched JTDX timing, reselected Tx6 and re-enabled TX for the immediately adjacent slot.");
+            BandAnalysis.PskProgress = $"PSK survey {row.Band}: CQ 1 finished; opposite timing armed for CQ 2";
+
+            var secondTimeout = period + TimeSpan.FromSeconds(5);
+            var secondCqAt = await WaitForPskProbeCqAsync(
+                _pskProbeSecondCqSignal,
+                secondTimeout,
+                "second CQ in the immediately adjacent FT8 slot",
+                cancellationToken);
+            BandAnalysis.PskProgress = $"PSK survey {row.Band}: CQ 2 started; waiting for its full transmission to finish";
+            await WaitForPskTransmissionToFinishAsync(
+                secondCqAt,
+                period,
+                "second CQ",
+                cancellationToken);
+            await DisablePskEnableTxAndConfirmAsync(
+                $"PSK propagation {row.Band}: second CQ finished",
+                cancellationToken);
+            row.SurveyStatus = "Two complete CQs";
+            BandAnalysis.PskProgress = $"PSK survey {row.Band}: two complete consecutive CQs confirmed";
+
+            var receiveReady = await WaitForJtdxReceiveAsync(TimeSpan.FromTicks(period.Ticks * 2), cancellationToken);
+            if (!receiveReady)
+                throw new InvalidOperationException("JTDX did not return to receive after the second propagation CQ.");
+            if (parityWasToggled)
+            {
+                if (!ClickMappedTxEvenSelector())
+                    throw new InvalidOperationException("The JTDX Tx timing button could not be restored after probing.");
+                parityWasToggled = false;
+            }
+            return new PskProbeWindow(row.Band, firstCqAt.ToUniversalTime(), secondCqAt.ToUniversalTime());
+        }
+        finally
+        {
+            _pskProbeAuthorised = false;
+            try
+            {
+                await DisablePskEnableTxAndConfirmAsync(
+                    "PSK propagation probe safety cleanup",
+                    CancellationToken.None);
+            }
+            finally
+            {
+                if (parityWasToggled)
+                    ClickMappedTxEvenSelector();
+                _pskProbeFirstCqSignal = null;
+                _pskProbeSecondCqSignal = null;
+                _pskProbeFailureSignal = null;
+            }
+        }
+    }
+
+    private async Task DisablePskEnableTxAndConfirmAsync(
+        string source,
+        CancellationToken cancellationToken,
+        TimeSpan? confirmationTimeout = null)
+    {
+        var armClickAt = _pskLastEnableTxClickAt;
+        var trustExistingOffAfter = armClickAt == DateTime.MinValue
+            ? DateTime.Now
+            : armClickAt.AddMilliseconds(1200);
+        var requestedTimeout = confirmationTimeout ?? TimeSpan.FromSeconds(4);
+        var timeout = requestedTimeout < TimeSpan.FromSeconds(4)
+            ? TimeSpan.FromSeconds(4)
+            : requestedTimeout;
+        var deadline = DateTime.Now + timeout;
+        var clickedOffAt = DateTime.MinValue;
+        while (DateTime.Now < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var status = _udpListener.LastStatus;
+            var freshAfterArm = status != null
+                && (armClickAt == DateTime.MinValue
+                    || status.ReceivedAt >= armClickAt.AddMilliseconds(-100));
+            if (freshAfterArm && status!.TxEnabled && clickedOffAt == DateTime.MinValue)
+            {
+                clickedOffAt = DateTime.Now;
+                _clicker.MoveClickRestore(Settings.Settings.EnableTxX, Settings.Settings.EnableTxY);
+                AddAction($"{source}; fresh JTDX Status confirmed Enable TX on, so it was clicked off at {clickedOffAt:HH:mm:ss.fff}.");
+            }
+            else if (freshAfterArm && !status!.TxEnabled && !status.Transmitting)
+            {
+                var freshAfterOffClick = clickedOffAt != DateTime.MinValue
+                    && status.ReceivedAt >= clickedOffAt.AddMilliseconds(-100);
+                var settledWithoutEnable = clickedOffAt == DateTime.MinValue
+                    && DateTime.Now >= trustExistingOffAfter;
+                if (freshAfterOffClick || settledWithoutEnable)
+                {
+                    AddAction($"{source}; JTDX freshly confirmed receive-only with Enable TX off at {status.ReceivedAt:HH:mm:ss.fff}.");
+                    _pskLastEnableTxClickAt = DateTime.MinValue;
+                    return;
+                }
+            }
+            await Task.Delay(50, cancellationToken);
+        }
+
+        throw new InvalidOperationException($"{source}; JTDX did not provide a fresh, settled confirmation that Enable TX was off.");
+    }
+
+    private void ArmPskEnableTx()
+    {
+        _pskLastEnableTxClickAt = DateTime.Now;
+        _clicker.MoveClickRestore(Settings.Settings.EnableTxX, Settings.Settings.EnableTxY);
+    }
+
+    private async Task WaitForPskSlotArmWindowAsync(
+        TimeSpan period,
+        CancellationToken cancellationToken)
+    {
+        var periodTicks = Math.Max(TimeSpan.TicksPerSecond, period.Ticks);
+        var nowUtc = DateTime.UtcNow;
+        var nextBoundaryTicks = ((nowUtc.Ticks / periodTicks) + 1) * periodTicks;
+        var armAtUtc = new DateTime(nextBoundaryTicks, DateTimeKind.Utc).AddMilliseconds(-900);
+        var delay = armAtUtc - DateTime.UtcNow;
+        if (delay > TimeSpan.Zero)
+        {
+            BandAnalysis.PskProgress = $"PSK survey: waiting {Math.Ceiling(delay.TotalSeconds):0}s to arm at the next complete FT8 boundary";
+            await Task.Delay(delay, cancellationToken);
+        }
+    }
+
+    private async Task WaitForPskTransmissionToFinishAsync(
+        DateTime transmissionStartedAt,
+        TimeSpan period,
+        string transmissionName,
+        CancellationToken cancellationToken)
+    {
+        var sawTransmitting = _udpListener.LastStatus?.Transmitting == true;
+        var deadline = DateTime.Now + period + TimeSpan.FromSeconds(5);
+        while (DateTime.Now < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var status = _udpListener.LastStatus;
+            if (status != null && status.ReceivedAt >= transmissionStartedAt.AddMilliseconds(-100))
+            {
+                if (status.Transmitting)
+                    sawTransmitting = true;
+                else if (sawTransmitting && status.ReceivedAt > transmissionStartedAt)
+                {
+                    AddAction($"PSK propagation {transmissionName} completed at {status.ReceivedAt:HH:mm:ss.fff}; JTDX returned to receive.");
+                    return;
+                }
+            }
+
+            await Task.Delay(40, cancellationToken);
+        }
+
+        throw new TimeoutException($"JTDX did not confirm that the {transmissionName} completed before the safety timeout.");
+    }
+
+    private bool ClickMappedTxEvenSelector()
+    {
+        if (!BandAnalysisViewModel.HasTxEvenCalibration(Settings.Settings))
+            return false;
+        var window = _jtdxWindowLocator.FindMainWindow(Settings.Settings.JtdxWindowTitleMatch);
+        if (window == null || window.IsMinimized)
+            return false;
+        _clicker.MoveClickRestore(
+            window.Left + Settings.Settings.JtdxTxEvenRelativeX,
+            window.Top + Settings.Settings.JtdxTxEvenRelativeY);
+        return true;
+    }
+
+    private bool ClickMappedTx1Selector()
+    {
+        if (!BandAnalysisViewModel.HasTx1Calibration(Settings.Settings))
+            return false;
+        var window = _jtdxWindowLocator.FindMainWindow(Settings.Settings.JtdxWindowTitleMatch);
+        if (window == null || window.IsMinimized)
+            return false;
+        _clicker.MoveClickRestore(
+            window.Left + Settings.Settings.JtdxTx1RelativeX,
+            window.Top + Settings.Settings.JtdxTx1RelativeY);
+        return true;
+    }
+
+    private async Task<bool> RestoreStableTargetAcquisitionAfterPskAsync(
+        string source,
+        CancellationToken cancellationToken)
+    {
+        if (!Settings.Settings.PskStandaloneCleanupRequired)
+            return true;
+
+        if (!BandAnalysisViewModel.HasTx1Calibration(Settings.Settings))
+        {
+            BandAnalysis.PskProbeStatus =
+                "Normal hunting is stopped: map JTDX's Tx1 button so DX Pilot can leave the standalone PSK sequence and restore stable target acquisition.";
+            AddAction(BandAnalysis.PskProbeStatus);
+            return false;
+        }
+
+        try
+        {
+            await DisablePskEnableTxAndConfirmAsync(
+                $"{source}: pre-Tx1 cleanup",
+                cancellationToken);
+            if (!await WaitForJtdxReceiveAsync(TimeSpan.FromSeconds(20), cancellationToken))
+            {
+                BandAnalysis.PskProbeStatus =
+                    "Normal hunting is stopped: JTDX did not confirm receive-only operation before the Tx1 reset.";
+                AddAction(BandAnalysis.PskProbeStatus);
+                return false;
+            }
+
+            if (!ClickMappedTx1Selector())
+            {
+                BandAnalysis.PskProbeStatus =
+                    "Normal hunting is stopped: the mapped JTDX Tx1 reset could not be clicked.";
+                AddAction(BandAnalysis.PskProbeStatus);
+                return false;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(350), cancellationToken);
+            var status = _udpListener.LastStatus;
+            if (status == null || status.Transmitting || status.TxEnabled)
+            {
+                BandAnalysis.PskProbeStatus =
+                    "Normal hunting is stopped: JTDX was not safely receive-only after selecting Tx1.";
+                AddAction(BandAnalysis.PskProbeStatus);
+                return false;
+            }
+
+            Settings.Settings.PskStandaloneCleanupRequired = false;
+            _settingsService.SaveSettings(Settings.Settings);
+            BandAnalysis.PskProbeStatus =
+                "Standalone PSK sequence closed: final band selected, JTDX restored to Tx1, and stable v3.4.3 target acquisition is ready.";
+            AddAction(BandAnalysis.PskProbeStatus);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            BandAnalysis.PskProbeStatus = "Normal hunting remains stopped because the Tx1 reset was cancelled.";
+            AddAction(BandAnalysis.PskProbeStatus);
+            return false;
+        }
+    }
+
+    private void ObservePskProbeStatus(JtdxStatusMessage status)
+    {
+        if (!_pskProbeAuthorised || !status.Transmitting)
+            return;
+        if (LooksLikeCq(status.TxMessage))
+        {
+            _pskProbeFirstNonCqStatusAt = DateTime.MinValue;
+            RecordPskProbeCq(status.ReceivedAt, status.TrPeriodSeconds);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(status.TxMessage))
+            return;
+        var periodSeconds = Math.Max(1, (int)(status.TrPeriodSeconds == 0 ? 15 : status.TrPeriodSeconds));
+        var statusSlot = new DateTimeOffset(status.ReceivedAt.ToUniversalTime()).ToUnixTimeSeconds() / periodSeconds;
+        if (statusSlot == _pskProbeLastObservedSlot)
+            return;
+        if (_pskProbeFirstNonCqStatusAt == DateTime.MinValue)
+        {
+            _pskProbeFirstNonCqStatusAt = DateTime.Now;
+            return;
+        }
+        if (DateTime.Now - _pskProbeFirstNonCqStatusAt >= TimeSpan.FromSeconds(2))
+            FailPskProbe($"JTDX reported transmitting '{status.TxMessage}' instead of CQ.");
+    }
+
+    private void ObservePskProbeTransmission(JtdxOutgoingTransmission transmission)
+    {
+        RecordPskProbeCq(transmission.ObservedAt, _udpListener.LastStatus?.TrPeriodSeconds ?? 15);
+    }
+
+    private async Task<DateTime> WaitForPskProbeCqAsync(
+        TaskCompletionSource<DateTime> cqSignal,
+        TimeSpan timeout,
+        string expectedTransmission,
+        CancellationToken cancellationToken)
+    {
+        var failureSignal = _pskProbeFailureSignal
+            ?? throw new InvalidOperationException("PSK propagation safety monitor was not initialised.");
+        var timeoutTask = Task.Delay(timeout, cancellationToken);
+        var completed = await Task.WhenAny(cqSignal.Task, failureSignal.Task, timeoutTask);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (completed == failureSignal.Task)
+            throw new InvalidOperationException(await failureSignal.Task);
+        if (completed == timeoutTask)
+            throw new TimeoutException($"JTDX did not confirm the {expectedTransmission} before the safety timeout.");
+        return await cqSignal.Task;
+    }
+
+    private void FailPskProbe(string reason)
+    {
+        if (!_pskProbeAuthorised || _pskProbeFailureSignal?.Task.IsCompleted == true)
+            return;
+        _pskProbeFailureSignal?.TrySetResult(reason + " Safe Enable TX cleanup was started.");
+        AddAction($"PSK propagation safety stop: {reason}");
+    }
+
+    private void RecordPskProbeCq(DateTime observedAt, uint reportedPeriodSeconds)
+    {
+        if (!_pskProbeAuthorised)
+            return;
+        var periodSeconds = Math.Max(1, (int)(reportedPeriodSeconds == 0 ? 15 : reportedPeriodSeconds));
+        var slot = PskPropagationProbeTiming.SlotNumber(observedAt, TimeSpan.FromSeconds(periodSeconds));
+        if (slot == _pskProbeLastObservedSlot)
+            return;
+        if (_pskProbeObservedCqCount == 1
+            && !PskPropagationProbeTiming.AreImmediatelyConsecutive(_pskProbeFirstConfirmedSlot, slot))
+        {
+            FailPskProbe(
+                $"The second CQ started in FT8 slot {slot}, not the immediately consecutive slot {_pskProbeFirstConfirmedSlot + 1}. The Tx timing toggle was not confirmed.");
+            return;
+        }
+        _pskProbeLastObservedSlot = slot;
+        _pskProbeFirstNonCqStatusAt = DateTime.MinValue;
+        _pskProbeLastObservedCqAt = observedAt;
+        _pskProbeObservedCqCount++;
+        if (_pskProbeObservedCqCount == 1)
+            _pskProbeFirstConfirmedSlot = slot;
+        AddAction($"PSK propagation CQ {_pskProbeObservedCqCount}/2 confirmed at {observedAt:HH:mm:ss} on {CurrentReportedBand()}.");
+        if (_pskProbeObservedCqCount == 1)
+            _pskProbeFirstCqSignal?.TrySetResult(observedAt);
+        else if (_pskProbeObservedCqCount == 2)
+            _pskProbeSecondCqSignal?.TrySetResult(observedAt);
+    }
+
+    private async Task StartBandSurveyCoreAsync(bool automatic, string triggerReason, int? dwellMinutesOverride)
+    {
+        if (!BandAnalysisViewModel.HasUsableCalibration(Settings.Settings))
+        {
+            BandAnalysis.Status = "Map and test the band button strip before starting a survey.";
+            return;
+        }
+
+        var enabledBands = BandAnalysis.Bands.Where(row => row.Enabled).ToList();
+        if (enabledBands.Count == 0)
+        {
+            BandAnalysis.Status = "Select at least one band to survey.";
+            return;
+        }
+
+        BandAnalysis.SaveTo(Settings.Settings);
+        SaveAll();
+        // A user-started survey is also a temporary interruption when an
+        // assistance mode is running. Preserve and resume that mode exactly as
+        // an automatically triggered Conditions Search does.
+        var resumeAutomation = _autoResume.IsRunning;
+        var resumeMode = _operatingMode;
+        _bandSurveyAutomatic = automatic;
+        _bandSurveyResumesAssistance = resumeAutomation;
+        _bandSurveyTriggerReason = triggerReason;
+        _bandSurveyPriorityNewDxcc = null;
+        _bandButtonStripOverlay?.Close();
+        await PrepareForReceiveOnlyBandAnalysisAsync();
+        _operatingMode = resumeMode;
+        if (!_udpListener.IsRunning)
+            await StartUdpAsync();
+        if (_udpListener.LastStatus == null)
+        {
+            BandAnalysis.Status = "Waiting for JTDX UDP status. Confirm JTDX is open and UDP reporting is enabled, then start again.";
+            AddAction(BandAnalysis.Status);
+            _bandSurveyAutomatic = false;
+            _bandSurveyResumesAssistance = false;
+            _operatingMode = resumeMode;
+            RefreshModeIndicators();
+            if (resumeAutomation)
+                await StartAutoResumeAsync();
+            return;
+        }
+
+        _bandSurveyCancellation?.Cancel();
+        _bandSurveyCancellation?.Dispose();
+        _bandSurveyCancellation = new CancellationTokenSource();
+        var cancellationToken = _bandSurveyCancellation.Token;
+        var startingBand = CurrentReportedBand();
+        _bandSurveyDecodes.Clear();
+        foreach (var row in BandAnalysis.Bands)
+        {
+            row.ResetSurvey();
+            _bandSurveyDecodes[row.Band] = new List<DecodeMessage>();
+        }
+
+        BandAnalysis.IsRunning = true;
+        BandAnalysis.OverallSummary = "Survey in progress; results update after each received decode.";
+        var dwellMinutes = Math.Clamp(dwellMinutesOverride ?? BandAnalysis.DwellMinutes, 1, 3);
+        AddAction($"{(automatic ? "Automatic Conditions Search" : "Receive-only band survey")} started ({triggerReason}): {string.Join(", ", enabledBands.Select(row => row.Band))}; {dwellMinutes} minute(s) per band; {BandAnalysis.SurveyCycles} cycle(s).");
+
+        var completedNormally = false;
+        var historySaved = false;
+        var selectedBandForHistory = startingBand;
+        var decisionForHistory = "Survey started.";
+        try
+        {
+            var dwellSeconds = dwellMinutes * 60;
+            for (var cycle = 1; cycle <= BandAnalysis.SurveyCycles; cycle++)
+            {
+                for (var bandIndex = 0; bandIndex < enabledBands.Count; bandIndex++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var row = enabledBands[bandIndex];
+                    _bandSurveyActiveBand = "";
+                    row.SurveyStatus = "Changing band";
+                    BandAnalysis.Progress = $"Cycle {cycle}/{BandAnalysis.SurveyCycles}: moving to {row.Band} ({bandIndex + 1}/{enabledBands.Count})";
+                    if (!await MoveToBandAndConfirmAsync(row, cancellationToken))
+                    {
+                        row.SurveyStatus = "Movement failed";
+                        throw new InvalidOperationException($"Survey stopped because movement to {row.Band} was not confirmed.");
+                    }
+
+                    await SynchronizeBandSurveyToFullDecodeCycleAsync(row, cycle, cancellationToken);
+                    row.SurveyStatus = $"Listening · cycle {cycle}";
+                    var alreadyObserved = row.SecondsObserved;
+                    for (var elapsed = 0; elapsed < dwellSeconds; elapsed++)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        row.SecondsObserved = alreadyObserved + elapsed + 1;
+                        BandAnalysis.Progress = $"Cycle {cycle}/{BandAnalysis.SurveyCycles}: {row.Band}, {dwellSeconds - elapsed - 1}s remaining";
+                        await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                    }
+
+                    _bandSurveyActiveBand = "";
+                    RefreshBandAnalysisRow(row);
+                    row.SurveyStatus = cycle == BandAnalysis.SurveyCycles ? "Complete" : $"Cycle {cycle} complete";
+                    RefreshBandAnalysisOverview(inProgress: true);
+                    AddAction($"Band survey {row.Band}: {row.Detail}");
+                }
+            }
+
+            BandAnalysis.Progress = "Survey complete";
+            BandAnalysis.Status = "Receive-only band survey completed successfully.";
+            RefreshBandAnalysisOverview(inProgress: false);
+            AddAction(BandAnalysis.Status);
+            completedNormally = true;
+
+            foreach (var row in BandAnalysis.Bands.Where(row => row.SecondsObserved > 0))
+                row.ConditionsScore = CalculateConditionsScore(row, resumeMode);
+
+            if (automatic || resumeAutomation)
+            {
+                var samples = BandAnalysis.Bands
+                    .Where(row => row.SecondsObserved > 0)
+                    .Select(row => (row.Quality, row.TrendScore))
+                    .ToList();
+                var choice = ConditionsSearchPolicy.ChooseBand(
+                    samples,
+                    startingBand,
+                    resumeMode,
+                    Settings.Settings.ConditionsSearchSwitchImprovementPercent);
+                // Automatic background checks retain the configured movement
+                // margin. A manually requested analysis made from an active
+                // assistance mode uses any genuinely stronger winner, without
+                // moving on an empty or exactly tied result.
+                var destinationBand = ConditionsSearchPolicy.SurveyDestinationBand(
+                    choice,
+                    startingBand,
+                    automatic,
+                    Settings.Settings.ConditionsSearchMoveToBestBand);
+                var movementConfirmed = true;
+                if (!string.IsNullOrWhiteSpace(destinationBand)
+                    && !CurrentReportedBand().Equals(destinationBand, StringComparison.OrdinalIgnoreCase))
+                {
+                    var destination = BandAnalysis.Bands.FirstOrDefault(row => row.Band.Equals(destinationBand, StringComparison.OrdinalIgnoreCase));
+                    if (destination != null)
+                        movementConfirmed = await MoveToBandAndConfirmAsync(destination, cancellationToken);
+                }
+
+                var finalBand = CurrentReportedBand();
+                var movement = !movementConfirmed
+                    ? $"Selected {destinationBand}, but JTDX did not confirm movement and remains on {finalBand}."
+                    : finalBand.Equals(startingBand, StringComparison.OrdinalIgnoreCase)
+                        ? $"Stayed on {finalBand}."
+                        : $"Moved to {finalBand}.";
+                BandAnalysis.Status = automatic
+                    ? $"Automatic Conditions Search complete: {movement} {choice.Explanation}"
+                    : $"Manual Band Analysis complete: {movement} {OperatingModeLabel()} will resume on {finalBand}.";
+                if (automatic)
+                    BandAnalysis.AutomaticStatus = BandAnalysis.Status;
+                AddAction(BandAnalysis.Status);
+                selectedBandForHistory = finalBand;
+                decisionForHistory = $"{movement} {choice.Explanation}";
+
+                if (automatic
+                    && dwellMinutesOverride == 1
+                    && BandAnalysis.DwellMinutes > 1
+                    && Settings.Settings.ConditionsSearchFullSurveyWhenAmbiguous
+                    && !choice.ShouldMove
+                    && !choice.Band.Equals(startingBand, StringComparison.OrdinalIgnoreCase))
+                {
+                    _conditionsFullConfirmationPending = true;
+                    _conditionsPendingReason = "quick results were too close; full confirmation survey";
+                    BandAnalysis.AutomaticStatus += " A full confirmation survey is queued because the quick result was close.";
+                }
+            }
+            else if (BandAnalysis.ReturnToStartingBand
+                     && !string.IsNullOrWhiteSpace(startingBand)
+                     && !CurrentReportedBand().Equals(startingBand, StringComparison.OrdinalIgnoreCase))
+            {
+                var returnRow = BandAnalysis.Bands.FirstOrDefault(row => row.Band.Equals(startingBand, StringComparison.OrdinalIgnoreCase));
+                if (returnRow != null)
+                {
+                    BandAnalysis.Status += $" Returning to {startingBand}.";
+                    await MoveToBandAndConfirmAsync(returnRow, cancellationToken);
+                }
+            }
+            selectedBandForHistory = CurrentReportedBand();
+            if (!automatic && !resumeAutomation)
+                decisionForHistory = BandAnalysis.ReturnToStartingBand
+                    ? $"Manual survey completed and returned to {selectedBandForHistory}."
+                    : $"Manual survey completed and remained on {selectedBandForHistory}.";
+            SaveBandAnalysisHistory(
+                triggerReason,
+                automatic,
+                startingBand,
+                selectedBandForHistory,
+                decisionForHistory);
+            historySaved = true;
+        }
+        catch (OperationCanceledException)
+        {
+            BandAnalysis.Status = _bandSurveyPriorityNewDxcc == null
+                ? "Band survey stopped by the user; completed observations have been retained."
+                : $"Band survey interrupted for absolute-priority New DXCC {_bandSurveyPriorityNewDxcc.Callsign} on {_bandSurveyPriorityNewDxcc.Decode.Band}.";
+            BandAnalysis.Progress = "Stopped";
+            RefreshBandAnalysisOverview(inProgress: false);
+            AddAction(BandAnalysis.Status);
+            selectedBandForHistory = CurrentReportedBand();
+            decisionForHistory = _bandSurveyPriorityNewDxcc == null
+                ? $"Survey stopped; remained on {selectedBandForHistory}."
+                : $"Interrupted to call New DXCC {_bandSurveyPriorityNewDxcc.Callsign} on {selectedBandForHistory}.";
+        }
+        catch (Exception ex)
+        {
+            BandAnalysis.Status = $"Band survey stopped safely: {ex.GetBaseException().Message}";
+            BandAnalysis.Progress = "Stopped after an error";
+            RefreshBandAnalysisOverview(inProgress: false);
+            AddAction(BandAnalysis.Status);
+            selectedBandForHistory = CurrentReportedBand();
+            decisionForHistory = $"Survey failed safely and remained on {selectedBandForHistory}: {ex.GetBaseException().Message}";
+        }
+        finally
+        {
+            if (!historySaved)
+                SaveBandAnalysisHistory(
+                    triggerReason,
+                    automatic,
+                    startingBand,
+                    selectedBandForHistory,
+                    decisionForHistory);
+            _bandSurveyActiveBand = "";
+            _bandSurveyFirstEligibleSlotStart = DateTime.MaxValue;
+            _bandSurveyFirstFullDecodeSignal = null;
+            BandAnalysis.IsRunning = false;
+            if (automatic && (completedNormally || _bandSurveyPriorityNewDxcc != null))
+                _conditionsLastSurveyCompletedAtUtc = DateTime.UtcNow;
+            _bandSurveyAutomatic = false;
+            _bandSurveyResumesAssistance = false;
+        }
+
+        if (resumeAutomation)
+        {
+            _operatingMode = resumeMode;
+            RefreshModeIndicators();
+            await StartAutoResumeAsync();
+            if (_bandSurveyPriorityNewDxcc != null)
+            {
+                BandAnalysis.AutomaticStatus = $"New DXCC priority handed to {OperatingModeLabel()}: {_bandSurveyPriorityNewDxcc.Callsign} ({_bandSurveyPriorityNewDxcc.Decode.EntityName}) on {_bandSurveyPriorityNewDxcc.Decode.Band}.";
+                AddAction(BandAnalysis.AutomaticStatus);
+                await HuntTickAsync();
+            }
+        }
+
+        _bandSurveyPriorityNewDxcc = null;
+    }
+
+    private void StopBandSurvey()
+    {
+        if (!BandAnalysis.IsRunning)
+        {
+            BandAnalysis.Status = "No band survey is running.";
+            return;
+        }
+
+        BandAnalysis.Status = "Stopping after the current receive step...";
+        _bandSurveyCancellation?.Cancel();
+    }
+
+    private async Task PrepareForReceiveOnlyBandAnalysisAsync()
+    {
+        _callNowSession.Reset();
+        _autoResume.Stop();
+        _huntTimer.Stop();
+        _operatingMode = HuntingOperatingMode.DxAssist;
+        if (_lockedTarget != null)
+        {
+            await ReleaseLockedTargetAndMaybeResumeAsync(
+                "Band Analysis started",
+                "Abandoned - receive-only Band Analysis started",
+                suppress: false,
+                resumeSniper: false);
+        }
+
+        EnsureEnableTxOff("Receive-only Band Analysis", _udpListener.LastStatus?.TxEnabled == true);
+        RefreshModeIndicators();
+    }
+
+    private async Task<bool> MoveToBandAndConfirmAsync(BandAnalysisBandViewModel row, CancellationToken cancellationToken)
+    {
+        if (!BandAnalysisViewModel.HasUsableCalibration(Settings.Settings))
+        {
+            row.MovementStatus = "Not mapped";
+            BandAnalysis.Status = "Band button strip is not mapped.";
+            return false;
+        }
+
+        var readyForRx = await WaitForJtdxReceiveAsync(TimeSpan.FromSeconds(25), cancellationToken);
+        if (!readyForRx)
+        {
+            row.MovementStatus = "RX timeout";
+            BandAnalysis.Status = $"Could not move to {row.Band}: JTDX did not become receive-only.";
+            return false;
+        }
+
+        if (CurrentReportedBand().Equals(row.Band, StringComparison.OrdinalIgnoreCase))
+        {
+            row.MovementStatus = "Confirmed";
+            return true;
+        }
+
+        var window = _jtdxWindowLocator.FindMainWindow(Settings.Settings.JtdxWindowTitleMatch);
+        if (window == null || window.IsMinimized)
+        {
+            row.MovementStatus = "Window unavailable";
+            BandAnalysis.Status = "JTDX receive window was not found or is minimized.";
+            return false;
+        }
+
+        var width = Settings.Settings.JtdxBandButtonStripRight - Settings.Settings.JtdxBandButtonStripLeft;
+        var columnWidth = width / (double)BandAnalysisViewModel.BandButtons.Length;
+        var relativeX = Settings.Settings.JtdxBandButtonStripLeft + (row.ButtonIndex + 0.5) * columnWidth;
+        var relativeY = (Settings.Settings.JtdxBandButtonStripTop + Settings.Settings.JtdxBandButtonStripBottom) / 2d;
+        var clickX = window.Left + (int)Math.Round(relativeX);
+        var clickY = window.Top + (int)Math.Round(relativeY);
+        for (var attempt = 1; attempt <= 2; attempt++)
+        {
+            var clickedAt = DateTime.Now;
+            row.MovementStatus = attempt == 1
+                ? $"Clicked {clickX},{clickY}"
+                : $"Retrying {clickX},{clickY}";
+            _clicker.MoveClickRestore(clickX, clickY);
+            AddAction(attempt == 1
+                ? $"Band Analysis requested {row.Band} using button {row.ButtonLabel} at {clickX},{clickY}; awaiting fresh JTDX UDP confirmation."
+                : $"Band Analysis retried the same mapped {row.Band} button once because JTDX still reported {CurrentReportedBand()}.");
+
+            var timeoutAt = DateTime.Now.AddSeconds(attempt == 1 ? 8 : 10);
+            while (DateTime.Now < timeoutAt)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var status = _udpListener.LastStatus;
+                if (status != null && status.ReceivedAt >= clickedAt.AddMilliseconds(-100))
+                {
+                    var reportedBand = ReportedBand(status);
+                    if (reportedBand.Equals(row.Band, StringComparison.OrdinalIgnoreCase))
+                    {
+                        row.MovementStatus = $"Confirmed {DateTime.Now:HH:mm:ss}";
+                        AddAction($"Band movement confirmed: JTDX reports {reportedBand} at {status.DialFrequencyHz / 1_000_000d:0.000000} MHz on attempt {attempt}.");
+                        return true;
+                    }
+                }
+
+                await Task.Delay(100, cancellationToken);
+            }
+        }
+
+        var actual = CurrentReportedBand();
+        row.MovementStatus = $"Failed · reports {actual}";
+        BandAnalysis.Status = $"Movement to {row.Band} was not confirmed; JTDX reports {actual}. Survey transmission remains disabled.";
+        AddAction(BandAnalysis.Status);
+        return false;
+    }
+
+    private async Task<bool> WaitForJtdxReceiveAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var timeoutAt = DateTime.Now + timeout;
+        while (DateTime.Now < timeoutAt)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var status = _udpListener.LastStatus;
+            if (status != null && !status.Transmitting && !status.TxEnabled)
+                return true;
+            await Task.Delay(100, cancellationToken);
+        }
+
+        return false;
+    }
+
+    private async Task SynchronizeBandSurveyToFullDecodeCycleAsync(
+        BandAnalysisBandViewModel row,
+        int cycle,
+        CancellationToken cancellationToken)
+    {
+        var status = _udpListener.LastStatus;
+        var mode = AmateurBandMapper.NormalizeMode(status?.Mode ?? _radioContext?.Mode);
+        var receivePeriod = AmateurBandMapper.ReceivePeriod(mode, status?.TrPeriodSeconds ?? 0);
+        var synchronizationStartedAt = DateTime.Now;
+        _bandSurveyFirstEligibleSlotStart = BandSurveyTiming.FirstEligibleSlotStart(
+            synchronizationStartedAt,
+            receivePeriod);
+        var fallbackAt = BandSurveyTiming.SilentBandFallbackAt(synchronizationStartedAt, receivePeriod);
+        _bandSurveyFirstFullDecodeSignal = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        _bandSurveyActiveBand = row.Band;
+        row.SurveyStatus = "Synchronising";
+        BandAnalysis.Status = $"{row.Band}: discarding the partial {mode} cycle and waiting for the first complete receive sample.";
+
+        while (!_bandSurveyFirstFullDecodeSignal.Task.IsCompleted && DateTime.Now < fallbackAt)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var secondsRemaining = Math.Max(0, (int)Math.Ceiling((fallbackAt - DateTime.Now).TotalSeconds));
+            BandAnalysis.Progress = $"Cycle {cycle}/{BandAnalysis.SurveyCycles}: synchronising {row.Band} to a full {mode} sample · up to {secondsRemaining}s";
+            await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+        }
+
+        var receivedFullBatch = _bandSurveyFirstFullDecodeSignal.Task.IsCompletedSuccessfully;
+        _bandSurveyFirstFullDecodeSignal = null;
+        BandAnalysis.Status = receivedFullBatch
+            ? $"{row.Band}: first complete {mode} decode batch received; timed observation started."
+            : $"{row.Band}: one complete silent {mode} period elapsed; timed observation started.";
+        AddAction(BandAnalysis.Status);
+    }
+
+    private void ObserveBandSurveyDecode(DecodeMessage decode)
+    {
+        if (!BandAnalysis.IsRunning
+            || string.IsNullOrWhiteSpace(_bandSurveyActiveBand)
+            || !decode.Band.Equals(_bandSurveyActiveBand, StringComparison.OrdinalIgnoreCase)
+            || !_bandSurveyDecodes.TryGetValue(_bandSurveyActiveBand, out var observations))
+        {
+            return;
+        }
+
+        if (decode.DecodeTime.HasValue
+            && DecodeSlotStart(decode.DecodeTime.Value, decode.ReceivedAt)
+                < _bandSurveyFirstEligibleSlotStart.AddMilliseconds(-250))
+        {
+            return;
+        }
+        if (!decode.DecodeTime.HasValue
+            && _bandSurveyFirstFullDecodeSignal != null
+            && decode.ReceivedAt < _bandSurveyFirstEligibleSlotStart
+                + AmateurBandMapper.ReceivePeriod(decode.Mode, _udpListener.LastStatus?.TrPeriodSeconds ?? 0))
+        {
+            return;
+        }
+
+        observations.Add(decode);
+        _bandSurveyFirstFullDecodeSignal?.TrySetResult(true);
+        var row = BandAnalysis.Bands.First(item => item.Band.Equals(_bandSurveyActiveBand, StringComparison.OrdinalIgnoreCase));
+        RefreshBandAnalysisRow(row);
+    }
+
+    private void RefreshBandAnalysisRow(BandAnalysisBandViewModel row)
+    {
+        if (!_bandSurveyDecodes.TryGetValue(row.Band, out var observations))
+            observations = [];
+        row.Apply(_bandQualityAnalyzer.Analyze(row.Band, observations));
+        row.ConditionsScore = CalculateConditionsScore(row, _operatingMode);
+    }
+
+    private static double CalculateConditionsScore(
+        BandAnalysisBandViewModel row,
+        HuntingOperatingMode mode)
+    {
+        var receivedScore = ConditionsSearchPolicy.Score(row.Quality, mode, row.TrendScore);
+        if (!row.PskMeasured || row.Quality.NewDxccStations > 0)
+            return receivedScore;
+
+        // Outward propagation complements, but never overrides, received targets.
+        // New DXCC retains the 10,000+ absolute-priority score above.
+        return receivedScore + row.PskMetrics.PropagationScore * 0.55;
+    }
+
+    private void RefreshBandAnalysisOverview(bool inProgress)
+    {
+        var observed = BandAnalysis.Bands.Where(row => row.SecondsObserved > 0).ToList();
+        if (observed.Count == 0)
+        {
+            BandAnalysis.OverallSummary = "No completed band observations are available.";
+            return;
+        }
+
+        var bestDx = observed.OrderByDescending(row => row.DxReachScore).ThenByDescending(row => row.DistantStations).First();
+        var mostActive = observed.OrderByDescending(row => row.ActivityScore).ThenByDescending(row => row.UniqueStations).First();
+        var bestWanted = observed.OrderByDescending(row => row.WantedStations).ThenByDescending(row => row.DxReachScore).First();
+        var bestOutward = observed
+            .Where(row => row.PskMeasured)
+            .OrderByDescending(row => row.PskMetrics.PropagationScore)
+            .ThenByDescending(row => row.PskMetrics.FarthestDistanceMiles)
+            .FirstOrDefault();
+        var prefix = inProgress ? "Provisional results" : "Survey overview";
+        BandAnalysis.OverallSummary = $"{prefix}: Best DX propagation — {bestDx.Band} ({bestDx.Assessment}, DX reach {bestDx.DxReachScore}). "
+            + $"Most active — {mostActive.Band} ({mostActive.UniqueStations} unique stations, mainly {mostActive.MainArea}). "
+            + (bestWanted.WantedStations > 0
+                ? $"Most wanted opportunities — {bestWanted.Band} ({bestWanted.WantedStations})."
+                : "No wanted stations were identified during the observed periods.")
+            + (bestOutward == null
+                ? ""
+                : $" Best outward PSK propagation: {bestOutward.Band} ({bestOutward.PskAssessment}, heard by {bestOutward.PskUniqueReceivers}, reach {bestOutward.PskReachDisplay}, score {bestOutward.PskScoreDisplay}).");
+    }
+
+    private string CurrentReportedBand()
+    {
+        return _udpListener.LastStatus == null ? "" : ReportedBand(_udpListener.LastStatus);
+    }
+
+    private static string ReportedBand(JtdxStatusMessage status)
+    {
+        return string.IsNullOrWhiteSpace(status.Band)
+            ? AmateurBandMapper.FromDialFrequency(status.DialFrequencyHz)
+            : status.Band;
+    }
+
     private void AddSchedule()
     {
         Scheduler.ScheduleItems.Add(new BandScheduleItem());
@@ -7705,9 +9665,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        _bandSurveyCancellation?.Cancel();
+        _bandSurveyCancellation?.Dispose();
+        _bandSurveyCancellation = null;
         _sessionArchiveSaveTimer.Stop();
         SaveSessionArchive();
         _allTxtMonitor.Dispose();
+        _ = _pskReporterClient.DisposeAsync();
         StopAdifWatcher();
         _targetSelectionCancellation?.Cancel();
         _targetSelectionCancellation?.Dispose();
@@ -7724,6 +9688,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
 
             _bandActivityOverlay = null;
+        }
+
+        if (_bandButtonStripOverlay != null)
+        {
+            try
+            {
+                _bandButtonStripOverlay.Close();
+            }
+            catch
+            {
+            }
+
+            _bandButtonStripOverlay = null;
         }
 
         _callsignLocationService.Dispose();

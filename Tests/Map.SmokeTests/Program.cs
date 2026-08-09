@@ -5,6 +5,7 @@ using JtdxAutoResume.V3.Views;
 using Mapsui;
 using BruTile.Web;
 using Mapsui.Tiling.Layers;
+using System.IO;
 using System.Reflection;
 
 static void Require(bool condition, string message)
@@ -312,7 +313,67 @@ Require(map.VisibleStationCount == 4, "Currently called station was hidden by th
 map.ActiveCallsign = "";
 Require(map.VisibleStationCount == 3, "Released stale target remained visible as an active call.");
 
+var psk40 = new BandAnalysisBandViewModel("40m", "40", 3, true);
+psk40.ApplyPsk(new PskReporterMetrics
+{
+    Measured = true,
+    UniqueReceivers = 1,
+    PropagationScore = 62,
+    Assessment = "Good outward opening"
+});
+var psk20 = new BandAnalysisBandViewModel("20m", "20", 5, true);
+psk20.ApplyPsk(new PskReporterMetrics
+{
+    Measured = true,
+    UniqueReceivers = 1,
+    PropagationScore = 48,
+    Assessment = "Usable outward propagation"
+});
+var pskMap = new PskReporterMapViewModel();
+var probeTime = new DateTime(2026, 8, 9, 12, 0, 15, DateTimeKind.Utc);
+List<PskReporterSpot> pskSpots =
+[
+    new PskReporterSpot { Band = "40m", ReceiverCallsign = "K1ABC", ReceiverLocator = "FN42aa", ReceiverDxcc = "United States", SignalReportDb = -9, TransmissionTimeUtc = probeTime },
+    new PskReporterSpot { Band = "40m", ReceiverCallsign = "K1ABC", ReceiverLocator = "FN42aa", ReceiverDxcc = "United States", SignalReportDb = -16, TransmissionTimeUtc = probeTime },
+    new PskReporterSpot { Band = "20m", ReceiverCallsign = "K1ABC", ReceiverLocator = "FN42aa", ReceiverDxcc = "United States", SignalReportDb = -12, TransmissionTimeUtc = probeTime.AddSeconds(15) }
+];
+pskMap.Apply(
+pskSpots,
+[psk40, psk20],
+"IO83up");
+Require(pskMap.Reports.Count == 2, "PSK map did not deduplicate repeated reports while retaining the same receiver on different bands.");
+Require(pskMap.Bands.Count == 2 && pskMap.Bands.Select(item => item.Colour).Distinct().Count() == 2,
+    "PSK map legend did not retain distinct colours for each surveyed band.");
+Require(pskMap.SelectedReport != null && pskMap.HomeGrid == "IO83UP" && pskMap.HasReports,
+    "PSK map did not expose its initial selection, home locator and report state.");
+Require(pskMap.Reports.Single(item => item.Band == "40m").SignalReportDb == -9,
+    "PSK map did not retain the strongest duplicate receiver report.");
+pskMap.BeginSurvey();
+Require(pskMap.Reports.Count == 2 && pskMap.Status.Contains("retaining", StringComparison.OrdinalIgnoreCase),
+    "Starting a new PSK survey erased the previous useful map.");
+pskMap.RetainAfterEmptySurvey();
+Require(pskMap.Reports.Count == 2 && pskMap.Status.Contains("retained", StringComparison.OrdinalIgnoreCase),
+    "An empty PSK survey erased the previous useful map.");
+
+var pskStoreFolder = Path.Combine(Path.GetTempPath(), $"DXPilot-PskMapTests-{Guid.NewGuid():N}");
+try
+{
+    var pskStore = new PskReporterMapStore(pskStoreFolder);
+    pskStore.Save("IO83up", pskSpots);
+    var restoredPsk = pskStore.Load();
+    Require(restoredPsk != null
+            && restoredPsk.HomeGrid == "IO83UP"
+            && restoredPsk.Reports.Count == 2
+            && restoredPsk.Reports.Single(item => item.Band == "40m").SignalReportDb == -9,
+        "The latest PSK receiver map did not survive a persistence round-trip.");
+}
+finally
+{
+    if (Directory.Exists(pskStoreFolder))
+        Directory.Delete(pskStoreFolder, recursive: true);
+}
+
 map.Clear();
 Require(map.StationCount == 0 && map.Stations.Count == 0, "Clear map did not clear session stations.");
 
-Console.WriteLine("PASS: Grid4-normalized map/Wanted status, world-scale raster-cached LoTW confirmations, colour scopes, two-minute default, QRZ refinement, TX-safe semantic colours, contactability, active-call retention, stale filtering and session clearing.");
+Console.WriteLine("PASS: Grid4-normalized map/Wanted status, persistent PSK band-coloured propagation plotting, world-scale raster-cached LoTW confirmations, colour scopes, two-minute default, QRZ refinement, TX-safe semantic colours, contactability, active-call retention, stale filtering and session clearing.");

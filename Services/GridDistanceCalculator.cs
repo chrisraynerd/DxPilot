@@ -9,11 +9,29 @@ public sealed class GridDistanceCalculator
         if (home == null || target == null)
             return null;
 
+        return DistanceKm(home.Value.Lat, home.Value.Lon, target.Value.Lat, target.Value.Lon);
+    }
+
+    public double? DistanceKm(string homeGrid, double targetLatitude, double targetLongitude)
+    {
+        var home = ToLatLon(homeGrid);
+        if (home == null
+            || targetLatitude is < -90 or > 90
+            || targetLongitude is < -180 or > 180)
+        {
+            return null;
+        }
+
+        return DistanceKm(home.Value.Lat, home.Value.Lon, targetLatitude, targetLongitude);
+    }
+
+    private static double DistanceKm(double homeLatitude, double homeLongitude, double targetLatitude, double targetLongitude)
+    {
         const double earthRadiusKm = 6371.0;
-        var dLat = ToRadians(target.Value.Lat - home.Value.Lat);
-        var dLon = ToRadians(target.Value.Lon - home.Value.Lon);
-        var lat1 = ToRadians(home.Value.Lat);
-        var lat2 = ToRadians(target.Value.Lat);
+        var dLat = ToRadians(targetLatitude - homeLatitude);
+        var dLon = ToRadians(targetLongitude - homeLongitude);
+        var lat1 = ToRadians(homeLatitude);
+        var lat2 = ToRadians(targetLatitude);
 
         var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2)
             + Math.Cos(lat1) * Math.Cos(lat2) * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);

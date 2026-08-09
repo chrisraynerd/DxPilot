@@ -101,6 +101,10 @@ public sealed class DxTargetScorer
         }
         else if (!decode.DistanceKm.HasValue && decode.EntityLatitude.HasValue && decode.EntityLongitude.HasValue)
         {
+            decode.DistanceKm = _distanceCalculator.DistanceKm(
+                settings.HomeGrid,
+                decode.EntityLatitude.Value,
+                decode.EntityLongitude.Value);
             decode.DistanceSource = "EntityApprox";
         }
         else if (!decode.DistanceKm.HasValue)

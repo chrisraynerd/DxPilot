@@ -327,6 +327,7 @@ public sealed class SettingsService
         NormalizeWantedDefaults(settings);
         NormalizeLayoutDefaults(settings);
         NormalizeJtdxGuiSelectionDefaults(settings);
+        NormalizeBandAnalysisDefaults(settings);
         NormalizeQrzDefaults(settings);
         NormalizePermanentSuppressions(settings);
         NormalizeLocationHuntAreas(settings);
@@ -666,6 +667,75 @@ public sealed class SettingsService
 
         if (string.IsNullOrWhiteSpace(settings.JtdxBandCalibrationVersion))
             settings.JtdxBandCalibrationVersion = "grid-v1";
+    }
+
+    private static void NormalizeBandAnalysisDefaults(AppSettings settings)
+    {
+        var supportedBands = new HashSet<string>(
+            ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m"],
+            StringComparer.OrdinalIgnoreCase);
+        settings.BandAnalysisEnabledBands = (settings.BandAnalysisEnabledBands ?? [])
+            .Where(supportedBands.Contains)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (settings.BandAnalysisEnabledBands.Count == 0)
+            settings.BandAnalysisEnabledBands = ["40m", "30m", "20m", "17m", "15m"];
+
+        settings.BandAnalysisDwellMinutes = Math.Clamp(
+            settings.BandAnalysisDwellMinutes <= 0 ? 2 : settings.BandAnalysisDwellMinutes,
+            1,
+            3);
+        settings.BandAnalysisSurveyCycles = Math.Clamp(
+            settings.BandAnalysisSurveyCycles <= 0 ? 1 : settings.BandAnalysisSurveyCycles,
+            1,
+            5);
+        settings.PskPropagationProbeMinutes = Math.Clamp(
+            settings.PskPropagationProbeMinutes <= 0 ? 1 : settings.PskPropagationProbeMinutes,
+            1,
+            5);
+        settings.ConditionsSearchCooldownMinutes = Math.Clamp(
+            settings.ConditionsSearchCooldownMinutes <= 0 ? 45 : settings.ConditionsSearchCooldownMinutes,
+            15,
+            180);
+        settings.ConditionsSearchMinimumBandMinutes = Math.Clamp(
+            settings.ConditionsSearchMinimumBandMinutes <= 0 ? 15 : settings.ConditionsSearchMinimumBandMinutes,
+            5,
+            60);
+        settings.ConditionsSearchMonitoringWindowMinutes = Math.Clamp(
+            settings.ConditionsSearchMonitoringWindowMinutes <= 0 ? 5 : settings.ConditionsSearchMonitoringWindowMinutes,
+            3,
+            15);
+        settings.ConditionsSearchNoUsefulTargetMinutes = Math.Clamp(
+            settings.ConditionsSearchNoUsefulTargetMinutes <= 0 ? 10 : settings.ConditionsSearchNoUsefulTargetMinutes,
+            3,
+            60);
+        settings.ConditionsSearchLowStationThreshold = Math.Clamp(
+            settings.ConditionsSearchLowStationThreshold <= 0 ? 5 : settings.ConditionsSearchLowStationThreshold,
+            1,
+            30);
+        settings.ConditionsSearchLowActivityPersistMinutes = Math.Clamp(
+            settings.ConditionsSearchLowActivityPersistMinutes <= 0 ? 3 : settings.ConditionsSearchLowActivityPersistMinutes,
+            1,
+            15);
+        settings.ConditionsSearchPoorReplyAttempts = Math.Clamp(
+            settings.ConditionsSearchPoorReplyAttempts <= 0 ? 8 : settings.ConditionsSearchPoorReplyAttempts,
+            3,
+            30);
+        settings.ConditionsSearchPoorReplyDistinctStations = Math.Clamp(
+            settings.ConditionsSearchPoorReplyDistinctStations <= 0 ? 3 : settings.ConditionsSearchPoorReplyDistinctStations,
+            2,
+            10);
+        settings.ConditionsSearchSilentMinutes = Math.Clamp(
+            settings.ConditionsSearchSilentMinutes <= 0 ? 4 : settings.ConditionsSearchSilentMinutes,
+            2,
+            20);
+        settings.ConditionsSearchSwitchImprovementPercent = Math.Clamp(
+            settings.ConditionsSearchSwitchImprovementPercent <= 0 ? 20 : settings.ConditionsSearchSwitchImprovementPercent,
+            5,
+            100);
+        settings.ConditionsSearchScheduleUtc ??= "";
+        if (string.IsNullOrWhiteSpace(settings.JtdxBandButtonStripCalibrationVersion))
+            settings.JtdxBandButtonStripCalibrationVersion = "band-strip-v1";
     }
 
     public List<BandScheduleItem> LoadSchedule()
