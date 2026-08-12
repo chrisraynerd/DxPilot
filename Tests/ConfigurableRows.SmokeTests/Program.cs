@@ -1025,7 +1025,7 @@ var mainWindowXaml = File.ReadAllText(Path.Combine(sourceRoot, "MainWindow.xaml"
 var compactStripXaml = File.ReadAllText(Path.Combine(sourceRoot, "Views", "CompactConditionsStrip.xaml"));
 var compactStripCode = File.ReadAllText(Path.Combine(sourceRoot, "Views", "CompactConditionsStrip.xaml.cs"));
 var compactStripCount = mainWindowXaml.Split("<views:CompactConditionsStrip", StringSplitOptions.None).Length - 1;
-var dashboardStart = mainWindowXaml.IndexOf("<TabItem Header=\"Dashboard\">", StringComparison.Ordinal);
+var dashboardStart = mainWindowXaml.IndexOf("<TabItem Header=\"Live Monitor\">", StringComparison.Ordinal);
 var dxAssistStart = mainWindowXaml.IndexOf("<TabItem Header=\"DX Assist\">", StringComparison.Ordinal);
 var dashboardTabXaml = dashboardStart >= 0 && dxAssistStart > dashboardStart
     ? mainWindowXaml[dashboardStart..dxAssistStart]
@@ -1037,7 +1037,13 @@ if (compactStripCount != 7
     || !compactStripXaml.Contains("{Binding State}", StringComparison.Ordinal)
     || compactStripCode.Contains("DispatcherTimer", StringComparison.Ordinal))
 {
-    failures.Add("The compact global countdown strip was not shared across all seven non-Dashboard tabs using the existing live Band Analysis indicators.");
+    failures.Add("The compact global countdown strip was not shared across all seven non-Live-Monitor workspaces using the existing live Band Analysis indicators.");
+}
+if (!mainWindowXaml.Contains("AppNavigationTabControlStyle", StringComparison.Ordinal)
+    || !mainWindowXaml.Contains("CurrentTargetStatus.SelectedTargetDisplay", StringComparison.Ordinal)
+    || !mainWindowXaml.Contains("CurrentTargetStatus.TxGateStatus", StringComparison.Ordinal))
+{
+    failures.Add("The presentation-only application shell did not retain persistent target/TX state or the designed workspace navigation.");
 }
 var resolver = new DxccResolver(Path.Combine(sourceRoot, "Data", "cty.csv"));
 var kg4ExpectedEntities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

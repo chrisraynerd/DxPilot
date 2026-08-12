@@ -4,6 +4,12 @@
 FT8/FT4 decodes and can select wanted DXCC entities, grids, US states and
 configured geographical areas.
 
+The next development release is **v4.0.0**, a presentation-only redesign built on
+the unchanged v3.9.7 operating engine. It introduces a persistent radio/target/TX
+header, designed workspace navigation in place of native Windows tabs, a true Live
+Monitor, and distinct visual identities for DX Assist, Wanted Sniper and Location
+Hunt. No target-selection, QSO, TX, band-movement, UDP or PSK behaviour is changed.
+
 The current stable release is **v3.9.7**. Long-running sessions now batch Session
 History screen refreshes and persist the permanent archive away from the WPF UI thread,
 so a large Full Archive no longer causes a complete synchronous JSON rewrite during

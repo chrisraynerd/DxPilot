@@ -1,7 +1,7 @@
 <UserControl x:Class="JtdxAutoResume.V3.Views.DxAssistView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid Margin="0,12,0,0">
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -12,12 +12,19 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Grid.ColumnSpan="2" Margin="0,0,0,11">
+                    <TextBlock Text="DX ASSIST" Style="{StaticResource SectionEyebrow}" />
+                    <TextBlock Text="Best DX opportunities on the current band" Style="{StaticResource WorkspaceTitle}" Margin="0,2,0,0" />
+                    <TextBlock Text="Live candidates are ranked from the current JTDX radio context. New DXCC remains absolute priority."
+                               Foreground="{StaticResource AppTextMuted}" Margin="0,3,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <CheckBox Content="Auto-select best target" IsChecked="{Binding DxAssist.AutoSelectBestCq}" VerticalAlignment="Center" />
                     <ToggleButton Content="Give new grids priority"
                                   IsChecked="{Binding PrioritizeNewGridsInDxAssist, Mode=TwoWay}"
@@ -27,10 +34,10 @@
                                   ToolTip="When enabled, a globally new grid ranks below needed DXCC but above normal DX ranking. If no new grid is available, DX Assist continues with normal ranking." />
                     <TextBlock Text="{Binding LogbookStatus}" VerticalAlignment="Center" Foreground="#526577" ToolTip="{Binding AdifDiagnostics}" />
                 </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
                     <Button Content="Test Grid Selection" Command="{Binding TestGuiSelectionCommand}" MinWidth="190" />
                 </StackPanel>
-                <Border Grid.Row="1" Grid.ColumnSpan="2" BorderBrush="#D8E0E8" BorderThickness="0,1,0,0" Margin="0,10,0,0" Padding="0,8,0,0">
+                <Border Grid.Row="2" Grid.ColumnSpan="2" BorderBrush="{StaticResource AppBorder}" BorderThickness="0,1,0,0" Margin="0,10,0,0" Padding="0,9,0,0">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="1.2*" />
@@ -57,10 +64,12 @@
             <Border Grid.Column="0" Style="{StaticResource PanelBorder}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Text="Best Selectable Target" FontWeight="SemiBold" FontSize="15" />
-                        <TextBlock Text="{Binding DxAssist.BestTarget.Callsign, TargetNullValue=None}" FontSize="30" FontWeight="SemiBold" Margin="0,10,0,0" />
+                        <TextBlock Text="TOP OBSERVED OPPORTUNITY" Style="{StaticResource SectionEyebrow}" />
+                        <TextBlock Text="{Binding DxAssist.BestTarget.Callsign, TargetNullValue=None}" FontSize="34" FontWeight="Bold" Foreground="#183B56" Margin="0,8,0,0" />
                         <TextBlock Text="{Binding DxAssist.BestTarget.Decode.EntityName}" FontSize="16" Foreground="#263645" />
-                        <TextBlock Text="{Binding DxAssist.BestTarget.Score, StringFormat=Score {0}}" FontSize="16" Margin="0,4,0,0" />
+                        <Border Background="#EAF2FF" BorderBrush="#C7D9F9" BorderThickness="1" CornerRadius="5" Padding="8,4" HorizontalAlignment="Left" Margin="0,7,0,0">
+                            <TextBlock Text="{Binding DxAssist.BestTarget.Score, StringFormat=DX score {0}}" FontWeight="SemiBold" Foreground="#1D4ED8" />
+                        </Border>
                         <TextBlock Text="{Binding DxAssist.TargetSourceText}" TextWrapping="Wrap" Foreground="#526577" Margin="0,6,0,0" />
                         <TextBlock Text="{Binding DxAssist.TargetSourceRowText}" TextWrapping="Wrap" Foreground="#9A3412" FontWeight="SemiBold" Margin="0,2,0,0" />
                         <TextBlock Text="{Binding DxAssist.WantedReasonText}" TextWrapping="Wrap" Foreground="#263645" Margin="0,2,0,14" />
@@ -82,30 +91,33 @@
                         <TextBlock Text="{Binding DxAssist.LastMyTx}" TextWrapping="Wrap" Foreground="#526577" Margin="0,3,0,0" />
                         <TextBlock Text="{Binding DxAssist.LastStageChange}" TextWrapping="Wrap" Foreground="#526577" Margin="0,3,0,12" />
 
-                        <Separator />
-                        <TextBlock Text="Safety / Recovery" FontWeight="SemiBold" FontSize="15" Margin="0,14,0,6" />
-                        <TextBlock Text="{Binding DxAssist.TxVerificationText}" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding DxAssist.RecoveryModeText}" TextWrapping="Wrap" Margin="0,3,0,0" />
-                        <TextBlock Text="{Binding DxAssist.LastCorrectiveAction}" TextWrapping="Wrap" Foreground="#526577" Margin="0,3,0,0" />
-                        <TextBlock Text="{Binding DxAssist.SelectionMethodText}" TextWrapping="Wrap" Foreground="#263645" Margin="0,3,0,0" />
-                        <TextBlock Text="{Binding DxAssist.GuiSelectionStatus}" TextWrapping="Wrap" Foreground="#526577" Margin="0,3,0,0" />
-                        <TextBlock Text="{Binding DxAssist.LastObservedTransmitState}" TextWrapping="Wrap" Foreground="#526577" Margin="0,3,0,0" />
-                        <TextBlock Text="{Binding DxAssist.StuckReasonText}" TextWrapping="Wrap" Foreground="#9A3412" Margin="0,3,0,12" />
+                        <Expander Header="Technical target details" IsExpanded="False" FontWeight="SemiBold" Margin="0,5,0,0">
+                            <StackPanel Margin="0,9,0,0">
+                                <TextBlock Text="SAFETY AND RECOVERY" Style="{StaticResource SectionEyebrow}" />
+                                <TextBlock Text="{Binding DxAssist.TxVerificationText}" TextWrapping="Wrap" Margin="0,5,0,0" />
+                                <TextBlock Text="{Binding DxAssist.RecoveryModeText}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                <TextBlock Text="{Binding DxAssist.LastCorrectiveAction}" TextWrapping="Wrap" Foreground="#526577" Margin="0,3,0,0" />
+                                <TextBlock Text="{Binding DxAssist.SelectionMethodText}" TextWrapping="Wrap" Foreground="#263645" Margin="0,3,0,0" />
+                                <TextBlock Text="{Binding DxAssist.GuiSelectionStatus}" TextWrapping="Wrap" Foreground="#526577" Margin="0,3,0,0" />
+                                <TextBlock Text="{Binding DxAssist.LastObservedTransmitState}" TextWrapping="Wrap" Foreground="#526577" Margin="0,3,0,0" />
+                                <TextBlock Text="{Binding DxAssist.StuckReasonText}" TextWrapping="Wrap" Foreground="#9A3412" Margin="0,3,0,12" />
 
-                        <Separator />
-                        <TextBlock Text="Ranking Explanation" FontWeight="SemiBold" FontSize="15" Margin="0,14,0,6" />
-                        <ItemsControl ItemsSource="{Binding DxAssist.BestTarget.Reasons}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,0,0,5" />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <TextBlock Text="{Binding DxAssist.MoveOnAt}" Foreground="#526577" TextWrapping="Wrap" Margin="0,8,0,0" />
+                                <Separator />
+                                <TextBlock Text="RANKING EXPLANATION" Style="{StaticResource SectionEyebrow}" Margin="0,12,0,6" />
+                                <ItemsControl ItemsSource="{Binding DxAssist.BestTarget.Reasons}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,0,0,5" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding DxAssist.MoveOnAt}" Foreground="#526577" TextWrapping="Wrap" Margin="0,8,0,0" />
 
-                        <Separator />
-                        <TextBlock Text="DX Assist Recent Actions" FontWeight="SemiBold" FontSize="15" Margin="0,14,0,6" />
-                        <ListBox ItemsSource="{Binding DxAssistRecentActions}" BorderThickness="0" MaxHeight="140" />
+                                <Separator Margin="0,12,0,0" />
+                                <TextBlock Text="RECENT DX ASSIST ACTIONS" Style="{StaticResource SectionEyebrow}" Margin="0,12,0,6" />
+                                <ListBox ItemsSource="{Binding DxAssistRecentActions}" BorderThickness="0" MaxHeight="140" />
+                            </StackPanel>
+                        </Expander>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
@@ -123,7 +135,7 @@
                           DragCompleted="SelectedTargetSplitter_DragCompleted" />
 
             <Border Grid.Column="2" Style="{StaticResource PanelBorder}" Margin="12,0,0,0">
-                <TabControl>
+                <TabControl ItemContainerStyle="{StaticResource WorkspaceSubTabItemStyle}">
                     <TabItem Header="Ranked Target Candidates">
                         <DockPanel Margin="0,8,0,0">
                             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">

@@ -4,6 +4,22 @@
              StartupUri="MainWindow.xaml"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
+        <!-- DX Pilot visual system: restrained radio-console colours, clear action
+             hierarchy and reusable surfaces. Operating semantics remain unchanged. -->
+        <SolidColorBrush x:Key="AppNavy" Color="#0F1D2B" />
+        <SolidColorBrush x:Key="AppNavyRaised" Color="#172B3D" />
+        <SolidColorBrush x:Key="AppCanvas" Color="#EEF3F7" />
+        <SolidColorBrush x:Key="AppSurface" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="AppSurfaceMuted" Color="#F7F9FC" />
+        <SolidColorBrush x:Key="AppBorder" Color="#D7E0E8" />
+        <SolidColorBrush x:Key="AppText" Color="#14212B" />
+        <SolidColorBrush x:Key="AppTextMuted" Color="#5B6B7A" />
+        <SolidColorBrush x:Key="AppBlue" Color="#2563EB" />
+        <SolidColorBrush x:Key="AppBlueDark" Color="#1D4ED8" />
+        <SolidColorBrush x:Key="AppGreen" Color="#16A34A" />
+        <SolidColorBrush x:Key="AppAmber" Color="#D97706" />
+        <SolidColorBrush x:Key="AppRed" Color="#DC2626" />
+
         <SolidColorBrush x:Key="SemanticNeutralBackground" Color="#FFFFFF" />
         <SolidColorBrush x:Key="SemanticNeutralForeground" Color="#111827" />
         <SolidColorBrush x:Key="SemanticNewDxccBackground" Color="#E9D5FF" />
@@ -33,10 +49,58 @@
         <SolidColorBrush x:Key="SemanticInProgressBorder" Color="#16A34A" />
 
         <Style TargetType="Button">
-            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="Foreground" Value="{StaticResource AppText}" />
+            <Setter Property="BorderBrush" Value="#BAC7D3" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="14,8" />
             <Setter Property="Margin" Value="0,0,8,0" />
             <Setter Property="MinWidth" Value="96" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Focusable" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonChrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonChrome" Property="Background" Value="#EAF1F8" />
+                                <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="#8EA4B8" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonChrome" Property="Background" Value="#DCE7F1" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonChrome" Property="Opacity" Value="0.48" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource AppBlue}" />
+            <Setter Property="BorderBrush" Value="{StaticResource AppBlueDark}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource AppGreen}" />
+            <Setter Property="BorderBrush" Value="#15803D" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#B91C1C" />
+            <Setter Property="BorderBrush" Value="#991B1B" />
+            <Setter Property="Foreground" Value="White" />
         </Style>
         <Style TargetType="TextBox">
             <Setter Property="Margin" Value="0,0,10,8" />
@@ -46,11 +110,165 @@
             <Setter Property="Margin" Value="0,0,10,8" />
         </Style>
         <Style x:Key="PanelBorder" TargetType="Border">
-            <Setter Property="BorderBrush" Value="#D6DDE5" />
+            <Setter Property="BorderBrush" Value="{StaticResource AppBorder}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="Padding" Value="12" />
-            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Background" Value="{StaticResource AppSurface}" />
+        </Style>
+        <Style x:Key="StatusPill" TargetType="Border">
+            <Setter Property="Background" Value="#23384A" />
+            <Setter Property="BorderBrush" Value="#385267" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
+        <Style x:Key="SectionEyebrow" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource AppTextMuted}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+        </Style>
+        <Style x:Key="WorkspaceTitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource AppText}" />
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style x:Key="ChoiceChipCheckBox" TargetType="CheckBox">
+            <Setter Property="Background" Value="#F3F6F9" />
+            <Setter Property="BorderBrush" Value="#C8D4DF" />
+            <Setter Property="Foreground" Value="#304455" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Margin" Value="0,0,7,7" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Border x:Name="ChipChrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="15"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ChipChrome" Property="BorderBrush" Value="#7893AA" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="ChipChrome" Property="Background" Value="#183B56" />
+                                <Setter TargetName="ChipChrome" Property="BorderBrush" Value="#183B56" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="AppNavigationTabControlStyle" TargetType="TabControl">
+            <Setter Property="Background" Value="{StaticResource AppCanvas}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid KeyboardNavigation.TabNavigation="Local">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Border Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="0,0,0,1" Padding="14,7">
+                                <TabPanel IsItemsHost="True" KeyboardNavigation.TabIndex="1" Background="Transparent" />
+                            </Border>
+                            <Border Grid.Row="1" Background="{StaticResource AppCanvas}" Padding="14"
+                                    TextElement.Foreground="{StaticResource AppText}">
+                                <ContentPresenter ContentSource="SelectedContent" />
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="AppNavigationTabItemStyle" TargetType="TabItem">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#4B5D6D" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Padding" Value="15,9" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="NavChrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}"
+                                TextElement.Foreground="#4B5D6D">
+                            <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="NavChrome" Property="Background" Value="#EAF1F8" />
+                                <Setter TargetName="NavChrome" Property="TextElement.Foreground" Value="#18344C" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="NavChrome" Property="Background" Value="{StaticResource AppNavyRaised}" />
+                                <Setter TargetName="NavChrome" Property="BorderBrush" Value="#28465E" />
+                                <Setter TargetName="NavChrome" Property="TextElement.Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="WorkspaceSubTabItemStyle" TargetType="TabItem">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#526577" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="11,7" />
+            <Setter Property="Margin" Value="0,0,5,0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="SubTabChrome" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter ContentSource="Header" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SubTabChrome" Property="Background" Value="#EEF3F7" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="SubTabChrome" Property="Background" Value="#DCE9F5" />
+                                <Setter Property="Foreground" Value="#183B56" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource AppBorder}" />
+            <Setter Property="GridLinesVisibility" Value="Horizontal" />
+            <Setter Property="HorizontalGridLinesBrush" Value="#E8EEF3" />
+            <Setter Property="VerticalGridLinesBrush" Value="#EFF3F6" />
+            <Setter Property="RowHeight" Value="25" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="AlternatingRowBackground" Value="#FAFCFD" />
+        </Style>
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#EFF4F8" />
+            <Setter Property="Foreground" Value="#304455" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="BorderBrush" Value="#D7E0E8" />
+            <Setter Property="BorderThickness" Value="0,0,1,1" />
         </Style>
         <Style x:Key="WorkedCallsignTextStyle" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center" />

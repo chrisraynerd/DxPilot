@@ -7,29 +7,33 @@
         Height="780"
         MinWidth="980"
         MinHeight="660"
-        Background="#F3F6F8"
+        Background="{StaticResource AppCanvas}"
         WindowStartupLocation="CenterScreen">
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="#172331" Padding="18,12">
+        <Border DockPanel.Dock="Top" Background="{StaticResource AppNavy}" Padding="18,12,18,11">
             <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel>
-                    <TextBlock Text="DX Pilot for JTDX" FontSize="22" FontWeight="SemiBold" Foreground="White" />
-                    <TextBlock Text="{Binding RadioContextDisplay}" Foreground="#FFFFFF" FontWeight="SemiBold" Margin="0,2,0,0" />
-                    <TextBlock Text="{Binding Dashboard.OverallStatus}" Foreground="#C9D7E6" Margin="0,2,0,0" />
+                    <TextBlock Text="DX PILOT" FontSize="23" FontWeight="Bold" Foreground="White" />
+                    <TextBlock Text="INTELLIGENT JTDX ASSISTANCE" Foreground="#8FA9BE" FontSize="10" FontWeight="SemiBold" Margin="1,1,0,0" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="Start DX Assist" Command="{Binding StartDxAssistCommand}">
                         <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                            <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsDxAssistActive}" Value="True">
-                                        <Setter Property="Background" Value="#22C55E" />
+                                        <Setter Property="Background" Value="#16A34A" />
                                         <Setter Property="BorderBrush" Value="#15803D" />
-                                        <Setter Property="Foreground" Value="Black" />
+                                        <Setter Property="Foreground" Value="White" />
+                                        <Setter Property="Content" Value="DX Assist Active" />
                                         <Setter Property="FontWeight" Value="SemiBold" />
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -38,12 +42,13 @@
                     </Button>
                     <Button Content="Start Wanted Sniper" Command="{Binding StartWantedSniperCommand}">
                         <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                            <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsWantedSniperActive}" Value="True">
-                                        <Setter Property="Background" Value="#22C55E" />
+                                        <Setter Property="Background" Value="#16A34A" />
                                         <Setter Property="BorderBrush" Value="#15803D" />
-                                        <Setter Property="Foreground" Value="Black" />
+                                        <Setter Property="Foreground" Value="White" />
+                                        <Setter Property="Content" Value="Wanted Active" />
                                         <Setter Property="FontWeight" Value="SemiBold" />
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -52,20 +57,61 @@
                     </Button>
                     <Button Content="Start Location Hunt" Command="{Binding StartLocationHuntCommand}">
                         <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                            <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsLocationHuntActive}" Value="True">
-                                        <Setter Property="Background" Value="#22C55E" />
+                                        <Setter Property="Background" Value="#16A34A" />
                                         <Setter Property="BorderBrush" Value="#15803D" />
-                                        <Setter Property="Foreground" Value="Black" />
+                                        <Setter Property="Foreground" Value="White" />
+                                        <Setter Property="Content" Value="Location Active" />
                                         <Setter Property="FontWeight" Value="SemiBold" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Button.Style>
                     </Button>
-                    <Button Content="Stop All" Command="{Binding StopAutoResumeCommand}" />
+                    <Button Content="Stop All" Command="{Binding StopAutoResumeCommand}" Style="{StaticResource DangerButton}" Margin="4,0,0,0" />
                 </StackPanel>
+
+                <Grid Grid.Row="1" Grid.ColumnSpan="2" Margin="0,11,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource StatusPill}">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="8" Height="8" Fill="#38BDF8" Margin="0,0,8,0" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding CurrentBand}" Foreground="White" FontWeight="Bold" />
+                            <TextBlock Text=" · " Foreground="#8FA9BE" />
+                            <TextBlock Text="{Binding CurrentDigitalMode}" Foreground="White" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource StatusPill}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding CurrentTargetStatus.OperatingMode}" Foreground="White" FontWeight="SemiBold" />
+                            <TextBlock Text="  ·  " Foreground="#8FA9BE" />
+                            <TextBlock Text="{Binding CurrentTargetStatus.QsoState}" Foreground="#C7D7E5" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="2" Style="{StaticResource StatusPill}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="TARGET" Foreground="#8FA9BE" FontSize="10" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,9,0" />
+                            <TextBlock Grid.Column="1" Text="{Binding CurrentTargetStatus.SelectedTargetDisplay}" Foreground="White" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                    </Border>
+                    <Border Grid.Column="3" Style="{StaticResource StatusPill}" Margin="0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="TX" Foreground="#8FA9BE" FontSize="10" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBlock Text="{Binding CurrentTargetStatus.TxGateStatus}" Foreground="White" FontWeight="SemiBold" MaxWidth="290" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </Grid>
         </Border>
 
@@ -109,13 +155,15 @@
             </Grid>
         </Border>
 
-        <Border DockPanel.Dock="Top"
-                Background="#F8FAFC"
-                BorderBrush="#CBD5E1"
-                BorderThickness="0,0,0,1"
-                Padding="14,6">
-            <WrapPanel VerticalAlignment="Center">
-                <TextBlock Text="Colour key" FontWeight="SemiBold" Margin="0,0,12,0" VerticalAlignment="Center" />
+        <Expander DockPanel.Dock="Top"
+                  Header="Station colour legend"
+                  IsExpanded="False"
+                  Background="White"
+                  BorderBrush="{StaticResource AppBorder}"
+                  BorderThickness="0,0,0,1"
+                  Padding="14,6"
+                  FontWeight="SemiBold">
+            <WrapPanel VerticalAlignment="Center" Margin="0,7,0,2">
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                     <Border Style="{StaticResource SemanticLegendSwatch}" Background="{StaticResource SemanticNewDxccBackground}" />
                     <TextBlock Text="New DXCC" VerticalAlignment="Center" />
@@ -175,10 +223,11 @@
                     <TextBlock Text="Worked call" TextDecorations="Strikethrough" VerticalAlignment="Center" />
                 </StackPanel>
             </WrapPanel>
-        </Border>
+        </Expander>
 
-        <TabControl Margin="14">
-            <TabItem Header="Dashboard">
+        <TabControl Style="{StaticResource AppNavigationTabControlStyle}"
+                    ItemContainerStyle="{StaticResource AppNavigationTabItemStyle}">
+            <TabItem Header="Live Monitor">
                 <views:DashboardView />
             </TabItem>
             <TabItem Header="DX Assist">

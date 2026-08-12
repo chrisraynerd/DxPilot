@@ -1,7 +1,7 @@
 <UserControl x:Class="JtdxAutoResume.V3.Views.LocationView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid Margin="0,12,0,0">
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -10,8 +10,9 @@
         <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,10">
             <StackPanel>
                 <StackPanel>
-                    <TextBlock Text="Location" FontSize="18" FontWeight="SemiBold" />
-                    <TextBlock Text="Select one or more hunt areas. Their candidates are combined and ranked together; a contactable New DXCC anywhere still has absolute priority." Foreground="#526577" TextWrapping="Wrap" />
+                    <TextBlock Text="LOCATION HUNT" Style="{StaticResource SectionEyebrow}" />
+                    <TextBlock Text="Choose where in the world DX Pilot should hunt" Style="{StaticResource WorkspaceTitle}" Margin="0,2,0,0" />
+                    <TextBlock Text="Selected regions are combined and ranked together; a contactable New DXCC anywhere still has absolute priority." Foreground="{StaticResource AppTextMuted}" TextWrapping="Wrap" Margin="0,3,0,0" />
                     <TextBlock Text="{Binding Location.Status}" Margin="0,5,0,0" FontWeight="SemiBold" TextWrapping="Wrap" />
                 </StackPanel>
                 <DockPanel Margin="0,10,0,0">
@@ -36,8 +37,7 @@
                             <DataTemplate>
                                 <CheckBox Content="{Binding Title}"
                                           IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                          Margin="0,0,14,2"
-                                          FontWeight="SemiBold" />
+                                          Style="{StaticResource ChoiceChipCheckBox}" />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -61,8 +61,9 @@
                         <Border Style="{StaticResource PanelBorder}" Width="545" Height="285" Margin="0,0,10,10">
                             <DockPanel>
                                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,7">
-                                    <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding Summary}" Foreground="#526577" />
+                                    <TextBlock Text="HUNT REGION" Style="{StaticResource SectionEyebrow}" />
+                                    <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" Margin="0,2,0,0" />
+                                    <TextBlock Text="{Binding Summary}" Foreground="{StaticResource AppTextMuted}" />
                                 </StackPanel>
                                 <DataGrid ItemsSource="{Binding Candidates}"
                                           Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
