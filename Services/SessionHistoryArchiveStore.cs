@@ -64,7 +64,16 @@ public sealed class SessionHistoryArchiveStore
                     .ToList()
             };
             var temporary = ArchiveFile + ".tmp";
-            File.WriteAllText(temporary, JsonSerializer.Serialize(document, _jsonOptions));
+            using (var stream = new FileStream(
+                       temporary,
+                       FileMode.Create,
+                       FileAccess.Write,
+                       FileShare.None,
+                       bufferSize: 64 * 1024,
+                       FileOptions.SequentialScan))
+            {
+                JsonSerializer.Serialize(stream, document, _jsonOptions);
+            }
             File.Move(temporary, ArchiveFile, overwrite: true);
             return true;
         }

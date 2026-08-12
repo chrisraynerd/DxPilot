@@ -44,7 +44,63 @@
                 </Grid>
             </Border>
 
-        <UniformGrid Columns="6">
+            <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,10" Background="#F8FAFC">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Automatic Band Analysis — trigger monitors" FontSize="16" FontWeight="SemiBold" />
+                            <TextBlock Text="Each coloured bar empties as its condition approaches. Reaching zero makes that condition ready; cooldown and minimum-stay rules can still delay the analysis."
+                                       Foreground="#526577" TextWrapping="Wrap" Margin="0,3,12,0" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="{Binding BandAnalysis.AutomaticStatus}" TextWrapping="Wrap"
+                                   MaxWidth="410" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding BandAnalysis.ConditionsIndicators}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="#D6DDE5" BorderThickness="1" CornerRadius="5" Padding="9" Margin="0,0,8,0" Background="White">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" MinHeight="36" />
+                                        <ProgressBar Minimum="0" Maximum="100" Value="{Binding RemainingPercent, Mode=OneWay}" Height="12" Margin="0,7,0,6">
+                                            <ProgressBar.Style>
+                                                <Style TargetType="ProgressBar">
+                                                    <Setter Property="Foreground" Value="#16A34A" />
+                                                    <Setter Property="Background" Value="#DCFCE7" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding State}" Value="Near">
+                                                            <Setter Property="Foreground" Value="#F59E0B" />
+                                                            <Setter Property="Background" Value="#FEF3C7" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding State}" Value="Ready">
+                                                            <Setter Property="Foreground" Value="#DC2626" />
+                                                            <Setter Property="Background" Value="#FEE2E2" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding State}" Value="Inactive">
+                                                            <Setter Property="Foreground" Value="#94A3B8" />
+                                                            <Setter Property="Background" Value="#E2E8F0" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ProgressBar.Style>
+                                        </ProgressBar>
+                                        <TextBlock Text="{Binding Detail}" FontSize="11" TextWrapping="Wrap" MinHeight="32" />
+                                        <TextBlock Text="{Binding Explanation}" Foreground="#64748B" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+        <UniformGrid Columns="3">
             <Border Style="{StaticResource PanelBorder}" Margin="0,0,10,0">
                 <StackPanel>
                     <TextBlock Text="UDP" FontWeight="SemiBold" />
@@ -57,13 +113,13 @@
             </Border>
             <Border Style="{StaticResource PanelBorder}" Margin="0,0,10,0">
                 <StackPanel>
-                    <TextBlock Text="DX Pilot" FontWeight="SemiBold" />
+                    <TextBlock Text="Automation status" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding Dashboard.AutoResumeStatus}" TextWrapping="Wrap" Margin="0,6,0,0" />
                 </StackPanel>
             </Border>
             <Border Style="{StaticResource PanelBorder}" Margin="0,0,10,0">
                 <StackPanel>
-                    <TextBlock Text="Pixel State" FontWeight="SemiBold" />
+                    <TextBlock Text="Transmit safety" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding Dashboard.PixelState}" TextWrapping="Wrap" Margin="0,6,0,0" />
                 </StackPanel>
             </Border>
@@ -76,7 +132,7 @@
             </Border>
             <Border Style="{StaticResource PanelBorder}">
                 <StackPanel>
-                    <TextBlock Text="Resumes" FontWeight="SemiBold" />
+                    <TextBlock Text="Automatic recoveries" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding Dashboard.ResumeCount}" FontSize="28" FontWeight="SemiBold" Margin="0,4,0,0" />
                 </StackPanel>
             </Border>

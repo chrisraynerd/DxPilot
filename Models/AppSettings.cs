@@ -175,6 +175,9 @@ public sealed class AppSettings
     // Tx6. It is cleared only after a physical Tx1 reset has completed.
     public bool PskStandaloneCleanupRequired { get; set; } = true;
     public bool ConditionsSearchEnabled { get; set; }
+    // Automatic CQ probing is deliberately opt-in for upgraded installations.
+    // Manual Band Analysis still offers the full receive + PSK workflow.
+    public bool ConditionsSearchUsePskProbes { get; set; }
     public int ConditionsSearchCooldownMinutes { get; set; } = 45;
     public int ConditionsSearchMinimumBandMinutes { get; set; } = 15;
     public int ConditionsSearchMonitoringWindowMinutes { get; set; } = 5;

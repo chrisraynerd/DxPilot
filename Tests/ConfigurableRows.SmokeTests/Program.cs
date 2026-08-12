@@ -513,6 +513,15 @@ using (var viewModel = new MainViewModel())
     if (!(bool)(InvokePrivate(viewModel, "ShouldUseUdpReplyForSource", postPskCqTarget) ?? false))
         failures.Add("A normal CQ target did not retain the stable v3.4.3 UDP Reply selection path.");
 
+    var noUsefulTargetBaseline = DateTime.UtcNow.AddMinutes(-12);
+    SetPrivate(viewModel, "_conditionsLastUsefulTargetAtUtc", noUsefulTargetBaseline);
+    InvokePrivate(viewModel, "ObserveConditionsSearchDecode", postPskCqTarget);
+    if (PrivateDateTime(viewModel, "_conditionsLastUsefulTargetAtUtc") != noUsefulTargetBaseline)
+        failures.Add("An ordinary CQ decode incorrectly reset the no-useful-target Conditions Search timer.");
+    InvokePrivate(viewModel, "MarkConditionsUsefulTarget", postPskCqTarget.ContactableCall);
+    if (PrivateDateTime(viewModel, "_conditionsLastUsefulTargetAtUtc") <= noUsefulTargetBaseline)
+        failures.Add("An assistance target accepted by DX Pilot did not reset the no-useful-target Conditions Search timer.");
+
     var initialStatus = new JtdxStatusMessage
     {
         ReceivedAt = DateTime.Now.AddMilliseconds(-100),
@@ -1012,6 +1021,24 @@ using (var viewModel = new MainViewModel())
 }
 
 var sourceRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+var mainWindowXaml = File.ReadAllText(Path.Combine(sourceRoot, "MainWindow.xaml"));
+var compactStripXaml = File.ReadAllText(Path.Combine(sourceRoot, "Views", "CompactConditionsStrip.xaml"));
+var compactStripCode = File.ReadAllText(Path.Combine(sourceRoot, "Views", "CompactConditionsStrip.xaml.cs"));
+var compactStripCount = mainWindowXaml.Split("<views:CompactConditionsStrip", StringSplitOptions.None).Length - 1;
+var dashboardStart = mainWindowXaml.IndexOf("<TabItem Header=\"Dashboard\">", StringComparison.Ordinal);
+var dxAssistStart = mainWindowXaml.IndexOf("<TabItem Header=\"DX Assist\">", StringComparison.Ordinal);
+var dashboardTabXaml = dashboardStart >= 0 && dxAssistStart > dashboardStart
+    ? mainWindowXaml[dashboardStart..dxAssistStart]
+    : "";
+if (compactStripCount != 7
+    || dashboardTabXaml.Contains("CompactConditionsStrip", StringComparison.Ordinal)
+    || !compactStripXaml.Contains("BandAnalysis.ConditionsIndicators", StringComparison.Ordinal)
+    || !compactStripXaml.Contains("{Binding RemainingPercent, Mode=OneWay}", StringComparison.Ordinal)
+    || !compactStripXaml.Contains("{Binding State}", StringComparison.Ordinal)
+    || compactStripCode.Contains("DispatcherTimer", StringComparison.Ordinal))
+{
+    failures.Add("The compact global countdown strip was not shared across all seven non-Dashboard tabs using the existing live Band Analysis indicators.");
+}
 var resolver = new DxccResolver(Path.Combine(sourceRoot, "Data", "cty.csv"));
 var kg4ExpectedEntities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 {
@@ -1337,6 +1364,49 @@ var orderedSessionCalls = sessionOrdering.Opportunities.Select(item => item.Call
 if (!orderedSessionCalls.SequenceEqual(new[] { "NEW2", "UNCONF5", "GRID1", "GRID3" }))
     failures.Add($"Session History did not keep new/unconfirmed DXCC first and then follow universal rank: {string.Join(",", orderedSessionCalls)}.");
 
+var deferredSessionView = new SessionHistoryViewModel();
+deferredSessionView.AllOpportunities.Add(new SessionDxOpportunity
+{
+    Call = "HIDDEN1",
+    Category = "Heard",
+    DxccStatus = "Confirmed",
+    LastSeenUtc = DateTime.UtcNow,
+    Outcome = "Seen only"
+});
+deferredSessionView.RequestRefresh();
+deferredSessionView.RefreshIfDue(DateTime.UtcNow.AddMinutes(1), TimeSpan.FromSeconds(5));
+if (deferredSessionView.Opportunities.Count != 0)
+    failures.Add("Session History rebuilt its visible rows while its tab was inactive.");
+deferredSessionView.SetViewActive(true);
+deferredSessionView.AllOpportunities.Add(new SessionDxOpportunity
+{
+    Call = "VISIBLE2",
+    Category = "Heard",
+    DxccStatus = "Confirmed",
+    LastSeenUtc = DateTime.UtcNow.AddSeconds(1),
+    Outcome = "Seen only"
+});
+deferredSessionView.RequestRefresh();
+deferredSessionView.RefreshIfDue(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+var remainedBatched = deferredSessionView.Opportunities.Count == 1;
+deferredSessionView.RefreshIfDue(DateTime.UtcNow.AddSeconds(6), TimeSpan.FromSeconds(5));
+if (!remainedBatched || deferredSessionView.Opportunities.Count != 2)
+    failures.Add("Visible Session History updates were not batched while retaining a prompt refresh interval.");
+deferredSessionView.SetViewActive(false);
+deferredSessionView.AllOpportunities.Add(new SessionDxOpportunity
+{
+    Call = "RETURN3",
+    Category = "Heard",
+    DxccStatus = "Confirmed",
+    LastSeenUtc = DateTime.UtcNow.AddSeconds(2),
+    Outcome = "Seen only"
+});
+deferredSessionView.RequestRefresh();
+deferredSessionView.RefreshIfDue(DateTime.UtcNow.AddMinutes(1), TimeSpan.FromSeconds(5));
+deferredSessionView.SetViewActive(true);
+if (deferredSessionView.Opportunities.Count != 3)
+    failures.Add("Session History did not catch up immediately when its tab became active.");
+
 var archiveView = new SessionHistoryViewModel();
 var archiveEntries = new[]
 {
@@ -1552,6 +1622,26 @@ if (quietLongDxQuality.UniqueStations != 9
 }
 
 var conditionsSettings = new AppSettings();
+if (conditionsSettings.ConditionsSearchUsePskProbes)
+    failures.Add("Automatic PSK CQ probing was not opt-in for an upgraded installation.");
+var conditionsViewModel = new BandAnalysisViewModel(conditionsSettings);
+if (conditionsViewModel.ConditionsIndicators.Count != 5
+    || conditionsViewModel.ConditionsIndicators.Select(item => item.Key).Distinct().Count() != 5)
+{
+    failures.Add("The clearer dashboard did not expose all five distinct Conditions Search trigger indicators.");
+}
+var unansweredIndicator = conditionsViewModel.ConditionsIndicators.First(item => item.Key == "unanswered");
+unansweredIndicator.Update(25, "6/8 attempts · 2/3 different stations");
+if (unansweredIndicator.State != "Near" || unansweredIndicator.RemainingPercent != 25)
+    failures.Add("A nearly exhausted Conditions Search counter did not display its warning state.");
+unansweredIndicator.Update(0, "8/8 attempts · 3/3 different stations");
+if (unansweredIndicator.State != "Ready")
+    failures.Add("An exhausted Conditions Search counter did not display its trigger-ready state.");
+conditionsViewModel.ConditionsSearchUsePskProbes = true;
+conditionsViewModel.ConditionsSearchLowActivityPersistMinutes = 4;
+conditionsViewModel.SaveTo(conditionsSettings);
+if (!conditionsSettings.ConditionsSearchUsePskProbes || conditionsSettings.ConditionsSearchLowActivityPersistMinutes != 4)
+    failures.Add("Automatic full-analysis permission or the clearly exposed quiet-band duration did not survive settings save.");
 var silentTrigger = ConditionsSearchPolicy.DetectTrigger(
     scheduledDue: false,
     startupDue: false,
@@ -1844,6 +1934,13 @@ static bool PrivateBool(MainViewModel viewModel, string fieldName)
     var field = typeof(MainViewModel).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
         ?? throw new InvalidOperationException($"Missing private Boolean field {fieldName}.");
     return (bool)field.GetValue(viewModel)!;
+}
+
+static DateTime PrivateDateTime(MainViewModel viewModel, string fieldName)
+{
+    var field = typeof(MainViewModel).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException($"Missing private DateTime field {fieldName}.");
+    return (DateTime)field.GetValue(viewModel)!;
 }
 
 static DecodeMessage Candidate(string band, string mode)

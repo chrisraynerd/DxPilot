@@ -24,6 +24,9 @@ public sealed class SessionHistoryViewModel : ObservableObject
     private bool _showCurrentSessionOnly = true;
     private bool _isViewingArchive;
     private string _searchText = "";
+    private bool _isViewActive;
+    private bool _refreshPending;
+    private DateTime _lastRefreshUtc = DateTime.MinValue;
 
     public SessionHistoryViewModel()
     {
@@ -178,7 +181,32 @@ public sealed class SessionHistoryViewModel : ObservableObject
             ArchiveOpportunities[index] = snapshot;
 
         if (IsViewingArchive)
+            RequestRefresh();
+    }
+
+    public void SetViewActive(bool active)
+    {
+        if (_isViewActive == active)
+            return;
+
+        _isViewActive = active;
+        if (active)
             Refresh();
+    }
+
+    public void RequestRefresh()
+    {
+        _refreshPending = true;
+    }
+
+    public void RefreshIfDue(DateTime utcNow, TimeSpan minimumInterval)
+    {
+        if (!_isViewActive || !_refreshPending)
+            return;
+        if (_lastRefreshUtc != DateTime.MinValue && utcNow - _lastRefreshUtc < minimumInterval)
+            return;
+
+        Refresh();
     }
 
     private void ToggleArchive()
@@ -190,6 +218,8 @@ public sealed class SessionHistoryViewModel : ObservableObject
 
     public void Refresh()
     {
+        _refreshPending = false;
+        _lastRefreshUtc = DateTime.UtcNow;
         var source = IsViewingArchive ? ArchiveOpportunities : AllOpportunities;
         var rows = source
             .Where(PassesFilter)

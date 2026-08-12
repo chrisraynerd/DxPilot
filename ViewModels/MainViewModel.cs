@@ -94,7 +94,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly List<BandAnalysisHistoryEntry> _bandAnalysisHistory;
     private readonly string _sessionId = $"{DateTime.UtcNow:yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}";
     private readonly DateTime _sessionStartedUtc = DateTime.UtcNow;
+    private static readonly TimeSpan SessionArchiveSaveInterval = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan SessionHistoryVisibleRefreshInterval = TimeSpan.FromSeconds(5);
+    private Task<(bool Success, string Error)> _sessionArchiveSaveTask =
+        Task.FromResult((true, ""));
     private bool _sessionArchiveDirty;
+    private bool _disposed;
     private bool _huntTickRunning;
     private BandScheduleItem? _selectedScheduleItem;
     private DxTarget? _selectedIntendedTarget;
@@ -213,6 +218,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private DateTime _conditionsBandEnteredAtUtc = DateTime.UtcNow;
     private DateTime _conditionsLastDecodeAtUtc = DateTime.UtcNow;
     private DateTime _conditionsLastUsefulTargetAtUtc = DateTime.UtcNow;
+    private string _conditionsLastUsefulTargetCallsign = "";
     private DateTime _conditionsLastReplyOrProgressAtUtc = DateTime.UtcNow;
     private DateTime _conditionsLowActivitySinceUtc = DateTime.MinValue;
     private DateTime _conditionsLastSurveyCompletedAtUtc = DateTime.MinValue;
@@ -221,6 +227,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _conditionsPendingReason = "";
     private bool _conditionsFullConfirmationPending;
     private bool _conditionsEvaluationRunning;
+    private DateTime _conditionsAutomaticStartAllowedAtUtc = DateTime.MinValue;
+    private DateTime _conditionsUserDeferredUntilUtc = DateTime.MinValue;
     private DxTarget? _bandSurveyPriorityNewDxcc;
     private bool _bandSurveyAutomatic;
     private bool _bandSurveyResumesAssistance;
@@ -407,6 +415,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _wantedRefreshTimer.Tick += (_, _) =>
         {
             RefreshWantedTimeColumns();
+            SessionHistory.RefreshIfDue(DateTime.UtcNow, SessionHistoryVisibleRefreshInterval);
             CompleteRadioContextSettlingIfReady();
             if (DateTime.UtcNow - _lastMapContactabilityRefreshUtc >= TimeSpan.FromSeconds(5))
                 RefreshMapContactability();
@@ -416,12 +425,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _wantedRefreshTimer.Start();
         _sessionArchiveSaveTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromSeconds(2)
+            Interval = SessionArchiveSaveInterval
         };
         _sessionArchiveSaveTimer.Tick += (_, _) =>
         {
             _sessionArchiveSaveTimer.Stop();
-            SaveSessionArchive();
+            BeginSessionArchiveSave();
         };
 
         WireEvents();
@@ -2893,6 +2902,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         _selectedIntendedTarget = target;
         _lockedTarget = target;
+        MarkConditionsUsefulTarget(target.Callsign);
         _targetSelectionCancellation?.Cancel();
         _targetSelectionCancellation?.Dispose();
         _targetSelectionCancellation = new CancellationTokenSource();
@@ -6061,7 +6071,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         ArchiveSessionItem(item);
-        SessionHistory.Refresh();
+        SessionHistory.RequestRefresh();
     }
 
     private void RefreshTrackedDecodeDetails(DecodeMessage decode)
@@ -6075,7 +6085,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
 
         ArchiveSessionItem(UpsertSessionOpportunity(target));
-        SessionHistory.Refresh();
+        SessionHistory.RequestRefresh();
     }
 
     private void TrackOpportunitySelected(DxTarget target, bool manual)
@@ -6094,7 +6104,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         AddSessionTimeline(item, manual ? "Manual-selected" : "Auto-selected");
         AddSessionTimeline(item, "Target selection requested");
         ArchiveSessionItem(item);
-        SessionHistory.Refresh();
+        SessionHistory.RequestRefresh();
     }
 
     private void TrackOpportunityAttempt(DxTarget? target)
@@ -6112,7 +6122,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         item.OutcomeReason = $"Call attempt {CallAttemptProgressText()}";
         AddSessionTimeline(item, item.OutcomeReason);
         ArchiveSessionItem(item);
-        SessionHistory.Refresh();
+        SessionHistory.RequestRefresh();
     }
 
     private void TrackOpportunityWorked(DxTarget target, string reason)
@@ -6128,7 +6138,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         item.OutcomeReason = reason;
         AddSessionTimeline(item, $"Worked: {reason}");
         ArchiveSessionItem(item);
-        SessionHistory.Refresh();
+        SessionHistory.RequestRefresh();
     }
 
     private void TrackOpportunitySuppressed(string callsign, DateTime until, string reason)
@@ -6145,7 +6155,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         item.SuppressedUntilUtc = until.ToUniversalTime();
         AddSessionTimeline(item, $"Suppressed until {until:HH:mm:ss}: {reason}");
         ArchiveSessionItem(item);
-        SessionHistory.Refresh();
+        SessionHistory.RequestRefresh();
     }
 
     private void TrackOpportunityReleased(DxTarget? target, string reason)
@@ -6197,7 +6207,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         AddSessionTimeline(item, $"{item.Outcome}: {reason}");
         ArchiveSessionItem(item);
-        SessionHistory.Refresh();
+        SessionHistory.RequestRefresh();
     }
 
     private SessionDxOpportunity UpsertSessionOpportunity(DxTarget target)
@@ -6416,22 +6426,70 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         SessionHistory.UpsertArchive(item);
         _sessionArchiveDirty = true;
-        if (!_sessionArchiveSaveTimer.IsEnabled)
+        if (!_disposed && !_sessionArchiveSaveTimer.IsEnabled)
             _sessionArchiveSaveTimer.Start();
     }
 
-    private void SaveSessionArchive()
+    private void BeginSessionArchiveSave()
     {
-        if (!_sessionArchiveDirty)
+        if (_disposed || !_sessionArchiveDirty)
             return;
-
-        if (_sessionArchiveStore.Save(SessionHistory.ArchiveOpportunities, out var error))
+        if (!_sessionArchiveSaveTask.IsCompleted)
         {
-            _sessionArchiveDirty = false;
+            _sessionArchiveSaveTimer.Start();
             return;
         }
 
-        SessionHistory.Status = $"Full Archive save failed: {error}";
+        // Copy only the collection references on the UI thread. Archive entries are
+        // immutable snapshots which are replaced, rather than mutated, by UpsertArchive.
+        // Sorting, cloning and JSON serialization then happen entirely off the WPF thread.
+        var snapshot = SessionHistory.ArchiveOpportunities.ToList();
+        _sessionArchiveDirty = false;
+        var saveTask = Task.Run(() =>
+        {
+            var success = _sessionArchiveStore.Save(snapshot, out var error);
+            return (success, error);
+        });
+        _sessionArchiveSaveTask = saveTask;
+        _ = ObserveSessionArchiveSaveAsync(saveTask);
+    }
+
+    private async Task ObserveSessionArchiveSaveAsync(Task<(bool Success, string Error)> saveTask)
+    {
+        var result = await saveTask.ConfigureAwait(false);
+        if (_disposed || _uiDispatcher.HasShutdownStarted || _uiDispatcher.HasShutdownFinished)
+            return;
+
+        try
+        {
+            await _uiDispatcher.InvokeAsync(() =>
+            {
+                if (!result.Success)
+                {
+                    _sessionArchiveDirty = true;
+                    SessionHistory.Status = $"Full Archive save failed: {result.Error}";
+                }
+
+                if (_sessionArchiveDirty && !_sessionArchiveSaveTimer.IsEnabled)
+                    _sessionArchiveSaveTimer.Start();
+            }, DispatcherPriority.Background);
+        }
+        catch (InvalidOperationException)
+        {
+            // The application is closing; Dispose performs the final synchronous flush.
+        }
+    }
+
+    private void FlushSessionArchive()
+    {
+        var previousResult = _sessionArchiveSaveTask.GetAwaiter().GetResult();
+        if (!_sessionArchiveDirty && previousResult.Success)
+            return;
+
+        if (_sessionArchiveStore.Save(SessionHistory.ArchiveOpportunities, out var error))
+            _sessionArchiveDirty = false;
+        else
+            SessionHistory.Status = $"Full Archive save failed: {error}";
     }
 
     private void ExpireSessionHistory()
@@ -7067,7 +7125,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             item.RefreshTimeFields();
         }
 
-        SessionHistory.Refresh();
+        SessionHistory.RequestRefresh();
     }
 
     private string JtdxRowText(DecodeMessage decode)
@@ -7350,7 +7408,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         System.Windows.Data.CollectionViewSource.GetDefaultView(DxAssist.RecentDecodes).Refresh();
         UpdateNextBestTargets();
-        SessionHistory.Refresh();
+        SessionHistory.RequestRefresh();
         PermanentlySuppressCallsignCommand.RaiseCanExecuteChanged();
         ReleaseSuppressionCommand.RaiseCanExecuteChanged();
     }
@@ -7563,6 +7621,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _conditionsBandEnteredAtUtc = enteredAtUtc;
         _conditionsLastDecodeAtUtc = enteredAtUtc;
         _conditionsLastUsefulTargetAtUtc = enteredAtUtc;
+        _conditionsLastUsefulTargetCallsign = "";
         _conditionsLowActivitySinceUtc = DateTime.MinValue;
         _conditionsMonitorDecodes.RemoveAll(decode =>
             decode.Band.Equals(band, StringComparison.OrdinalIgnoreCase));
@@ -7575,13 +7634,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var nowUtc = DateTime.UtcNow;
         _conditionsLastDecodeAtUtc = nowUtc;
         _conditionsMonitorDecodes.Add(decode);
-
-        if (decode.Targetable
-            && !string.IsNullOrWhiteSpace(DecodeTargetCall(decode))
-            && (decode.IsCq || decode.IsNewDxcc || decode.IsUnconfirmedDxcc || decode.IsNewGrid || decode.IsNewState))
-        {
-            _conditionsLastUsefulTargetAtUtc = nowUtc;
-        }
 
         if (BandAnalysis.IsRunning
             && (_bandSurveyAutomatic || _bandSurveyResumesAssistance || _pskPropagationSurveyRunning)
@@ -7609,6 +7661,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     }
 
+    private void MarkConditionsUsefulTarget(string callsign)
+    {
+        _conditionsLastUsefulTargetAtUtc = DateTime.UtcNow;
+        _conditionsLastUsefulTargetCallsign = CallsignNormalizer.Normalize(callsign);
+    }
+
     private void RecordConditionsCallAttempt(string callsign)
     {
         _conditionsCallAttempts.Add((DateTime.UtcNow, callsign.Trim().ToUpperInvariant()));
@@ -7634,19 +7692,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private async Task EvaluateConditionsSearchAsync()
     {
         BandAnalysis.SaveTo(Settings.Settings);
-        if (_conditionsEvaluationRunning
-            || !BandAnalysis.ConditionsSearchEnabled
-            || !_autoResume.IsRunning
-            || _callNowSession.IsOneShot
-            || BandAnalysis.IsRunning
-            || _bandAnalysisOperationInProgress)
+        if (_conditionsEvaluationRunning || BandAnalysis.IsRunning || _bandAnalysisOperationInProgress)
+            return;
+
+        if (!BandAnalysis.ConditionsSearchEnabled)
         {
-            if (!BandAnalysis.ConditionsSearchEnabled
-                && DateTime.UtcNow - _conditionsLastStatusUpdateAtUtc >= TimeSpan.FromSeconds(10))
+            foreach (var indicator in BandAnalysis.ConditionsIndicators)
+                indicator.Update(100, "Automatic Conditions Search is off.", active: false);
+            if (!BandAnalysis.IsRunning)
+                BandAnalysis.HideAnalysisBanner();
+            if (DateTime.UtcNow - _conditionsLastStatusUpdateAtUtc >= TimeSpan.FromSeconds(10))
             {
                 BandAnalysis.AutomaticStatus = "Automatic Conditions Search is off.";
                 _conditionsLastStatusUpdateAtUtc = DateTime.UtcNow;
             }
+            return;
+        }
+
+        if (!_autoResume.IsRunning || _callNowSession.IsOneShot)
+        {
+            foreach (var indicator in BandAnalysis.ConditionsIndicators)
+                indicator.Update(100, "Waiting for a continuous assistance mode to start.", active: false);
+            if (!BandAnalysis.IsRunning)
+                BandAnalysis.HideAnalysisBanner();
+            BandAnalysis.AutomaticStatus = "Conditions monitoring is ready; start DX Assist, Wanted Sniper or Location Hunt to activate it.";
             return;
         }
 
@@ -7657,6 +7726,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var currentBand = CurrentReportedBand();
             if (string.IsNullOrWhiteSpace(currentBand))
                 return;
+
+            // A target is "useful" only when the active assistance mode has
+            // actually accepted and locked it. Ordinary CQ decodes must not
+            // continually reset this trigger on a busy but unproductive band.
+            if (_lockedTarget != null && _huntState is HuntState.Calling or HuntState.InQso)
+                MarkConditionsUsefulTarget(_lockedTarget.Callsign);
 
             var windowCutoff = nowUtc.AddMinutes(-Settings.Settings.ConditionsSearchMonitoringWindowMinutes);
             var rolling = _conditionsMonitorDecodes
@@ -7687,6 +7762,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 _conditionsLastReplyOrProgressAtUtc
             }.Max();
             var unanswered = _conditionsCallAttempts.Where(item => item.AtUtc >= attemptCutoff).ToList();
+            var distinctUnanswered = unanswered.Select(item => item.Callsign).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+            UpdateConditionsIndicators(
+                nowUtc,
+                rollingUniqueStations,
+                unanswered.Count,
+                distinctUnanswered);
             var scheduledReason = ScheduledConditionsReason(nowUtc);
             var startupDue = Settings.Settings.ConditionsSearchSurveyOnStartup
                 && _conditionsLastSurveyCompletedAtUtc == DateTime.MinValue
@@ -7700,7 +7781,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 rollingUniqueStations,
                 _conditionsLowActivitySinceUtc == DateTime.MinValue ? TimeSpan.Zero : nowUtc - _conditionsLowActivitySinceUtc,
                 unanswered.Count,
-                unanswered.Select(item => item.Callsign).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                distinctUnanswered,
                 Settings.Settings);
             if (_conditionsFullConfirmationPending)
                 trigger = new ConditionsSearchTrigger("quick results were too close; full confirmation survey", true, 95);
@@ -7711,6 +7792,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             {
                 BandAnalysis.AutomaticStatus = $"Conditions recovered on {currentBand}; the pending automatic analysis was cancelled.";
                 _conditionsPendingReason = "";
+                _conditionsAutomaticStartAllowedAtUtc = DateTime.MinValue;
+                BandAnalysis.HideAnalysisBanner();
                 return;
             }
 
@@ -7725,11 +7808,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     BandAnalysis.AutomaticStatus = $"Monitoring {currentBand}: {rollingUniqueStations} unique stations in the rolling {Settings.Settings.ConditionsSearchMonitoringWindowMinutes}-minute trigger window.{cooldownText}";
                     _conditionsLastStatusUpdateAtUtc = nowUtc;
                 }
+                BandAnalysis.HideAnalysisBanner();
                 return;
             }
 
             if (trigger != null)
-                _conditionsPendingReason = scheduledReason ?? trigger.Reason;
+            {
+                var detectedReason = scheduledReason ?? trigger.Reason;
+                if (!_conditionsPendingReason.Equals(detectedReason, StringComparison.OrdinalIgnoreCase))
+                    _conditionsAutomaticStartAllowedAtUtc = nowUtc.AddSeconds(10);
+                _conditionsPendingReason = detectedReason;
+            }
             var reason = _conditionsPendingReason;
             var fullSurvey = trigger?.FullSurvey == true
                 || scheduledReason != null
@@ -7740,31 +7829,62 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 ? DateTime.MinValue
                 : _conditionsBandEnteredAtUtc.AddMinutes(Settings.Settings.ConditionsSearchMinimumBandMinutes);
             var permittedAt = _conditionsFullConfirmationPending
-                ? DateTime.MinValue
-                : new[] { nextSurveyAt, minimumBandUntil }.Max();
+                ? _conditionsAutomaticStartAllowedAtUtc
+                : new[] { nextSurveyAt, minimumBandUntil, _conditionsAutomaticStartAllowedAtUtc }.Max();
+
+            if (nowUtc < _conditionsUserDeferredUntilUtc)
+            {
+                BandAnalysis.AutomaticStatus = $"Automatic Band Analysis deferred by the user until {_conditionsUserDeferredUntilUtc.ToLocalTime():HH:mm}. Trigger: {reason}.";
+                BandAnalysis.HideAnalysisBanner();
+                return;
+            }
+
             if (nowUtc < permittedAt)
             {
                 BandAnalysis.AutomaticStatus = $"Conditions Search pending: {reason}. Earliest safe automatic analysis {permittedAt.ToLocalTime():HH:mm}.";
+                var seconds = Math.Max(0, (int)Math.Ceiling((permittedAt - nowUtc).TotalSeconds));
+                BandAnalysis.ShowAnalysisBanner(
+                    "AUTOMATIC BAND ANALYSIS PENDING",
+                    $"Reason: {reason}. The current contact retains priority and New DXCC remains an immediate override.",
+                    seconds <= 60 ? $"Starts when safe · approximately {seconds}s" : $"Earliest start {permittedAt.ToLocalTime():HH:mm}",
+                    "Pending");
                 return;
             }
 
             if (_huntState != HuntState.Idle
                 || _lockedTarget != null
                 || _udpListener.LastStatus?.Transmitting == true
+                || _udpListener.LastStatus?.TxEnabled == true
                 || !RadioContextReadyForSelection())
             {
                 BandAnalysis.AutomaticStatus = $"Conditions Search pending: {reason}. Waiting for the current contact and JTDX receive cycle to finish safely.";
+                BandAnalysis.ShowAnalysisBanner(
+                    "AUTOMATIC BAND ANALYSIS PENDING",
+                    $"Reason: {reason}. DX Pilot is waiting for the current call or receive cycle to finish.",
+                    "Waiting for a safe handover",
+                    "Pending");
                 return;
             }
 
             _conditionsPendingReason = "";
+            _conditionsAutomaticStartAllowedAtUtc = DateTime.MinValue;
             _conditionsFullConfirmationPending = false;
             MarkScheduledConditionsRun(nowUtc, scheduledReason);
             _bandAnalysisOperationInProgress = true;
             try
             {
                 var dwellOverride = Settings.Settings.ConditionsSearchUseQuickSurvey && !fullSurvey ? 1 : (int?)null;
-                await StartBandSurveyCoreAsync(automatic: true, triggerReason: reason, dwellMinutesOverride: dwellOverride);
+                if (BandAnalysis.ConditionsSearchUsePskProbes
+                    && BandAnalysisViewModel.HasPskTransmitCalibration(Settings.Settings))
+                {
+                    await StartPskPropagationSurveyCoreAsync(automatic: true, triggerReason: reason);
+                }
+                else
+                {
+                    if (BandAnalysis.ConditionsSearchUsePskProbes)
+                        AddAction("Automatic Band Analysis used its receive-only fallback because the PSK timing selector or Tx1 reset is not mapped.");
+                    await StartBandSurveyCoreAsync(automatic: true, triggerReason: reason, dwellMinutesOverride: dwellOverride);
+                }
             }
             finally
             {
@@ -7775,6 +7895,80 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             _conditionsEvaluationRunning = false;
         }
+    }
+
+    private void UpdateConditionsIndicators(
+        DateTime nowUtc,
+        int rollingUniqueStations,
+        int unansweredAttempts,
+        int distinctUnansweredStations)
+    {
+        static double RemainingPercent(TimeSpan remaining, TimeSpan total) =>
+            total <= TimeSpan.Zero ? 0 : Math.Clamp(remaining.TotalSeconds / total.TotalSeconds * 100d, 0, 100);
+
+        var cooldown = TimeSpan.FromMinutes(Settings.Settings.ConditionsSearchCooldownMinutes);
+        var cooldownRemaining = NextConditionsSurveyAllowedAtUtc() - nowUtc;
+        if (cooldownRemaining < TimeSpan.Zero)
+            cooldownRemaining = TimeSpan.Zero;
+        BandAnalysis.UpdateConditionIndicator(
+            "cooldown",
+            RemainingPercent(cooldownRemaining, cooldown),
+            cooldownRemaining > TimeSpan.Zero
+                ? $"{Math.Ceiling(cooldownRemaining.TotalMinutes):0} min remaining"
+                : "Ready if another condition trigger is reached");
+
+        var residence = TimeSpan.FromMinutes(Settings.Settings.ConditionsSearchMinimumBandMinutes);
+        var residenceRemaining = _conditionsBandEnteredAtUtc + residence - nowUtc;
+        if (residenceRemaining < TimeSpan.Zero)
+            residenceRemaining = TimeSpan.Zero;
+        BandAnalysis.UpdateConditionIndicator(
+            "residence",
+            RemainingPercent(residenceRemaining, residence),
+            residenceRemaining > TimeSpan.Zero
+                ? $"{Math.Ceiling(residenceRemaining.TotalMinutes):0} min before a normal trigger may move band"
+                : "Minimum stay completed");
+
+        var attemptsTarget = Math.Max(1, Settings.Settings.ConditionsSearchPoorReplyAttempts);
+        var stationsTarget = Math.Max(1, Settings.Settings.ConditionsSearchPoorReplyDistinctStations);
+        var attemptsRemainingPercent = Math.Clamp((attemptsTarget - unansweredAttempts) / (double)attemptsTarget * 100d, 0, 100);
+        var stationsRemainingPercent = Math.Clamp((stationsTarget - distinctUnansweredStations) / (double)stationsTarget * 100d, 0, 100);
+        BandAnalysis.UpdateConditionIndicator(
+            "unanswered",
+            Math.Max(attemptsRemainingPercent, stationsRemainingPercent),
+            $"{unansweredAttempts}/{attemptsTarget} attempts · {distinctUnansweredStations}/{stationsTarget} different stations");
+
+        var usefulTotal = TimeSpan.FromMinutes(Settings.Settings.ConditionsSearchNoUsefulTargetMinutes);
+        var usefulRemaining = _conditionsLastUsefulTargetAtUtc + usefulTotal - nowUtc;
+        if (usefulRemaining < TimeSpan.Zero)
+            usefulRemaining = TimeSpan.Zero;
+        BandAnalysis.UpdateConditionIndicator(
+            "useful",
+            RemainingPercent(usefulRemaining, usefulTotal),
+            usefulRemaining > TimeSpan.Zero
+                ? string.IsNullOrWhiteSpace(_conditionsLastUsefulTargetCallsign)
+                    ? $"{Math.Ceiling(usefulRemaining.TotalMinutes):0} min until the no-target trigger"
+                    : $"{Math.Ceiling(usefulRemaining.TotalMinutes):0} min remaining after {_conditionsLastUsefulTargetCallsign}"
+                : "No-useful-target trigger reached");
+
+        var silenceTotal = TimeSpan.FromMinutes(Settings.Settings.ConditionsSearchSilentMinutes);
+        var silenceRemaining = _conditionsLastDecodeAtUtc + silenceTotal - nowUtc;
+        if (silenceRemaining < TimeSpan.Zero)
+            silenceRemaining = TimeSpan.Zero;
+        var silencePercent = RemainingPercent(silenceRemaining, silenceTotal);
+        var lowTotal = TimeSpan.FromMinutes(Settings.Settings.ConditionsSearchLowActivityPersistMinutes);
+        var lowRemaining = _conditionsLowActivitySinceUtc == DateTime.MinValue
+            ? lowTotal
+            : _conditionsLowActivitySinceUtc + lowTotal - nowUtc;
+        if (lowRemaining < TimeSpan.Zero)
+            lowRemaining = TimeSpan.Zero;
+        var lowPercent = _conditionsLowActivitySinceUtc == DateTime.MinValue
+            ? 100
+            : RemainingPercent(lowRemaining, lowTotal);
+        var activityPercent = Math.Min(silencePercent, lowPercent);
+        var activityDetail = rollingUniqueStations < Settings.Settings.ConditionsSearchLowStationThreshold
+            ? $"{rollingUniqueStations} recent stations · low activity for {Math.Max(0, (int)Math.Floor((lowTotal - lowRemaining).TotalMinutes))}/{Settings.Settings.ConditionsSearchLowActivityPersistMinutes} min"
+            : $"{rollingUniqueStations} recent stations · low threshold is below {Settings.Settings.ConditionsSearchLowStationThreshold}";
+        BandAnalysis.UpdateConditionIndicator("activity", activityPercent, activityDetail);
     }
 
     private DateTime NextConditionsSurveyAllowedAtUtc()
@@ -8125,7 +8319,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _bandAnalysisOperationInProgress = true;
         try
         {
-            await StartBandSurveyCoreAsync(automatic: false, triggerReason: "Manual survey", dwellMinutesOverride: null);
+            await StartBandSurveyCoreAsync(automatic: false, triggerReason: "Manual listen-only diagnostic", dwellMinutesOverride: null);
         }
         finally
         {
@@ -8176,22 +8370,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         var estimatedMinutes = enabledCount * BandAnalysis.PskPropagationProbeMinutes;
         var answer = System.Windows.MessageBox.Show(
-            $"This PSK propagation survey will transmit exactly two CQ messages on each of {enabledCount} enabled bands.\n\n"
+            $"Full Band Analysis will listen and then transmit exactly two CQ propagation probes on each of {enabledCount} enabled bands.\n\n"
             + $"Estimated minimum time: about {estimatedMinutes:0.#} minutes plus band-change synchronisation.\n\n"
-            + "DX Pilot will stop probing for an absolute-priority New DXCC. Start the transmitted survey?",
-            "Start PSK propagation survey",
+            + "DX Pilot will show a prominent transmission warning throughout and will stop for an absolute-priority New DXCC. Start Band Analysis?",
+            "Start full Band Analysis",
             System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Warning);
         if (answer != System.Windows.MessageBoxResult.Yes)
         {
-            BandAnalysis.PskProbeStatus = "PSK propagation survey cancelled before transmitting.";
+            BandAnalysis.PskProbeStatus = "Band Analysis cancelled before transmitting.";
             return;
         }
 
         _bandAnalysisOperationInProgress = true;
         try
         {
-            await StartPskPropagationSurveyCoreAsync();
+            await StartPskPropagationSurveyCoreAsync(automatic: false, triggerReason: "Manual full Band Analysis");
         }
         finally
         {
@@ -8199,15 +8393,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task StartPskPropagationSurveyCoreAsync()
+    private async Task StartPskPropagationSurveyCoreAsync(bool automatic, string triggerReason)
     {
         if (!BandAnalysisViewModel.HasUsableCalibration(Settings.Settings))
         {
             BandAnalysis.PskProbeStatus = "Map and test the band button strip before starting a PSK propagation survey.";
+            BandAnalysis.HideAnalysisBanner();
             return;
         }
 
         var enabledBands = BandAnalysis.Bands.Where(row => row.Enabled).ToList();
+        if (enabledBands.Count == 0)
+        {
+            BandAnalysis.PskProbeStatus = "Select at least one band before starting Band Analysis.";
+            BandAnalysis.HideAnalysisBanner();
+            return;
+        }
         var resumeAutomation = _autoResume.IsRunning;
         var resumeMode = _operatingMode;
         var startingBand = CurrentReportedBand();
@@ -8218,8 +8419,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var stableHandoverReady = true;
         BandAnalysis.SaveTo(Settings.Settings);
         SaveAll();
-        _bandSurveyAutomatic = false;
-        _bandSurveyTriggerReason = "Manual PSK propagation survey";
+        _bandSurveyAutomatic = automatic;
+        _bandSurveyResumesAssistance = resumeAutomation;
+        _bandSurveyTriggerReason = triggerReason;
         _bandSurveyPriorityNewDxcc = null;
         _pskPropagationSurveyRunning = true;
         _bandButtonStripOverlay?.Close();
@@ -8231,6 +8433,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             BandAnalysis.PskProbeStatus = "Waiting for JTDX UDP status. Confirm JTDX is open and UDP reporting is enabled, then start again.";
             _pskPropagationSurveyRunning = false;
+            BandAnalysis.HideAnalysisBanner();
             return;
         }
 
@@ -8247,10 +8450,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         BandAnalysis.PskMap.BeginSurvey();
 
         BandAnalysis.IsRunning = true;
-        BandAnalysis.PskProgress = "Starting PSK propagation survey";
-        BandAnalysis.OverallSummary = "PSK propagation survey in progress; passive received-band results update before each pair of CQ probes.";
-        BandAnalysis.PskProbeStatus = $"Transmitted survey started: {string.Join(", ", enabledBands.Select(row => row.Band))}.";
-        AddAction($"PSK propagation survey started: {string.Join(", ", enabledBands.Select(row => row.Band))}; {BandAnalysis.PskPropagationProbeMinutes} minute measurement; exactly two CQ probes per band.");
+        BandAnalysis.PskProgress = "Starting full Band Analysis";
+        BandAnalysis.OverallSummary = "Full Band Analysis is running: received opportunities update before two verified PSK propagation probes on each enabled band.";
+        BandAnalysis.PskProbeStatus = $"{(automatic ? "Automatic" : "Manual")} full analysis started: {string.Join(", ", enabledBands.Select(row => row.Band))}.";
+        BandAnalysis.ShowAnalysisBanner(
+            automatic ? "AUTOMATIC BAND ANALYSIS ACTIVE" : "MANUAL BAND ANALYSIS ACTIVE",
+            $"Reason: {triggerReason}. DX Pilot will listen and transmit exactly two CQ propagation probes on every enabled band.",
+            $"Starting · {enabledBands.Count} bands",
+            "Listening");
+        Dashboard.OverallStatus = BandAnalysis.AnalysisBannerTitle;
+        AddAction($"{(automatic ? "Automatic" : "Manual")} full Band Analysis started ({triggerReason}): {string.Join(", ", enabledBands.Select(row => row.Band))}; {BandAnalysis.PskPropagationProbeMinutes} minute measurement; exactly two CQ probes per band.");
+        if (automatic)
+            BandAnalysis.AutomaticStatus = $"Automatic Band Analysis active: {triggerReason}.";
 
         var decision = "PSK propagation survey started.";
         try
@@ -8266,6 +8477,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 _bandSurveyActiveBand = "";
                 row.SurveyStatus = "Changing band";
                 BandAnalysis.PskProgress = $"PSK survey: moving to {row.Band} ({bandIndex + 1}/{enabledBands.Count})";
+                BandAnalysis.ShowAnalysisBanner(
+                    automatic ? "AUTOMATIC BAND ANALYSIS ACTIVE" : "MANUAL BAND ANALYSIS ACTIVE",
+                    $"Reason: {triggerReason}. JTDX band movement must be confirmed before listening or transmitting.",
+                    $"Moving to {row.Band} · band {bandIndex + 1} of {enabledBands.Count}",
+                    "Listening");
                 if (!await MoveToBandAndConfirmAsync(row, cancellationToken))
                     throw new InvalidOperationException($"PSK survey stopped because movement to {row.Band} was not confirmed.");
 
@@ -8288,6 +8504,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     row.SecondsObserved = alreadyObserved + firstFullPeriodSeconds + elapsed + 1;
+                    BandAnalysis.ShowAnalysisBanner(
+                        automatic ? "AUTOMATIC BAND ANALYSIS ACTIVE" : "MANUAL BAND ANALYSIS ACTIVE",
+                        $"Reason: {triggerReason}. Receive quality and available targets are being measured before the propagation probes.",
+                        $"Listening on {row.Band} · band {bandIndex + 1} of {enabledBands.Count} · {remainingPassiveSeconds - elapsed - 1}s",
+                        "Listening");
                     BandAnalysis.PskProgress = $"PSK survey {row.Band}: listening in both FT8 periods · {remainingPassiveSeconds - elapsed - 1}s before two CQs";
                     await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
                 }
@@ -8295,6 +8516,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 _bandSurveyActiveBand = "";
                 RefreshBandAnalysisRow(row);
                 RefreshBandAnalysisOverview(inProgress: true);
+                BandAnalysis.ShowAnalysisBanner(
+                    automatic ? "AUTOMATIC BAND ANALYSIS — CQ PROBES ACTIVE" : "MANUAL BAND ANALYSIS — CQ PROBES ACTIVE",
+                    $"Two controlled CQ transmissions are testing where {Settings.Settings.MyCallsign} is being heard. Normal target acquisition is paused.",
+                    $"Transmitting PSK probes on {row.Band} · band {bandIndex + 1} of {enabledBands.Count}",
+                    "Transmitting");
                 var probeWindow = await RunTwoConsecutivePskCqsAsync(row, bandIndex + 1, enabledBands.Count, period, cancellationToken);
                 probeWindows[row.Band] = probeWindow;
                 row.SurveyStatus = "Probe complete";
@@ -8302,6 +8528,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
 
             BandAnalysis.PskProgress = "PSK survey: allowing immediate live reports to arrive · 8s";
+            BandAnalysis.ShowAnalysisBanner(
+                automatic ? "AUTOMATIC BAND ANALYSIS ACTIVE" : "MANUAL BAND ANALYSIS ACTIVE",
+                "All CQ probes are complete. DX Pilot is reconciling live and stored PSK Reporter reception reports before selecting a band.",
+                "Collecting propagation reports",
+                "Listening");
             await Task.Delay(TimeSpan.FromSeconds(8), cancellationToken);
             var queryResult = await _pskReporterClient.QueryRecentAsync(
                 Settings.Settings.MyCallsign,
@@ -8371,14 +8602,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             if (resumeAutomation && bestRow != null)
             {
-                var moved = CurrentReportedBand().Equals(bestRow.Band, StringComparison.OrdinalIgnoreCase)
-                    || await MoveToBandAndConfirmAsync(bestRow, cancellationToken);
+                var currentRow = enabledBands.FirstOrDefault(row => row.Band.Equals(startingBand, StringComparison.OrdinalIgnoreCase));
+                var currentScore = currentRow?.ConditionsScore ?? 0;
+                var currentPoor = currentRow == null || currentRow.UniqueStations <= 2;
+                var requiredScore = currentScore <= 0
+                    ? 0
+                    : currentScore * (1 + Settings.Settings.ConditionsSearchSwitchImprovementPercent / 100d);
+                var differentBand = !bestRow.Band.Equals(startingBand, StringComparison.OrdinalIgnoreCase);
+                var automaticMoveJustified = differentBand
+                    && Settings.Settings.ConditionsSearchMoveToBestBand
+                    && (currentPoor ? bestRow.ConditionsScore > currentScore : bestRow.ConditionsScore >= requiredScore);
+                var destinationRow = automatic && !automaticMoveJustified ? currentRow ?? bestRow : bestRow;
+                var moved = CurrentReportedBand().Equals(destinationRow.Band, StringComparison.OrdinalIgnoreCase)
+                    || await MoveToBandAndConfirmAsync(destinationRow, cancellationToken);
+                var marginText = automatic && differentBand && !automaticMoveJustified
+                    ? $" {bestRow.Band} did not exceed the configured {Settings.Settings.ConditionsSearchSwitchImprovementPercent}% movement margin."
+                    : "";
                 var selectionText = moved
-                    ? $"{OperatingModeLabel()} selected {bestRow.Band} with combined score {bestRow.ConditionsScore:0}; assistance will resume there."
-                    : $"{OperatingModeLabel()} selected {bestRow.Band}, but JTDX did not confirm movement; assistance will resume on {CurrentReportedBand()}.";
+                    ? $"{OperatingModeLabel()} selected {destinationRow.Band} with combined score {destinationRow.ConditionsScore:0}; assistance will resume there.{marginText}"
+                    : $"{OperatingModeLabel()} selected {destinationRow.Band}, but JTDX did not confirm movement; assistance will resume on {CurrentReportedBand()}.";
                 BandAnalysis.PskProbeStatus += $" {selectionText}";
                 decision += $" {selectionText}";
                 AddAction($"PSK survey assistance decision: {selectionText}");
+                if (automatic)
+                    BandAnalysis.AutomaticStatus = $"Automatic Band Analysis complete: {selectionText}";
             }
             else if (BandAnalysis.ReturnToStartingBand
                 && !string.IsNullOrWhiteSpace(startingBand)
@@ -8398,6 +8645,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             BandAnalysis.PskProgress = "PSK survey stopped";
             BandAnalysis.PskProbeStatus = decision;
             BandAnalysis.Status = decision;
+            if (automatic)
+                BandAnalysis.AutomaticStatus = decision;
         }
         catch (Exception ex)
         {
@@ -8406,6 +8655,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             BandAnalysis.PskProbeStatus = decision;
             BandAnalysis.Status = decision;
             AddAction(decision);
+            if (automatic)
+                BandAnalysis.AutomaticStatus = decision;
         }
         finally
         {
@@ -8443,11 +8694,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 BandAnalysis.PskProbeStatus += " Normal hunting remains stopped because JTDX could not be restored to Tx1.";
             }
             SaveBandAnalysisHistory(
-                "Manual PSK propagation survey",
-                automatic: false,
+                triggerReason,
+                automatic,
                 startingBand,
                 CurrentReportedBand(),
                 decision);
+            if (automatic)
+                _conditionsLastSurveyCompletedAtUtc = DateTime.UtcNow;
+            _bandSurveyAutomatic = false;
+            _bandSurveyResumesAssistance = false;
+            BandAnalysis.HideAnalysisBanner();
         }
 
         _operatingMode = resumeMode;
@@ -8931,6 +9187,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         BandAnalysis.IsRunning = true;
         BandAnalysis.OverallSummary = "Survey in progress; results update after each received decode.";
         var dwellMinutes = Math.Clamp(dwellMinutesOverride ?? BandAnalysis.DwellMinutes, 1, 3);
+        BandAnalysis.ShowAnalysisBanner(
+            automatic ? "AUTOMATIC BAND ANALYSIS ACTIVE — LISTEN ONLY" : "LISTEN-ONLY DIAGNOSTIC ACTIVE",
+            automatic
+                ? $"Reason: {triggerReason}. Automatic CQ probes are disabled or unavailable, so this result will use received signals only."
+                : "This diagnostic visits the enabled bands without transmitting. Full Band Analysis also measures outward PSK propagation.",
+            $"Starting · {enabledBands.Count} bands",
+            "Listening");
+        Dashboard.OverallStatus = BandAnalysis.AnalysisBannerTitle;
         AddAction($"{(automatic ? "Automatic Conditions Search" : "Receive-only band survey")} started ({triggerReason}): {string.Join(", ", enabledBands.Select(row => row.Band))}; {dwellMinutes} minute(s) per band; {BandAnalysis.SurveyCycles} cycle(s).");
 
         var completedNormally = false;
@@ -8949,6 +9213,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     _bandSurveyActiveBand = "";
                     row.SurveyStatus = "Changing band";
                     BandAnalysis.Progress = $"Cycle {cycle}/{BandAnalysis.SurveyCycles}: moving to {row.Band} ({bandIndex + 1}/{enabledBands.Count})";
+                    BandAnalysis.ShowAnalysisBanner(
+                        automatic ? "AUTOMATIC BAND ANALYSIS ACTIVE — LISTEN ONLY" : "LISTEN-ONLY DIAGNOSTIC ACTIVE",
+                        $"Reason: {triggerReason}. No CQ propagation probes will be transmitted in this diagnostic mode.",
+                        $"Moving to {row.Band} · band {bandIndex + 1} of {enabledBands.Count}",
+                        "Listening");
                     if (!await MoveToBandAndConfirmAsync(row, cancellationToken))
                     {
                         row.SurveyStatus = "Movement failed";
@@ -8963,6 +9232,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                         cancellationToken.ThrowIfCancellationRequested();
                         row.SecondsObserved = alreadyObserved + elapsed + 1;
                         BandAnalysis.Progress = $"Cycle {cycle}/{BandAnalysis.SurveyCycles}: {row.Band}, {dwellSeconds - elapsed - 1}s remaining";
+                        BandAnalysis.AnalysisBannerPhase = $"Listening on {row.Band} · band {bandIndex + 1} of {enabledBands.Count} · {dwellSeconds - elapsed - 1}s";
                         await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
                     }
 
@@ -9102,6 +9372,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 _conditionsLastSurveyCompletedAtUtc = DateTime.UtcNow;
             _bandSurveyAutomatic = false;
             _bandSurveyResumesAssistance = false;
+            BandAnalysis.HideAnalysisBanner();
         }
 
         if (resumeAutomation)
@@ -9122,6 +9393,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void StopBandSurvey()
     {
+        if (!BandAnalysis.IsRunning && !string.IsNullOrWhiteSpace(_conditionsPendingReason))
+        {
+            _conditionsPendingReason = "";
+            _conditionsAutomaticStartAllowedAtUtc = DateTime.MinValue;
+            _conditionsUserDeferredUntilUtc = DateTime.UtcNow.AddMinutes(10);
+            BandAnalysis.HideAnalysisBanner();
+            BandAnalysis.AutomaticStatus = $"Automatic Band Analysis cancelled and deferred until {_conditionsUserDeferredUntilUtc.ToLocalTime():HH:mm}.";
+            BandAnalysis.Status = BandAnalysis.AutomaticStatus;
+            AddAction(BandAnalysis.AutomaticStatus);
+            return;
+        }
+
         if (!BandAnalysis.IsRunning)
         {
             BandAnalysis.Status = "No band survey is running.";
@@ -9665,11 +9948,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+            return;
+        _disposed = true;
         _bandSurveyCancellation?.Cancel();
         _bandSurveyCancellation?.Dispose();
         _bandSurveyCancellation = null;
         _sessionArchiveSaveTimer.Stop();
-        SaveSessionArchive();
+        FlushSessionArchive();
         _allTxtMonitor.Dispose();
         _ = _pskReporterClient.DisposeAsync();
         StopAdifWatcher();

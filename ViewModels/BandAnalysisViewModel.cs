@@ -18,16 +18,18 @@ public sealed class BandAnalysisViewModel : ObservableObject
     private bool _isRunning;
     private string _status = "Ready for band-strip calibration.";
     private string _calibrationStatus = "Band button strip not mapped.";
-    private string _overallSummary = "Run a receive-only survey to compare enabled bands.";
+    private string _overallSummary = "Run Band Analysis to compare received opportunities and outward PSK propagation across the enabled bands.";
     private string _progress = "Not running";
     private string _pskProgress = "Not running";
     private BandAnalysisBandViewModel? _selectedBand;
     private bool _conditionsSearchEnabled;
+    private bool _conditionsSearchUsePskProbes;
     private int _conditionsSearchCooldownMinutes;
     private int _conditionsSearchMinimumBandMinutes;
     private int _conditionsSearchMonitoringWindowMinutes;
     private int _conditionsSearchNoUsefulTargetMinutes;
     private int _conditionsSearchLowStationThreshold;
+    private int _conditionsSearchLowActivityPersistMinutes;
     private int _conditionsSearchPoorReplyAttempts;
     private int _conditionsSearchPoorReplyDistinctStations;
     private int _conditionsSearchSilentMinutes;
@@ -41,6 +43,11 @@ public sealed class BandAnalysisViewModel : ObservableObject
     private string _historySummary = "Band trend history will appear after two surveys.";
     private int _pskPropagationProbeMinutes;
     private string _pskProbeStatus = "PSK propagation probing is ready after JTDX's Tx 15/45 (or Tx 00/30) timing button is mapped.";
+    private bool _analysisBannerVisible;
+    private string _analysisBannerTitle = "";
+    private string _analysisBannerMessage = "";
+    private string _analysisBannerPhase = "";
+    private string _analysisBannerTone = "Pending";
 
     public BandAnalysisViewModel(AppSettings settings)
     {
@@ -57,11 +64,13 @@ public sealed class BandAnalysisViewModel : ObservableObject
         _returnToStartingBand = settings.BandAnalysisReturnToStartingBand;
         _pskPropagationProbeMinutes = Math.Clamp(settings.PskPropagationProbeMinutes, 1, 5);
         _conditionsSearchEnabled = settings.ConditionsSearchEnabled;
+        _conditionsSearchUsePskProbes = settings.ConditionsSearchUsePskProbes;
         _conditionsSearchCooldownMinutes = settings.ConditionsSearchCooldownMinutes;
         _conditionsSearchMinimumBandMinutes = settings.ConditionsSearchMinimumBandMinutes;
         _conditionsSearchMonitoringWindowMinutes = settings.ConditionsSearchMonitoringWindowMinutes;
         _conditionsSearchNoUsefulTargetMinutes = settings.ConditionsSearchNoUsefulTargetMinutes;
         _conditionsSearchLowStationThreshold = settings.ConditionsSearchLowStationThreshold;
+        _conditionsSearchLowActivityPersistMinutes = settings.ConditionsSearchLowActivityPersistMinutes;
         _conditionsSearchPoorReplyAttempts = settings.ConditionsSearchPoorReplyAttempts;
         _conditionsSearchPoorReplyDistinctStations = settings.ConditionsSearchPoorReplyDistinctStations;
         _conditionsSearchSilentMinutes = settings.ConditionsSearchSilentMinutes;
@@ -71,6 +80,21 @@ public sealed class BandAnalysisViewModel : ObservableObject
         _conditionsSearchMoveToBestBand = settings.ConditionsSearchMoveToBestBand;
         _conditionsSearchSurveyOnStartup = settings.ConditionsSearchSurveyOnStartup;
         _conditionsSearchScheduleUtc = settings.ConditionsSearchScheduleUtc ?? "";
+        ConditionsIndicators.Add(new ConditionsIndicatorViewModel(
+            "cooldown", "Time until another analysis is allowed",
+            "Prevents Band Analysis from running repeatedly. The bar empties from the last completed analysis."));
+        ConditionsIndicators.Add(new ConditionsIndicatorViewModel(
+            "residence", "Minimum stay on the selected band",
+            "Gives the chosen band time to produce contacts before DX Pilot considers moving again."));
+        ConditionsIndicators.Add(new ConditionsIndicatorViewModel(
+            "unanswered", "Calls without a reply",
+            "Counts calling attempts since the most recent reply or QSO progress, across several different stations."));
+        ConditionsIndicators.Add(new ConditionsIndicatorViewModel(
+            "useful", "Time without a useful target",
+            "Measures how long DX Pilot has gone without hearing a selectable CQ or wanted opportunity."));
+        ConditionsIndicators.Add(new ConditionsIndicatorViewModel(
+            "activity", "Band activity",
+            "Combines complete silence with a persistently low number of unique stations in the recent listening window."));
         RefreshCalibration(settings);
         _pskProbeStatus = HasPskTransmitCalibration(settings)
             ? "JTDX PSK controls mapped: timing selector and Tx1 stable-mode reset are ready."
@@ -78,6 +102,7 @@ public sealed class BandAnalysisViewModel : ObservableObject
     }
 
     public ObservableCollection<BandAnalysisBandViewModel> Bands { get; } = new();
+    public ObservableCollection<ConditionsIndicatorViewModel> ConditionsIndicators { get; } = new();
     public PskReporterMapViewModel PskMap { get; }
     public IReadOnlyList<int> DwellMinuteOptions { get; } = [1, 2, 3];
     public IReadOnlyList<int> SurveyCycleOptions { get; } = [1, 2, 3, 4, 5];
@@ -163,11 +188,13 @@ public sealed class BandAnalysisViewModel : ObservableObject
     }
 
     public bool ConditionsSearchEnabled { get => _conditionsSearchEnabled; set => SetProperty(ref _conditionsSearchEnabled, value); }
+    public bool ConditionsSearchUsePskProbes { get => _conditionsSearchUsePskProbes; set => SetProperty(ref _conditionsSearchUsePskProbes, value); }
     public int ConditionsSearchCooldownMinutes { get => _conditionsSearchCooldownMinutes; set => SetProperty(ref _conditionsSearchCooldownMinutes, Math.Clamp(value, 15, 180)); }
     public int ConditionsSearchMinimumBandMinutes { get => _conditionsSearchMinimumBandMinutes; set => SetProperty(ref _conditionsSearchMinimumBandMinutes, Math.Clamp(value, 5, 60)); }
     public int ConditionsSearchMonitoringWindowMinutes { get => _conditionsSearchMonitoringWindowMinutes; set => SetProperty(ref _conditionsSearchMonitoringWindowMinutes, Math.Clamp(value, 3, 15)); }
     public int ConditionsSearchNoUsefulTargetMinutes { get => _conditionsSearchNoUsefulTargetMinutes; set => SetProperty(ref _conditionsSearchNoUsefulTargetMinutes, Math.Clamp(value, 3, 60)); }
     public int ConditionsSearchLowStationThreshold { get => _conditionsSearchLowStationThreshold; set => SetProperty(ref _conditionsSearchLowStationThreshold, Math.Clamp(value, 1, 30)); }
+    public int ConditionsSearchLowActivityPersistMinutes { get => _conditionsSearchLowActivityPersistMinutes; set => SetProperty(ref _conditionsSearchLowActivityPersistMinutes, Math.Clamp(value, 1, 15)); }
     public int ConditionsSearchPoorReplyAttempts { get => _conditionsSearchPoorReplyAttempts; set => SetProperty(ref _conditionsSearchPoorReplyAttempts, Math.Clamp(value, 3, 30)); }
     public int ConditionsSearchPoorReplyDistinctStations { get => _conditionsSearchPoorReplyDistinctStations; set => SetProperty(ref _conditionsSearchPoorReplyDistinctStations, Math.Clamp(value, 2, 10)); }
     public int ConditionsSearchSilentMinutes { get => _conditionsSearchSilentMinutes; set => SetProperty(ref _conditionsSearchSilentMinutes, Math.Clamp(value, 2, 20)); }
@@ -179,6 +206,31 @@ public sealed class BandAnalysisViewModel : ObservableObject
     public string ConditionsSearchScheduleUtc { get => _conditionsSearchScheduleUtc; set => SetProperty(ref _conditionsSearchScheduleUtc, value ?? ""); }
     public string AutomaticStatus { get => _automaticStatus; set => SetProperty(ref _automaticStatus, value); }
     public string HistorySummary { get => _historySummary; set => SetProperty(ref _historySummary, value); }
+    public bool AnalysisBannerVisible { get => _analysisBannerVisible; set => SetProperty(ref _analysisBannerVisible, value); }
+    public string AnalysisBannerTitle { get => _analysisBannerTitle; set => SetProperty(ref _analysisBannerTitle, value); }
+    public string AnalysisBannerMessage { get => _analysisBannerMessage; set => SetProperty(ref _analysisBannerMessage, value); }
+    public string AnalysisBannerPhase { get => _analysisBannerPhase; set => SetProperty(ref _analysisBannerPhase, value); }
+    public string AnalysisBannerTone { get => _analysisBannerTone; set => SetProperty(ref _analysisBannerTone, value); }
+
+    public void ShowAnalysisBanner(string title, string message, string phase, string tone)
+    {
+        AnalysisBannerTitle = title;
+        AnalysisBannerMessage = message;
+        AnalysisBannerPhase = phase;
+        AnalysisBannerTone = tone;
+        AnalysisBannerVisible = true;
+    }
+
+    public void HideAnalysisBanner()
+    {
+        AnalysisBannerVisible = false;
+        AnalysisBannerPhase = "";
+    }
+
+    public void UpdateConditionIndicator(string key, double remainingPercent, string detail, bool active = true)
+    {
+        ConditionsIndicators.First(item => item.Key == key).Update(remainingPercent, detail, active);
+    }
 
     public void SaveTo(AppSettings settings)
     {
@@ -188,11 +240,13 @@ public sealed class BandAnalysisViewModel : ObservableObject
         settings.BandAnalysisReturnToStartingBand = ReturnToStartingBand;
         settings.PskPropagationProbeMinutes = PskPropagationProbeMinutes;
         settings.ConditionsSearchEnabled = ConditionsSearchEnabled;
+        settings.ConditionsSearchUsePskProbes = ConditionsSearchUsePskProbes;
         settings.ConditionsSearchCooldownMinutes = ConditionsSearchCooldownMinutes;
         settings.ConditionsSearchMinimumBandMinutes = ConditionsSearchMinimumBandMinutes;
         settings.ConditionsSearchMonitoringWindowMinutes = ConditionsSearchMonitoringWindowMinutes;
         settings.ConditionsSearchNoUsefulTargetMinutes = ConditionsSearchNoUsefulTargetMinutes;
         settings.ConditionsSearchLowStationThreshold = ConditionsSearchLowStationThreshold;
+        settings.ConditionsSearchLowActivityPersistMinutes = ConditionsSearchLowActivityPersistMinutes;
         settings.ConditionsSearchPoorReplyAttempts = ConditionsSearchPoorReplyAttempts;
         settings.ConditionsSearchPoorReplyDistinctStations = ConditionsSearchPoorReplyDistinctStations;
         settings.ConditionsSearchSilentMinutes = ConditionsSearchSilentMinutes;

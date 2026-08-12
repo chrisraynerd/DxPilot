@@ -4,7 +4,29 @@
 FT8/FT4 decodes and can select wanted DXCC entities, grids, US states and
 configured geographical areas.
 
-The current release is **v3.9.6**. PSK survey cancellation now waits for a fresh
+The current stable release is **v3.9.7**. Long-running sessions now batch Session
+History screen refreshes and persist the permanent archive away from the WPF UI thread,
+so a large Full Archive no longer causes a complete synchronous JSON rewrite during
+normal interaction. Every main screen also carries a compact shared view of the live
+Automatic Band Analysis trigger bars, while Dashboard retains the detailed monitor cards.
+Band Analysis is now presented as one
+clear receive-plus-PSK workflow: every enabled band is sampled for received targets
+and then tested with exactly two verified propagation CQs. The receive-only engine
+remains available as a collapsed diagnostic/fallback instead of a competing primary
+survey. Automatic Conditions Search can use the full workflow after the user grants
+the separate automatic-CQ permission; upgraded installations keep that permission
+off until it is explicitly selected.
+
+A persistent application-wide banner announces a pending or active automatic Band
+Analysis, shows the trigger reason, current band/phase and whether CQ probes are
+transmitting, and provides a Stop action. The Dashboard now displays five coloured
+bars which empty toward the actual cooldown, minimum-band-time, unanswered-call,
+no-useful-target and low/silent-band thresholds. The Band Analysis settings use
+plain-language labels and explain precisely what every duration or count controls.
+The no-useful-target bar resets only when the active assistance mode accepts a real
+target; routine CQ decodes no longer keep a busy but unproductive band at 100%.
+
+The previous stable release was **v3.9.6**. PSK survey cancellation waits for a fresh
 post-click JTDX status before deciding whether Enable TX is on or off. This closes
 the race where a queued Enable TX click could be processed after survey cleanup and
 leave JTDX calling CQ. Malformed decode text can no longer interrupt a survey as a

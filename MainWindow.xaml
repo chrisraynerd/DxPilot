@@ -69,6 +69,46 @@
             </Grid>
         </Border>
 
+        <Border DockPanel.Dock="Top" Padding="16,10" BorderThickness="0,0,0,2">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Setter Property="Background" Value="#FEF3C7" />
+                    <Setter Property="BorderBrush" Value="#D97706" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding BandAnalysis.AnalysisBannerVisible}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding BandAnalysis.AnalysisBannerTone}" Value="Listening">
+                            <Setter Property="Background" Value="#DBEAFE" />
+                            <Setter Property="BorderBrush" Value="#2563EB" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding BandAnalysis.AnalysisBannerTone}" Value="Transmitting">
+                            <Setter Property="Background" Value="#FEE2E2" />
+                            <Setter Property="BorderBrush" Value="#DC2626" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Background="#172331" CornerRadius="18" Padding="11,5" Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="BAND ANALYSIS" Foreground="White" FontWeight="Bold" />
+                </Border>
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="{Binding BandAnalysis.AnalysisBannerTitle}" FontWeight="Bold" FontSize="16" />
+                    <TextBlock Text="{Binding BandAnalysis.AnalysisBannerPhase}" FontWeight="SemiBold" Margin="0,2,0,0" />
+                    <TextBlock Text="{Binding BandAnalysis.AnalysisBannerMessage}" TextWrapping="Wrap" Margin="0,2,12,0" />
+                </StackPanel>
+                <Button Grid.Column="2" Content="Stop analysis" Command="{Binding StopBandSurveyCommand}"
+                        VerticalAlignment="Center" Background="#FFFFFF" BorderBrush="#991B1B" Foreground="#7F1D1D" />
+            </Grid>
+        </Border>
+
         <Border DockPanel.Dock="Top"
                 Background="#F8FAFC"
                 BorderBrush="#CBD5E1"
@@ -142,25 +182,46 @@
                 <views:DashboardView />
             </TabItem>
             <TabItem Header="DX Assist">
-                <views:DxAssistView />
+                <DockPanel>
+                    <views:CompactConditionsStrip DockPanel.Dock="Top" />
+                    <views:DxAssistView />
+                </DockPanel>
             </TabItem>
             <TabItem Header="Wanted">
-                <views:WantedView />
+                <DockPanel>
+                    <views:CompactConditionsStrip DockPanel.Dock="Top" />
+                    <views:WantedView />
+                </DockPanel>
             </TabItem>
             <TabItem Header="Location">
-                <views:LocationView />
+                <DockPanel>
+                    <views:CompactConditionsStrip DockPanel.Dock="Top" />
+                    <views:LocationView />
+                </DockPanel>
             </TabItem>
             <TabItem Header="Map">
-                <views:MapView />
+                <DockPanel>
+                    <views:CompactConditionsStrip DockPanel.Dock="Top" />
+                    <views:MapView />
+                </DockPanel>
             </TabItem>
             <TabItem Header="Session History">
-                <views:SessionHistoryView />
+                <DockPanel>
+                    <views:CompactConditionsStrip DockPanel.Dock="Top" />
+                    <views:SessionHistoryView />
+                </DockPanel>
             </TabItem>
             <TabItem Header="Band Analysis">
-                <views:SchedulerView />
+                <DockPanel>
+                    <views:CompactConditionsStrip DockPanel.Dock="Top" />
+                    <views:SchedulerView />
+                </DockPanel>
             </TabItem>
             <TabItem Header="Settings">
-                <views:SettingsView />
+                <DockPanel>
+                    <views:CompactConditionsStrip DockPanel.Dock="Top" />
+                    <views:SettingsView />
+                </DockPanel>
             </TabItem>
         </TabControl>
     </DockPanel>
