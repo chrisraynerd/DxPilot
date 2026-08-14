@@ -5,7 +5,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,10">
@@ -84,6 +84,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <Border Style="{StaticResource PanelBorder}" Margin="0,0,8,8">
                 <DockPanel>
@@ -104,22 +105,21 @@
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Rank" Binding="{Binding RankText}" Width="45" />
-                            <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignContactableCallTemplate}" SortMemberPath="ContactableCall" Width="82" />
-                            <DataGridTextColumn Header="Country" Binding="{Binding Entity}" Width="112" />
-                            <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="55" />
-                            <DataGridTextColumn Header="State" Binding="{Binding State}" Width="48" />
-                            <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="52" />
-                            <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="44" />
-                            <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="68" />
-                            <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedReasonDisplay}" Width="175" />
-                            <DataGridTextColumn Header="Status" Binding="{Binding StationStatusDisplay}" Width="110" />
+                            <DataGridTextColumn Header="#" Binding="{Binding RankText}" Width="36" />
+                            <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignContactableCallTemplate}" SortMemberPath="ContactableCall" Width="74" />
+                            <DataGridTextColumn Header="Country" Binding="{Binding Entity}" Width="92" />
+                            <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="50" />
+                            <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="43" />
+                            <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="38" />
+                            <DataGridTextColumn Header="Row" Binding="{Binding JtdxRow}" Width="38" />
+                            <DataGridTextColumn Header="Wanted reason" Binding="{Binding WantedReasonDisplay}" Width="*" MinWidth="105" />
+                            <DataGridTextColumn Header="Status" Binding="{Binding StationStatusDisplay}" Width="76" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
             </Border>
 
-            <Border Grid.Column="1" Style="{StaticResource PanelBorder}" Margin="8,0,0,8">
+            <Border Grid.Column="1" Style="{StaticResource PanelBorder}" Margin="4,0,4,8">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,9">
                         <TextBlock Text="GRID OPPORTUNITIES" Style="{StaticResource SectionEyebrow}" />
@@ -138,34 +138,26 @@
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Rank" Binding="{Binding RankText}" Width="45" />
-                            <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignContactableCallTemplate}" SortMemberPath="ContactableCall" Width="82" />
-                            <DataGridTextColumn Header="Country" Binding="{Binding Entity}" Width="112" />
-                            <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="55" />
-                            <DataGridTextColumn Header="State" Binding="{Binding State}" Width="48" />
-                            <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="52" />
-                            <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="44" />
-                            <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="68" />
-                            <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedReasonDisplay}" Width="175" />
-                            <DataGridTextColumn Header="Status" Binding="{Binding StationStatusDisplay}" Width="110" />
+                            <DataGridTextColumn Header="#" Binding="{Binding RankText}" Width="36" />
+                            <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignContactableCallTemplate}" SortMemberPath="ContactableCall" Width="74" />
+                            <DataGridTextColumn Header="Country" Binding="{Binding Entity}" Width="92" />
+                            <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="50" />
+                            <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="43" />
+                            <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="38" />
+                            <DataGridTextColumn Header="Row" Binding="{Binding JtdxRow}" Width="38" />
+                            <DataGridTextColumn Header="Wanted reason" Binding="{Binding WantedReasonDisplay}" Width="*" MinWidth="105" />
+                            <DataGridTextColumn Header="Status" Binding="{Binding StationStatusDisplay}" Width="76" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
             </Border>
-        </Grid>
 
-        <Border Grid.Row="2" Style="{StaticResource PanelBorder}" Margin="0,8,0,0">
+            <Border Grid.Column="2" Style="{StaticResource PanelBorder}" Margin="8,0,0,8">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,9">
                     <TextBlock Text="STATE OPPORTUNITIES" Style="{StaticResource SectionEyebrow}" />
                     <TextBlock Text="{Binding Wanted.WantedStates.Count, StringFormat=Wanted USA states · {0}}" FontSize="17" FontWeight="SemiBold" Margin="0,2,0,0" />
                 </StackPanel>
-                <Border DockPanel.Dock="Bottom" BorderBrush="#D8E0E8" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0" MaxHeight="115">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="Wanted Recent Actions" FontWeight="SemiBold" Margin="0,0,0,4" />
-                        <ListBox ItemsSource="{Binding WantedRecentActions}" BorderThickness="0" />
-                    </DockPanel>
-                </Border>
                 <DataGrid ItemsSource="{Binding Wanted.WantedStates}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" RowStyle="{StaticResource SemanticStationRowStyle}" MouseDoubleClick="WantedGrid_MouseDoubleClick" PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
                     <DataGrid.ContextMenu>
                         <ContextMenu>
@@ -179,19 +171,25 @@
                         </ContextMenu>
                     </DataGrid.ContextMenu>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Rank" Binding="{Binding RankText}" Width="45" />
-                        <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignContactableCallTemplate}" SortMemberPath="ContactableCall" Width="82" />
-                        <DataGridTextColumn Header="Country" Binding="{Binding Entity}" Width="112" />
-                        <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="55" />
-                        <DataGridTextColumn Header="State" Binding="{Binding State}" Width="48" />
-                        <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="52" />
-                        <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="44" />
-                        <DataGridTextColumn Header="JTDX Row" Binding="{Binding JtdxRow}" Width="68" />
-                        <DataGridTextColumn Header="Wanted Reason" Binding="{Binding WantedReasonDisplay}" Width="175" />
-                        <DataGridTextColumn Header="Status" Binding="{Binding StationStatusDisplay}" Width="110" />
+                        <DataGridTextColumn Header="#" Binding="{Binding RankText}" Width="36" />
+                        <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignContactableCallTemplate}" SortMemberPath="ContactableCall" Width="74" />
+                        <DataGridTextColumn Header="State" Binding="{Binding State}" Width="44" />
+                        <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="50" />
+                        <DataGridTextColumn Header="Age" Binding="{Binding AgeText, Mode=OneWay}" Width="43" />
+                        <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="38" />
+                        <DataGridTextColumn Header="Row" Binding="{Binding JtdxRow}" Width="38" />
+                        <DataGridTextColumn Header="Wanted reason" Binding="{Binding WantedReasonDisplay}" Width="*" MinWidth="105" />
+                        <DataGridTextColumn Header="Status" Binding="{Binding StationStatusDisplay}" Width="76" />
                     </DataGrid.Columns>
                 </DataGrid>
             </DockPanel>
-        </Border>
+            </Border>
+        </Grid>
+
+        <Expander Grid.Row="2" Header="Wanted recent actions" IsExpanded="False" Margin="0,0,0,0">
+            <Border Style="{StaticResource PanelBorder}" Padding="10" Margin="0,6,0,0" Height="100">
+                <ListBox ItemsSource="{Binding WantedRecentActions}" BorderThickness="0" />
+            </Border>
+        </Expander>
     </Grid>
 </UserControl>
