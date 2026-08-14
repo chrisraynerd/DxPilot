@@ -607,11 +607,11 @@ public sealed class SettingsService
         if (!ConfirmationModes.Contains(settings.DxccConfirmationMode))
             settings.DxccConfirmationMode = "LoTWOnly";
         if (!ConfirmationModes.Contains(settings.GridConfirmationMode))
-            settings.GridConfirmationMode = "WorkedOnly";
+            settings.GridConfirmationMode = "LoTWOnly";
         if (!ConfirmationModes.Contains(settings.StateConfirmationMode))
-            settings.StateConfirmationMode = "WorkedOnly";
+            settings.StateConfirmationMode = "LoTWOnly";
         if (!ConfirmationModes.Contains(settings.IotaConfirmationMode))
-            settings.IotaConfirmationMode = "WorkedOnly";
+            settings.IotaConfirmationMode = "LoTWOnly";
     }
 
     private static void NormalizeLayoutDefaults(AppSettings settings)

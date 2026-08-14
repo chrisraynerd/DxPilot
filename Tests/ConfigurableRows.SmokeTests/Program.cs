@@ -1338,6 +1338,15 @@ if (CandidateColour(DxccCandidateStatus.NotWorked, 10, "New", "New") != "NewDxcc
     failures.Add("DX Assist colour classification did not follow opportunity status independently of ranking tier.");
 }
 
+var confirmationDefaults = new AppSettings();
+if (confirmationDefaults.DxccConfirmationMode != "LoTWOnly"
+    || confirmationDefaults.GridConfirmationMode != "LoTWOnly"
+    || confirmationDefaults.StateConfirmationMode != "LoTWOnly"
+    || confirmationDefaults.IotaConfirmationMode != "LoTWOnly")
+{
+    failures.Add("New installations did not default every confirmation category to LoTW only.");
+}
+
 var sessionOrdering = new SessionHistoryViewModel();
 sessionOrdering.AllOpportunities.Add(new SessionDxOpportunity
 {

@@ -330,6 +330,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ReplyToBestCommand = new RelayCommand(ReplyToBestAsync);
         LoadAdifCommand = new RelayCommand(LoadAdif);
         SaveSettingsCommand = new RelayCommand(SaveAll);
+        ApplyConfirmationRulesCommand = new RelayCommand(ApplyConfirmationRules);
+        UseLotwConfirmationForAllCommand = new RelayCommand(UseLotwConfirmationForAll);
         ExportSettingsCommand = new RelayCommand(ExportSettings);
         ImportSettingsCommand = new RelayCommand(ImportSettings);
         OpenSetupWizardCommand = new RelayCommand(OpenSetupWizardAsync);
@@ -613,6 +615,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ICommand ReplyToBestCommand { get; }
     public ICommand LoadAdifCommand { get; }
     public ICommand SaveSettingsCommand { get; }
+    public ICommand ApplyConfirmationRulesCommand { get; }
+    public ICommand UseLotwConfirmationForAllCommand { get; }
     public ICommand ExportSettingsCommand { get; }
     public ICommand ImportSettingsCommand { get; }
     public ICommand OpenSetupWizardCommand { get; }
@@ -1701,6 +1705,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         StartAllTxtMonitor();
         UpdateAdifDiagnostics();
         AddAction("Settings saved.");
+    }
+
+    private void UseLotwConfirmationForAll()
+    {
+        Settings.Settings.DxccConfirmationMode = "LoTWOnly";
+        Settings.Settings.GridConfirmationMode = "LoTWOnly";
+        Settings.Settings.StateConfirmationMode = "LoTWOnly";
+        Settings.Settings.IotaConfirmationMode = "LoTWOnly";
+        Settings.Refresh();
+        ApplyConfirmationRules();
+    }
+
+    private void ApplyConfirmationRules()
+    {
+        _settingsService.SaveSettings(Settings.Settings);
+        LoadAdifSources();
+        SessionHistory.RequestRefresh();
+        AddAction($"Confirmation rules applied: DXCC {Settings.Settings.DxccConfirmationMode}, grids {Settings.Settings.GridConfirmationMode}, states {Settings.Settings.StateConfirmationMode}, IOTA {Settings.Settings.IotaConfirmationMode}.");
     }
 
     private void OnMapPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

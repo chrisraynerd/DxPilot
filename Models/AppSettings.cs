@@ -75,9 +75,9 @@ public sealed class AppSettings
         $"{DateTime.UtcNow:yyyyMM}_ALL.TXT");
     public bool WatchJtdxAllTxt { get; set; } = true;
     public string DxccConfirmationMode { get; set; } = "LoTWOnly";
-    public string GridConfirmationMode { get; set; } = "WorkedOnly";
-    public string StateConfirmationMode { get; set; } = "WorkedOnly";
-    public string IotaConfirmationMode { get; set; } = "WorkedOnly";
+    public string GridConfirmationMode { get; set; } = "LoTWOnly";
+    public string StateConfirmationMode { get; set; } = "LoTWOnly";
+    public string IotaConfirmationMode { get; set; } = "LoTWOnly";
     public string DxccRarityFilePath { get; set; } = "";
     public double GlobalRarityWeight { get; set; } = 0.50;
     public double UkDesirabilityWeight { get; set; } = 0.35;

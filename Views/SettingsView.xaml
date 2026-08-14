@@ -9,6 +9,7 @@
             </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
@@ -24,7 +25,55 @@
                 </DockPanel>
             </Border>
 
-            <Border Grid.Row="1" Style="{StaticResource PanelBorder}" Margin="0,0,12,0">
+            <Border Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource PanelBorder}" Margin="0,0,0,12"
+                    Background="#EFF6FF" BorderBrush="#93C5FD">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="20,0,0,0" VerticalAlignment="Center">
+                            <Button Content="Use LoTW only for all" Command="{Binding UseLotwConfirmationForAllCommand}"
+                                    Style="{StaticResource PrimaryButton}" />
+                            <Button Content="Apply rules and reload logbook" Command="{Binding ApplyConfirmationRulesCommand}" Margin="0" />
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="What counts as confirmed?" FontSize="17" FontWeight="SemiBold" Foreground="#1E3A8A" />
+                            <TextBlock Text="These rules directly control New/Unconfirmed DXCC, grid, state and IOTA classification. LoTW only is the recommended default."
+                                       TextWrapping="Wrap" Foreground="#1E40AF" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </DockPanel>
+                    <UniformGrid Grid.Row="1" Columns="4" Margin="0,14,0,0">
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Text="DXCC countries" FontWeight="SemiBold" Margin="0,0,0,5" />
+                            <ComboBox ItemsSource="{Binding Settings.ConfirmationModeOptions}"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectedValue="{Binding Settings.Settings.DxccConfirmationMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Text="Maidenhead grids" FontWeight="SemiBold" Margin="0,0,0,5" />
+                            <ComboBox ItemsSource="{Binding Settings.ConfirmationModeOptions}"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectedValue="{Binding Settings.Settings.GridConfirmationMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Text="USA states" FontWeight="SemiBold" Margin="0,0,0,5" />
+                            <ComboBox ItemsSource="{Binding Settings.ConfirmationModeOptions}"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectedValue="{Binding Settings.Settings.StateConfirmationMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="IOTA references" FontWeight="SemiBold" Margin="0,0,0,5" />
+                            <ComboBox ItemsSource="{Binding Settings.ConfirmationModeOptions}"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectedValue="{Binding Settings.Settings.IotaConfirmationMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                    </UniformGrid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="2" Style="{StaticResource PanelBorder}" Margin="0,0,12,0">
                 <StackPanel>
                     <TextBlock Text="Automation Coordinates" FontWeight="SemiBold" Margin="0,0,0,12" />
                     <UniformGrid Columns="2">
@@ -69,7 +118,7 @@
                 </StackPanel>
             </Border>
 
-            <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource PanelBorder}">
+            <Border Grid.Row="2" Grid.Column="1" Style="{StaticResource PanelBorder}">
                 <StackPanel>
                     <TextBlock Text="Runtime" FontWeight="SemiBold" Margin="0,0,0,12" />
                     <UniformGrid Columns="2">
@@ -137,14 +186,6 @@
                         <TextBox Text="{Binding Settings.Settings.JtdxAllTxtPath, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Watch outgoing messages" />
                         <CheckBox IsChecked="{Binding Settings.Settings.WatchJtdxAllTxt, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="DXCC confirmation mode" />
-                        <TextBox Text="{Binding Settings.Settings.DxccConfirmationMode, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Grid confirmation mode" />
-                        <TextBox Text="{Binding Settings.Settings.GridConfirmationMode, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="State confirmation mode" />
-                        <TextBox Text="{Binding Settings.Settings.StateConfirmationMode, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="IOTA confirmation mode" />
-                        <TextBox Text="{Binding Settings.Settings.IotaConfirmationMode, UpdateSourceTrigger=PropertyChanged}" />
                     </UniformGrid>
                     <WrapPanel Margin="0,8,0,0">
                         <Button Content="Load / Choose Full ADIF" Command="{Binding LoadAdifCommand}"
