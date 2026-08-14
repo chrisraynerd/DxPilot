@@ -1356,7 +1356,9 @@ locationLayout.TogglePanelFocusCommand.Execute(usaLocationPanel);
 if (locationLayout.PanelColumnCount != 1
     || !usaLocationPanel.IsFocused
     || !usaLocationPanel.IsVisible
-    || europeLocationPanel.IsVisible)
+    || europeLocationPanel.IsVisible
+    || locationLayout.VisiblePanels.Count != 1
+    || !ReferenceEquals(locationLayout.VisiblePanels[0], usaLocationPanel))
 {
     failures.Add("Location overview did not enter single-region focus mode correctly.");
 }
@@ -1364,7 +1366,8 @@ locationLayout.TogglePanelFocusCommand.Execute(usaLocationPanel);
 if (locationLayout.PanelColumnCount != 4
     || usaLocationPanel.IsFocused
     || !usaLocationPanel.IsVisible
-    || !europeLocationPanel.IsVisible)
+    || !europeLocationPanel.IsVisible
+    || locationLayout.VisiblePanels.Count != 2)
 {
     failures.Add("Location focus mode did not restore the four-column all-region overview.");
 }

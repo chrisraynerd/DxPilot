@@ -71,6 +71,7 @@ public sealed class LocationViewModel : ObservableObject
     private string _status = "Location panels update whenever UDP decodes arrive.";
     private bool _isApplyingAreaSelection;
     private int _panelColumnCount = 4;
+    private LocationPanelViewModel? _focusedPanel;
 
     public LocationViewModel()
     {
@@ -97,10 +98,16 @@ public sealed class LocationViewModel : ObservableObject
         SelectAllAreasCommand = new RelayCommand(() => SetSelectedAreas(Areas.Select(area => area.Key)));
         ClearAllAreasCommand = new RelayCommand(() => SetSelectedAreas(Array.Empty<string>()));
         TogglePanelFocusCommand = new RelayCommand(TogglePanelFocus);
+        Panels.CollectionChanged += (_, _) =>
+        {
+            if (_focusedPanel == null)
+                RefreshVisiblePanels();
+        };
     }
 
     public ObservableCollection<LocationHuntAreaViewModel> Areas { get; }
     public ObservableCollection<LocationPanelViewModel> Panels { get; } = new();
+    public ObservableCollection<LocationPanelViewModel> VisiblePanels { get; } = new();
     public event EventHandler? SelectedAreasChanged;
     public ICommand SelectAllAreasCommand { get; }
     public ICommand ClearAllAreasCommand { get; }
@@ -157,12 +164,14 @@ public sealed class LocationViewModel : ObservableObject
 
     public void ClearPanelFocus()
     {
+        _focusedPanel = null;
         PanelColumnCount = 4;
         foreach (var panel in Panels)
         {
             panel.IsFocused = false;
             panel.IsVisible = true;
         }
+        RefreshVisiblePanels();
     }
 
     private void TogglePanelFocus(object? parameter)
@@ -176,12 +185,22 @@ public sealed class LocationViewModel : ObservableObject
             return;
         }
 
+        _focusedPanel = selected;
         PanelColumnCount = 1;
         foreach (var panel in Panels)
         {
             panel.IsFocused = ReferenceEquals(panel, selected);
             panel.IsVisible = ReferenceEquals(panel, selected);
         }
+        VisiblePanels.Clear();
+        VisiblePanels.Add(selected);
+    }
+
+    private void RefreshVisiblePanels()
+    {
+        VisiblePanels.Clear();
+        foreach (var panel in Panels)
+            VisiblePanels.Add(panel);
     }
 
     private void RaiseSelectedAreasChanged()
