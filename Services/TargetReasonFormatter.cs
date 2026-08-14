@@ -121,7 +121,7 @@ public static class TargetReasonFormatter
     {
         if (status == null || !status.WorkedAny)
             return NeedStatus.NeverWorked;
-        return status.LoTWConfirmedAny ? NeedStatus.LoTWConfirmed : NeedStatus.WorkedNotLoTWConfirmed;
+        return status.ConfirmedAny ? NeedStatus.LoTWConfirmed : NeedStatus.WorkedNotLoTWConfirmed;
     }
 
     private static string? ScopeText(WantedScope scope, string band, string mode)

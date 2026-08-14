@@ -1384,6 +1384,59 @@ var orderedSessionCalls = sessionOrdering.Opportunities.Select(item => item.Call
 if (!orderedSessionCalls.SequenceEqual(new[] { "NEW2", "UNCONF5", "GRID1", "GRID3" }))
     failures.Add($"Session History did not keep new/unconfirmed DXCC first and then follow universal rank: {string.Join(",", orderedSessionCalls)}.");
 
+var sessionCategoryFilters = new SessionHistoryViewModel();
+sessionCategoryFilters.AllOpportunities.Add(new SessionDxOpportunity
+{
+    Call = "DXCCCALLED",
+    Category = "DXCC",
+    DxccStatus = "Worked unconfirmed",
+    WasCalled = true,
+    LastSeenUtc = DateTime.UtcNow,
+    Outcome = "Called"
+});
+sessionCategoryFilters.AllOpportunities.Add(new SessionDxOpportunity
+{
+    Call = "GRIDUNCONF",
+    Category = "Grid",
+    DxccStatus = "Confirmed",
+    GridNeed = "Unconfirmed",
+    LastSeenUtc = DateTime.UtcNow,
+    Outcome = "Seen only"
+});
+sessionCategoryFilters.ShowDxcc = false;
+sessionCategoryFilters.ShowRareConfirmed = false;
+sessionCategoryFilters.ShowUsaStates = false;
+sessionCategoryFilters.ShowHeard = false;
+sessionCategoryFilters.Refresh();
+if (sessionCategoryFilters.Opportunities.Count != 1
+    || sessionCategoryFilters.Opportunities[0].Call != "GRIDUNCONF")
+{
+    failures.Add("Session History category filters were not strict, or an enabled unconfirmed-grid category was incorrectly hidden with DXCC disabled.");
+}
+sessionCategoryFilters.ShowGrids = false;
+if (sessionCategoryFilters.Opportunities.Count != 0)
+    failures.Add("Session History continued to show an unconfirmed grid after its Grids category was disabled.");
+
+var evaluateSimpleNeed = typeof(MainViewModel).GetMethod(
+    "EvaluateSimpleNeed",
+    BindingFlags.Static | BindingFlags.NonPublic)
+    ?? throw new InvalidOperationException("Missing simple worked-status evaluator.");
+var workedOnlyGrid = new SimpleWorkedStatus
+{
+    Id = "EN74",
+    WorkedAny = true,
+    ConfirmedAny = true,
+    LoTWConfirmedAny = false
+};
+var workedOnlyGridNeed = (NeedStatus)(evaluateSimpleNeed.Invoke(
+    null,
+    [workedOnlyGrid, "40m", "FT8", WantedScope.Overall]) ?? NeedStatus.Unknown);
+if (workedOnlyGridNeed != NeedStatus.LoTWConfirmed
+    || TargetReasonFormatter.FormatGrid(workedOnlyGrid, "EN74") != TargetReasonFormatter.Unavailable)
+{
+    failures.Add("Worked-only grid confirmation was incorrectly treated as an unconfirmed/LoTW-only grid.");
+}
+
 var deferredSessionView = new SessionHistoryViewModel();
 deferredSessionView.AllOpportunities.Add(new SessionDxOpportunity
 {

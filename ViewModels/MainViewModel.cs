@@ -6987,7 +6987,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private NeedStatus EvaluateDxccNeed(string dxcc, string band, string mode, WantedScope scope)
     {
         return _adifMergeResult.Indexes.Dxcc.TryGetValue(dxcc, out var status)
-            ? EvaluateNeed(status.WorkedAny, status.LoTWConfirmedAny, status.WorkedBands, status.WorkedModes, status.WorkedBandModes, status.LoTWConfirmedBands, status.LoTWConfirmedModes, status.LoTWConfirmedBandModes, band, mode, scope)
+            ? EvaluateNeed(status.WorkedAny, status.ConfirmedAny, status.WorkedBands, status.WorkedModes, status.WorkedBandModes, status.ConfirmedBands, status.ConfirmedModes, status.ConfirmedBandModes, band, mode, scope)
             : NeedStatus.NeverWorked;
     }
 
@@ -6995,7 +6995,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         return status == null
             ? NeedStatus.NeverWorked
-            : EvaluateNeed(status.WorkedAny, status.LoTWConfirmedAny, status.WorkedBands, status.WorkedModes, status.WorkedBandModes, status.LoTWConfirmedBands, status.LoTWConfirmedModes, status.LoTWConfirmedBandModes, band, mode, scope);
+            : EvaluateNeed(status.WorkedAny, status.ConfirmedAny, status.WorkedBands, status.WorkedModes, status.WorkedBandModes, status.ConfirmedBands, status.ConfirmedModes, status.ConfirmedBandModes, band, mode, scope);
     }
 
     private void LogGridWantedDecision(DecodeMessage decode, NormalizedGrid normalized, WantedScope scope, SimpleWorkedStatus? status, NeedStatus need)
@@ -7036,13 +7036,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private static NeedStatus EvaluateNeed(
         bool workedAny,
-        bool lotwConfirmedAny,
+        bool confirmedAny,
         HashSet<string> workedBands,
         HashSet<string> workedModes,
         HashSet<string> workedBandModes,
-        HashSet<string> lotwBands,
-        HashSet<string> lotwModes,
-        HashSet<string> lotwBandModes,
+        HashSet<string> confirmedBands,
+        HashSet<string> confirmedModes,
+        HashSet<string> confirmedBandModes,
         string band,
         string mode,
         WantedScope scope)
@@ -7055,17 +7055,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _ => workedAny
         };
 
-        var lotw = scope switch
+        var confirmed = scope switch
         {
-            WantedScope.CurrentBand => !string.IsNullOrWhiteSpace(band) && lotwBands.Contains(band),
-            WantedScope.CurrentMode => !string.IsNullOrWhiteSpace(mode) && lotwModes.Contains(mode),
-            WantedScope.CurrentBandMode => !string.IsNullOrWhiteSpace(band) && !string.IsNullOrWhiteSpace(mode) && lotwBandModes.Contains(BandModeKey(band, mode)),
-            _ => lotwConfirmedAny
+            WantedScope.CurrentBand => !string.IsNullOrWhiteSpace(band) && confirmedBands.Contains(band),
+            WantedScope.CurrentMode => !string.IsNullOrWhiteSpace(mode) && confirmedModes.Contains(mode),
+            WantedScope.CurrentBandMode => !string.IsNullOrWhiteSpace(band) && !string.IsNullOrWhiteSpace(mode) && confirmedBandModes.Contains(BandModeKey(band, mode)),
+            _ => confirmedAny
         };
 
         if (!worked)
             return NeedStatus.NeverWorked;
-        return lotw ? NeedStatus.LoTWConfirmed : NeedStatus.WorkedNotLoTWConfirmed;
+        return confirmed ? NeedStatus.LoTWConfirmed : NeedStatus.WorkedNotLoTWConfirmed;
     }
 
     private static string BuildWantedReason(NeedStatus need, string category, string value, string band, string mode, WantedScope scope)

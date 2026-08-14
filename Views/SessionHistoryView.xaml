@@ -42,16 +42,20 @@
         <Expander Grid.Row="1" Header="Filters and colour key" IsExpanded="False" Margin="0,0,0,8">
             <Border Style="{StaticResource PanelBorder}" Padding="14,10" Margin="0,6,0,0">
                 <StackPanel>
-                    <TextBlock Text="Station category" FontWeight="SemiBold" />
+                    <TextBlock Text="Primary station category" FontWeight="SemiBold" />
+                    <TextBlock Text="These select what the station is wanted for; New and Unconfirmed apply separately within each category."
+                               Foreground="{StaticResource AppTextMuted}" FontSize="11" Margin="0,2,0,5" />
                     <WrapPanel Margin="0,4,0,0">
-                        <CheckBox Content="New / unconfirmed DXCC"
+                        <CheckBox Content="DXCC — new / unconfirmed"
                                   IsChecked="{Binding SessionHistory.ShowDxcc}"
                                   ToolTip="Countries that have never been worked, or have been worked but are not yet confirmed under your selected DXCC confirmation rule." />
-                        <CheckBox Content="Grids" IsChecked="{Binding SessionHistory.ShowGrids}" />
-                        <CheckBox Content="USA States" IsChecked="{Binding SessionHistory.ShowUsaStates}" />
-                        <CheckBox Content="Rare country (DXCC already confirmed)"
+                        <CheckBox Content="Grids — new / unconfirmed" IsChecked="{Binding SessionHistory.ShowGrids}"
+                                  ToolTip="Grid opportunities, including both new and worked-but-unconfirmed grids." />
+                        <CheckBox Content="USA states — new / unconfirmed" IsChecked="{Binding SessionHistory.ShowUsaStates}"
+                                  ToolTip="USA state opportunities, including both new and worked-but-unconfirmed states." />
+                        <CheckBox Content="Rare DXCC — already confirmed"
                                   IsChecked="{Binding SessionHistory.ShowRareConfirmed}"
-                                  ToolTip="An optional repeat contact with a country you have already confirmed, because it ranks highly in the rarity list. It does not outrank a needed DXCC." />
+                                  ToolTip="An optional repeat contact with an already-confirmed DXCC whose rarity rank is within the cutoff configured in Settings. It never outranks a needed DXCC." />
                         <CheckBox Content="Other heard" IsChecked="{Binding SessionHistory.ShowHeard}"
                                   ToolTip="Ordinary stations heard during the session, including stations that were not wanted." />
                     </WrapPanel>

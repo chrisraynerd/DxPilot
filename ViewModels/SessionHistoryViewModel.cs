@@ -271,7 +271,9 @@ public sealed class SessionHistoryViewModel : ObservableObject
             || item.Outcome.Contains("Failed", StringComparison.OrdinalIgnoreCase);
         var isSeenOnly = item.Outcome == "Seen only";
 
-        if (!passesType && !item.WasCalled && !item.WasWorked)
+        // Category filters are strict. Outcome filters are a separate dimension and
+        // must not make called/worked records reappear when their category is hidden.
+        if (!passesType)
             return false;
 
         return (ShowWorked && item.WasWorked)
