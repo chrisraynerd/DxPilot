@@ -5721,6 +5721,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 .Any(changed => changed);
         if (panelLayoutChanged)
         {
+            Location.ClearPanelFocus();
             Location.Panels.Clear();
             foreach (var definition in definitions)
                 Location.Panels.Add(new LocationPanelViewModel(definition.Key, definition.Title));

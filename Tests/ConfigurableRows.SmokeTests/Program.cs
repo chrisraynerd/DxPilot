@@ -1347,6 +1347,28 @@ if (confirmationDefaults.DxccConfirmationMode != "LoTWOnly"
     failures.Add("New installations did not default every confirmation category to LoTW only.");
 }
 
+var locationLayout = new LocationViewModel();
+var usaLocationPanel = new LocationPanelViewModel("USA", "USA");
+var europeLocationPanel = new LocationPanelViewModel("EU", "Europe");
+locationLayout.Panels.Add(usaLocationPanel);
+locationLayout.Panels.Add(europeLocationPanel);
+locationLayout.TogglePanelFocusCommand.Execute(usaLocationPanel);
+if (locationLayout.PanelColumnCount != 1
+    || !usaLocationPanel.IsFocused
+    || !usaLocationPanel.IsVisible
+    || europeLocationPanel.IsVisible)
+{
+    failures.Add("Location overview did not enter single-region focus mode correctly.");
+}
+locationLayout.TogglePanelFocusCommand.Execute(usaLocationPanel);
+if (locationLayout.PanelColumnCount != 4
+    || usaLocationPanel.IsFocused
+    || !usaLocationPanel.IsVisible
+    || !europeLocationPanel.IsVisible)
+{
+    failures.Add("Location focus mode did not restore the four-column all-region overview.");
+}
+
 var sessionOrdering = new SessionHistoryViewModel();
 sessionOrdering.AllOpportunities.Add(new SessionDxOpportunity
 {

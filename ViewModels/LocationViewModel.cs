@@ -27,6 +27,8 @@ public sealed class LocationHuntAreaViewModel : ObservableObject
 public sealed class LocationPanelViewModel : ObservableObject
 {
     private string _summary = "No recent decodes.";
+    private bool _isFocused;
+    private bool _isVisible = true;
 
     public LocationPanelViewModel(string key, string title)
     {
@@ -39,6 +41,24 @@ public sealed class LocationPanelViewModel : ObservableObject
     public string LocationDetailHeader => Key.Equals("IOTA", StringComparison.OrdinalIgnoreCase) ? "IOTA" : "State";
     public ObservableCollection<DxCandidateRow> Candidates { get; } = new();
 
+    public bool IsFocused
+    {
+        get => _isFocused;
+        set
+        {
+            if (SetProperty(ref _isFocused, value))
+                OnPropertyChanged(nameof(FocusButtonText));
+        }
+    }
+
+    public bool IsVisible
+    {
+        get => _isVisible;
+        set => SetProperty(ref _isVisible, value);
+    }
+
+    public string FocusButtonText => IsFocused ? "Show all regions" : "Expand";
+
     public string Summary
     {
         get => _summary;
@@ -50,6 +70,7 @@ public sealed class LocationViewModel : ObservableObject
 {
     private string _status = "Location panels update whenever UDP decodes arrive.";
     private bool _isApplyingAreaSelection;
+    private int _panelColumnCount = 4;
 
     public LocationViewModel()
     {
@@ -75,6 +96,7 @@ public sealed class LocationViewModel : ObservableObject
 
         SelectAllAreasCommand = new RelayCommand(() => SetSelectedAreas(Areas.Select(area => area.Key)));
         ClearAllAreasCommand = new RelayCommand(() => SetSelectedAreas(Array.Empty<string>()));
+        TogglePanelFocusCommand = new RelayCommand(TogglePanelFocus);
     }
 
     public ObservableCollection<LocationHuntAreaViewModel> Areas { get; }
@@ -82,6 +104,12 @@ public sealed class LocationViewModel : ObservableObject
     public event EventHandler? SelectedAreasChanged;
     public ICommand SelectAllAreasCommand { get; }
     public ICommand ClearAllAreasCommand { get; }
+    public ICommand TogglePanelFocusCommand { get; }
+    public int PanelColumnCount
+    {
+        get => _panelColumnCount;
+        private set => SetProperty(ref _panelColumnCount, value);
+    }
     public IReadOnlyList<string> SelectedAreaKeys => Areas.Where(area => area.IsSelected).Select(area => area.Key).ToList();
     public string SelectedAreasDisplay
     {
@@ -125,6 +153,35 @@ public sealed class LocationViewModel : ObservableObject
         }
 
         RaiseSelectedAreasChanged();
+    }
+
+    public void ClearPanelFocus()
+    {
+        PanelColumnCount = 4;
+        foreach (var panel in Panels)
+        {
+            panel.IsFocused = false;
+            panel.IsVisible = true;
+        }
+    }
+
+    private void TogglePanelFocus(object? parameter)
+    {
+        if (parameter is not LocationPanelViewModel selected)
+            return;
+
+        if (selected.IsFocused)
+        {
+            ClearPanelFocus();
+            return;
+        }
+
+        PanelColumnCount = 1;
+        foreach (var panel in Panels)
+        {
+            panel.IsFocused = ReferenceEquals(panel, selected);
+            panel.IsVisible = ReferenceEquals(panel, selected);
+        }
     }
 
     private void RaiseSelectedAreasChanged()
