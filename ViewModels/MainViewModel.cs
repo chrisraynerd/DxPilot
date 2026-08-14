@@ -117,6 +117,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private DateTime _lastRecoveryBlockLogAt = DateTime.MinValue;
     private DateTime _lastTxMismatchCycleAt = DateTime.MinValue;
     private DateTime _lastForcedTxOffAt = DateTime.MinValue;
+    private DateTime _lastUnconfirmedTxStateLogAt = DateTime.MinValue;
     private DateTime _manualTxOffDetectedAt = DateTime.MinValue;
     private string _lastReportRepeatCycleKey = "";
     private string _lastObservedTransmitState = "Unknown";
@@ -3011,9 +3012,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             settings.EnableTxOnRgb,
             settings.Tolerance);
         var looksOff = greyPct >= settings.MinGreyPercent && redPct <= settings.MaxRedPercent;
+        var status = _udpListener.LastStatus;
+        var hasFreshTxStatus = IsFreshTxStatus(status);
+        var udpConfirmsOff = hasFreshTxStatus && !status!.TxEnabled && !status.Transmitting;
+        var udpConfirmsOn = hasFreshTxStatus && status!.TxEnabled;
         Dashboard.PixelState = looksOff
-            ? $"Enable TX looks OFF: grey {greyPct}% / red {redPct}%"
-            : $"Enable TX active or unknown: grey {greyPct}% / red {redPct}%";
+            ? $"Enable TX pixels look OFF: grey {greyPct}% / red {redPct}%. {DescribeTxUdpState(status, hasFreshTxStatus)}"
+            : $"Enable TX pixels active or unknown: grey {greyPct}% / red {redPct}%. {DescribeTxUdpState(status, hasFreshTxStatus)}";
 
         var currentDxCall = (_udpListener.LastStatus?.DxCall ?? _actualJtdxDxCall).Trim();
         if (!string.IsNullOrWhiteSpace(currentDxCall)
@@ -3025,17 +3030,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _observedWrongTargetCall = currentDxCall;
             _lastCorrectiveAction = $"Enable TX blocked because JTDX DX Call is {currentDxCall}, not {_lockedTarget.Callsign}";
             AddAction($"{source}: Enable TX blocked; JTDX DX Call is {currentDxCall}, expected {_lockedTarget.Callsign}.");
-            if (!looksOff && DateTime.Now - _lastForcedTxOffAt >= TimeSpan.FromSeconds(4))
-            {
-                _lastForcedTxOffAt = DateTime.Now;
-                _clicker.MoveClickRestore(settings.EnableTxX, settings.EnableTxY);
-                AddAction($"{source}: clicked Enable TX off because JTDX is aimed at {currentDxCall}, not {_lockedTarget.Callsign}.");
-            }
+            EnsureEnableTxOff(
+                $"{source}: JTDX is aimed at {currentDxCall}, not {_lockedTarget.Callsign}",
+                udpConfirmsOn);
             return;
         }
 
-        if (!looksOff)
+        if (udpConfirmsOn)
             return;
+        if (!udpConfirmsOff && !(!hasFreshTxStatus && looksOff))
+        {
+            LogUnconfirmedTxState($"{source}: Enable TX was not clicked because its current state could not be confirmed safely.");
+            return;
+        }
         if (!ShouldClickEnableTxRecovery())
         {
             _lastCorrectiveAction = $"Waiting for JTDX to accept {_lockedTarget.Callsign} before enabling TX";
@@ -3070,17 +3077,68 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             settings.EnableTxOnRgb,
             settings.Tolerance);
         var looksOff = greyPct >= settings.MinGreyPercent && redPct <= settings.MaxRedPercent;
+        var status = _udpListener.LastStatus;
+        var hasFreshTxStatus = IsFreshTxStatus(status);
+        var udpConfirmsEnabled = hasFreshTxStatus && status!.TxEnabled;
+        var udpConfirmsOff = hasFreshTxStatus && !status!.TxEnabled && !status.Transmitting;
         Dashboard.PixelState = looksOff
-            ? $"Enable TX looks OFF: grey {greyPct}% / red {redPct}%"
-            : $"Enable TX active or unknown: grey {greyPct}% / red {redPct}%";
+            ? $"Enable TX pixels look OFF: grey {greyPct}% / red {redPct}%. {DescribeTxUdpState(status, hasFreshTxStatus)}"
+            : $"Enable TX pixels active or unknown: grey {greyPct}% / red {redPct}%. {DescribeTxUdpState(status, hasFreshTxStatus)}";
 
-        if ((!statusConfirmsEnabled && looksOff)
-            || DateTime.Now - _lastForcedTxOffAt < TimeSpan.FromSeconds(4))
+        // Enable TX is a toggle. A visual result of "unknown" must never be
+        // interpreted as "on", because clicking an already-off toggle arms TX.
+        // A recent JTDX Status packet is therefore authoritative for shutdown.
+        if (udpConfirmsOff)
+            return;
+
+        if (!udpConfirmsEnabled)
+        {
+            var statusHint = statusConfirmsEnabled
+                ? "The caller expected TX to be enabled, but no sufficiently recent JTDX Status confirms it."
+                : "JTDX has not freshly confirmed that Enable TX is on.";
+            LogUnconfirmedTxState($"{source}: no Enable TX click was made. {statusHint} Pixel result: grey {greyPct}% / red {redPct}%.");
+            return;
+        }
+
+        if (DateTime.Now - _lastForcedTxOffAt < TimeSpan.FromSeconds(4))
             return;
 
         _lastForcedTxOffAt = DateTime.Now;
         _clicker.MoveClickRestore(settings.EnableTxX, settings.EnableTxY);
-        AddAction($"{source}: clicked Enable TX off.");
+        AddAction($"{source}: fresh JTDX UDP Status confirmed Enable TX on at {status!.ReceivedAt:HH:mm:ss.fff}; clicked the toggle once to turn it off.");
+    }
+
+    private static bool IsFreshTxStatus(JtdxStatusMessage? status)
+    {
+        if (status == null)
+            return false;
+
+        var age = DateTime.Now - status.ReceivedAt;
+        return age >= TimeSpan.FromSeconds(-1) && age <= TimeSpan.FromSeconds(3);
+    }
+
+    private static string DescribeTxUdpState(JtdxStatusMessage? status, bool isFresh)
+    {
+        if (status == null)
+            return "No JTDX UDP TX state available.";
+
+        var ageMs = Math.Max(0, (DateTime.Now - status.ReceivedAt).TotalMilliseconds);
+        if (!isFresh)
+            return $"JTDX UDP TX state is stale ({ageMs / 1000d:0.0}s old).";
+
+        var state = status.Transmitting
+            ? "transmitting"
+            : status.TxEnabled ? "enabled" : "off";
+        return $"Fresh JTDX UDP says TX is {state} ({ageMs:0}ms old).";
+    }
+
+    private void LogUnconfirmedTxState(string message)
+    {
+        if (DateTime.Now - _lastUnconfirmedTxStateLogAt < TimeSpan.FromSeconds(5))
+            return;
+
+        _lastUnconfirmedTxStateLogAt = DateTime.Now;
+        AddAction(message);
     }
 
     private bool RecordCallAttempt(string cycleKey = "")
@@ -4217,6 +4275,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             _recoveryMode = "UdpRequired";
             _lastCorrectiveAction = "Enable TX blocked because UDP listener is stopped";
+            return false;
+        }
+
+        var txStatus = _udpListener.LastStatus;
+        if (!IsFreshTxStatus(txStatus))
+        {
+            _recoveryMode = "FreshUdpRequired";
+            _lastCorrectiveAction = "Enable TX blocked because the JTDX UDP TX state is not fresh";
+            LogUnconfirmedTxState("Enable TX recovery was not clicked because a fresh JTDX UDP TX state is required.");
+            return false;
+        }
+
+        if (txStatus!.TxEnabled || txStatus.Transmitting)
+        {
+            _recoveryMode = "TxAlreadyActive";
+            _lastCorrectiveAction = "Enable TX recovery not required because JTDX does not confirm receive-only TX-off state";
             return false;
         }
 
@@ -8933,6 +9007,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void ArmPskEnableTx()
     {
+        var status = _udpListener.LastStatus;
+        if (!IsFreshTxStatus(status) || status!.TxEnabled || status.Transmitting)
+        {
+            var state = DescribeTxUdpState(status, IsFreshTxStatus(status));
+            throw new InvalidOperationException($"PSK propagation CQ was not armed because Enable TX was not freshly confirmed off. {state}");
+        }
+
         _pskLastEnableTxClickAt = DateTime.Now;
         _clicker.MoveClickRestore(Settings.Settings.EnableTxX, Settings.Settings.EnableTxY);
     }
