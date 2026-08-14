@@ -135,6 +135,7 @@ public sealed class SessionHistoryViewModel : ObservableObject
             if (!SetProperty(ref _isViewingArchive, value))
                 return;
             OnPropertyChanged(nameof(ViewHeading));
+            OnPropertyChanged(nameof(ViewSubtitle));
             OnPropertyChanged(nameof(ArchiveButtonText));
             Refresh();
         }
@@ -147,6 +148,9 @@ public sealed class SessionHistoryViewModel : ObservableObject
     }
 
     public string ViewHeading => IsViewingArchive ? "Full Archive" : "Current Session";
+    public string ViewSubtitle => IsViewingArchive
+        ? "Permanently stored records from this and previous DX Pilot runs"
+        : "Across every band and mode used during this DX Pilot run";
     public string ArchiveButtonText => IsViewingArchive ? "Current Session" : "Full Archive";
 
     public ICommand? ExportCommand { get; set; }

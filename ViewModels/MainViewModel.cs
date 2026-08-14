@@ -963,7 +963,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Map.ClearForBandChange(previous.BandDisplay, _radioContext.BandDisplay);
         RadioContextStatus = $"Changed from {previousDisplay} to {_radioContext.Display}. Waiting for the first complete decode batch.";
         Dashboard.OverallStatus = RadioContextStatus;
-        AddAction($"Radio context changed: {previousDisplay} -> {_radioContext.Display}. All live station tables, ranks and JTDX row positions were cleared.");
+        AddAction($"Radio context changed: {previousDisplay} -> {_radioContext.Display}. Live band tables and JTDX row positions were cleared; full-run Session History was retained.");
     }
 
     private bool PrepareDecodeForCurrentRadioContext(DecodeMessage decode)
@@ -6056,7 +6056,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        ExpireSessionHistory();
         var target = _targetScorer.Score(decode, _logbook, _adifMergeResult.Indexes, _decodeHistory, Settings.Settings);
         var item = UpsertSessionOpportunity(target);
         var observationId = $"{DecodeSeenUtc(decode).Ticks}|{decode.AudioOffset?.ToString() ?? ""}|{decode.RawText}";
@@ -6490,20 +6489,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _sessionArchiveDirty = false;
         else
             SessionHistory.Status = $"Full Archive save failed: {error}";
-    }
-
-    private void ExpireSessionHistory()
-    {
-        var expiry = Settings.Settings.SessionHistoryExpiryMinutes;
-        if (expiry <= 0)
-            return;
-
-        var cutoff = DateTime.UtcNow.AddMinutes(-expiry);
-        for (var i = SessionHistory.AllOpportunities.Count - 1; i >= 0; i--)
-        {
-            if (SessionHistory.AllOpportunities[i].LastSeenUtc < cutoff)
-                SessionHistory.AllOpportunities.RemoveAt(i);
-        }
     }
 
     private void ExportSessionHistory()

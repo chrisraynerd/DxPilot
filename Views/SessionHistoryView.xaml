@@ -1,41 +1,49 @@
 <UserControl x:Class="JtdxAutoResume.V3.Views.SessionHistoryView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <DockPanel Margin="0,12,0,0">
-        <Border DockPanel.Dock="Top" Style="{StaticResource PanelBorder}" Margin="0,0,0,10">
-            <DockPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+    <Grid Margin="0,12,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource PanelBorder}" Padding="14,11" Margin="0,0,0,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,22,0">
+                    <TextBlock Text="{Binding SessionHistory.ViewHeading}" FontWeight="SemiBold" FontSize="17" />
+                    <TextBlock Text="{Binding SessionHistory.ViewSubtitle}"
+                               Foreground="{StaticResource AppTextMuted}" FontSize="11" Margin="0,2,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <DockPanel LastChildFill="True">
+                        <TextBlock DockPanel.Dock="Left" Text="Search" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,7,0" />
+                        <TextBox Text="{Binding SessionHistory.SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Width="360" Margin="0" HorizontalAlignment="Left"
+                                 ToolTip="Search callsign, country, DXCC number, grid, state, wanted reason or outcome." />
+                    </DockPanel>
+                    <TextBlock Text="{Binding SessionHistory.Status}" Foreground="{StaticResource AppTextMuted}" Margin="0,5,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
                     <Button Content="{Binding SessionHistory.ArchiveButtonText}" Command="{Binding SessionHistory.ToggleArchiveCommand}" />
                     <Button Content="Export CSV" Command="{Binding SessionHistory.ExportCommand}" />
-                    <Button Content="Clear Current Session" Command="{Binding SessionHistory.ClearCommand}" />
+                    <Button Content="Clear session" Command="{Binding SessionHistory.ClearCommand}" Margin="0" />
                 </StackPanel>
+            </Grid>
+        </Border>
+
+        <Expander Grid.Row="1" Header="Filters and colour key" IsExpanded="False" Margin="0,0,0,8">
+            <Border Style="{StaticResource PanelBorder}" Padding="14,10" Margin="0,6,0,0">
                 <StackPanel>
-                    <TextBlock Text="{Binding SessionHistory.ViewHeading}" FontWeight="SemiBold" FontSize="16" />
-                    <TextBlock Text="{Binding SessionHistory.Status}" Foreground="#526577" Margin="0,2,0,8" />
-                    <DockPanel Margin="0,0,0,8" LastChildFill="False">
-                        <TextBlock Text="Search:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <TextBox Text="{Binding SessionHistory.SearchText, UpdateSourceTrigger=PropertyChanged}"
-                                 Width="250" Margin="0,0,10,0"
-                                 ToolTip="Search callsign, country, DXCC number, grid, state, wanted reason or outcome." />
-                        <TextBlock Text="Full Archive is stored permanently; Current Session remains the default after startup."
-                                   VerticalAlignment="Center" Foreground="#526577" TextWrapping="Wrap" />
-                    </DockPanel>
-                    <Border BorderBrush="#D8E0E8" BorderThickness="0,0,0,1" Padding="0,0,0,8" Margin="0,0,0,8">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1.4*" />
-                                <ColumnDefinition Width="2*" />
-                                <ColumnDefinition Width="2.2*" />
-                                <ColumnDefinition Width="1.6*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="{Binding CurrentTargetStatus.OperatingMode}" FontWeight="SemiBold" />
-                            <TextBlock Grid.Column="1" Text="{Binding CurrentTargetStatus.SelectedTargetDisplay}" FontWeight="SemiBold" />
-                            <TextBlock Grid.Column="2" Text="{Binding CurrentTargetStatus.PlainStatusMessage}" TextWrapping="Wrap" />
-                            <TextBlock Grid.Column="3" Text="{Binding CurrentTargetStatus.TxGateStatus}" TextWrapping="Wrap" />
-                        </Grid>
-                    </Border>
-                    <TextBlock Text="Show wanted categories" FontWeight="SemiBold" />
-                    <WrapPanel>
+                    <TextBlock Text="Station category" FontWeight="SemiBold" />
+                    <WrapPanel Margin="0,4,0,0">
                         <CheckBox Content="New / unconfirmed DXCC"
                                   IsChecked="{Binding SessionHistory.ShowDxcc}"
                                   ToolTip="Countries that have never been worked, or have been worked but are not yet confirmed under your selected DXCC confirmation rule." />
@@ -47,7 +55,7 @@
                         <CheckBox Content="Other heard" IsChecked="{Binding SessionHistory.ShowHeard}"
                                   ToolTip="Ordinary stations heard during the session, including stations that were not wanted." />
                     </WrapPanel>
-                    <WrapPanel Margin="0,2,0,4">
+                    <WrapPanel Margin="0,0,0,3">
                         <Border Style="{StaticResource SemanticLegendSwatch}" Background="{StaticResource SemanticNewDxccBackground}" /><TextBlock Text="New DXCC" Margin="0,0,10,0" />
                         <Border Style="{StaticResource SemanticLegendSwatch}" Background="{StaticResource SemanticUnconfirmedDxccBackground}" /><TextBlock Text="Unconfirmed DXCC" Margin="0,0,10,0" />
                         <Border Style="{StaticResource SemanticLegendSwatch}" Background="{StaticResource SemanticNewGridBackground}" /><TextBlock Text="Wanted grid" Margin="0,0,10,0" />
@@ -55,7 +63,7 @@
                         <Border Style="{StaticResource SemanticLegendSwatch}" Background="{StaticResource SemanticRareDxccBackground}" /><TextBlock Text="Rare DXCC" Margin="0,0,10,0" />
                         <Border Style="{StaticResource SemanticLegendSwatch}" Background="{StaticResource SemanticHeardBackground}" /><TextBlock Text="Other heard" />
                     </WrapPanel>
-                    <TextBlock Text="Outcome" FontWeight="SemiBold" Margin="0,6,0,0" />
+                    <TextBlock Text="Outcome" FontWeight="SemiBold" Margin="0,4,0,0" />
                     <WrapPanel>
                         <CheckBox Content="Seen only" IsChecked="{Binding SessionHistory.ShowSeenOnly}" />
                         <CheckBox Content="Called" IsChecked="{Binding SessionHistory.ShowCalledOnly}" />
@@ -65,27 +73,12 @@
                         <CheckBox Content="Failed / mismatch" IsChecked="{Binding SessionHistory.ShowFailedMismatch}" />
                     </WrapPanel>
                 </StackPanel>
-            </DockPanel>
-        </Border>
+            </Border>
+        </Expander>
 
-        <TextBox DockPanel.Dock="Bottom"
-                 Text="{Binding SessionHistory.SelectedOpportunity.Details, Mode=OneWay, TargetNullValue=Select a DX opportunity to see details.}"
-                 IsReadOnly="True"
-                 TextWrapping="Wrap"
-                 AcceptsReturn="True"
-                 MinHeight="150"
-                 MaxHeight="230"
-                 VerticalScrollBarVisibility="Auto"
-                 Margin="0,10,0,0" />
-
-        <Border DockPanel.Dock="Bottom" Style="{StaticResource PanelBorder}" Margin="0,10,0,0" MaxHeight="110">
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="Session History Recent Actions" FontWeight="SemiBold" Margin="0,0,0,4" />
-                <ListBox ItemsSource="{Binding SessionHistoryRecentActions}" BorderThickness="0" />
-            </DockPanel>
-        </Border>
-
-        <DataGrid ItemsSource="{Binding SessionHistory.Opportunities}"
+        <DataGrid Grid.Row="2"
+                  MinHeight="300"
+                  ItemsSource="{Binding SessionHistory.Opportunities}"
                   SelectedItem="{Binding SessionHistory.SelectedOpportunity}"
                   AutoGenerateColumns="False"
                   IsReadOnly="True"
@@ -180,5 +173,21 @@
                 <DataGridTextColumn Header="Status" Binding="{Binding StationStatusDisplay}" Width="125" />
             </DataGrid.Columns>
         </DataGrid>
-    </DockPanel>
+
+        <Expander Grid.Row="3" Header="Selected station details" IsExpanded="False" Margin="0,8,0,0">
+            <TextBox Text="{Binding SessionHistory.SelectedOpportunity.Details, Mode=OneWay, TargetNullValue=Select a DX opportunity to see details.}"
+                     IsReadOnly="True"
+                     TextWrapping="Wrap"
+                     AcceptsReturn="True"
+                     Height="150"
+                     VerticalScrollBarVisibility="Auto"
+                     Margin="0,6,0,0" />
+        </Expander>
+
+        <Expander Grid.Row="4" Header="Session history recent actions" IsExpanded="False" Margin="0,6,0,0">
+            <Border Style="{StaticResource PanelBorder}" Padding="10" Margin="0,6,0,0" Height="100">
+                <ListBox ItemsSource="{Binding SessionHistoryRecentActions}" BorderThickness="0" />
+            </Border>
+        </Expander>
+    </Grid>
 </UserControl>

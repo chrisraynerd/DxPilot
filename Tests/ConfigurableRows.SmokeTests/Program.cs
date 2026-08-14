@@ -555,6 +555,18 @@ using (var viewModel = new MainViewModel())
     panel.Candidates.Add(new DxCandidateRow());
     viewModel.Location.Panels.Add(panel);
     PrivateDecodeHistory(viewModel).Add(new DecodeMessage());
+    viewModel.SessionHistory.AllOpportunities.Add(new SessionDxOpportunity
+    {
+        SessionId = "radio-context-regression",
+        OpportunityId = "291:K1HISTORY:20M:FT8",
+        Call = "K1HISTORY",
+        Band = "20m",
+        Mode = "FT8",
+        Category = "Heard",
+        DxccStatus = "Confirmed",
+        LastSeenUtc = DateTime.UtcNow,
+        Outcome = "Seen only"
+    });
 
     var changedStatus = new JtdxStatusMessage
     {
@@ -581,6 +593,8 @@ using (var viewModel = new MainViewModel())
     {
         failures.Add("Band change did not clear only live map stations while retaining permanent LoTW grid shading.");
     }
+    if (!viewModel.SessionHistory.AllOpportunities.Any(item => item.Call == "K1HISTORY" && item.Band == "20m"))
+        failures.Add("Band change incorrectly cleared the full-run Session History.");
 
     var decode = new DecodeMessage
     {
