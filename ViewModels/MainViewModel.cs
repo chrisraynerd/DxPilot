@@ -3579,6 +3579,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task ProcessJtdxStatusForCurrentTargetAsync(JtdxStatusMessage status)
     {
+        // Stopped means monitor-only. UDP status still reaches this method so
+        // the UI can remain live, but no normal hunting safety or recovery
+        // path may click JTDX until an assistance/CALL NOW session is running.
+        // PSK probe control is routed separately by the status event handler.
+        if (!_autoResume.IsRunning)
+            return;
+
         if (_lockedTarget == null)
         {
             PreventUnwantedCq(status);
@@ -4575,7 +4582,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void TryAdoptInboundQso(DecodeMessage decode)
     {
-        if (!Settings.Settings.AcceptIncomingCalls)
+        // Passive monitoring must never create an automation-owned QSO lock.
+        // Inbound adoption is available only while a hunting/CALL NOW session
+        // is actively authorised to control JTDX.
+        if (!_autoResume.IsRunning || !Settings.Settings.AcceptIncomingCalls)
             return;
 
         if (_huntState != HuntState.Idle || !IsInboundReplyToMe(decode.RawText, out var inboundCall))
@@ -5713,7 +5723,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _adifMergeResult.Indexes,
             Settings.Settings,
             300);
-        var definitions = LocationPanelDefinitions(Location.SelectedAreaKeys);
+        // The Location workspace is always a complete geographical monitor.
+        // Hunt-area selection controls targeting only; it must not hide the
+        // overview count or station card for an unselected region.
+        var definitions = AllLocationPanelDefinitions();
 
         var panelLayoutChanged = Location.Panels.Count != definitions.Count
             || Location.Panels
@@ -5793,6 +5806,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private static IReadOnlyList<(string Key, string Title)> LocationPanelDefinitions(IEnumerable<string> selectedAreaKeys)
     {
         var selected = selectedAreaKeys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return AllLocationPanelDefinitions()
+            .Where(definition => selected.Contains(definition.Key))
+            .ToList();
+    }
+
+    private static IReadOnlyList<(string Key, string Title)> AllLocationPanelDefinitions()
+    {
         return new (string Key, string Title)[]
         {
             ("USA", "USA"),
@@ -5804,9 +5824,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ("OC", "Oceania"),
             ("IOTA", "Known IOTA stations"),
             ("OTHER", "Antarctica / unresolved")
-        }
-        .Where(definition => selected.Contains(definition.Key))
-        .ToList();
+        };
     }
 
     private bool MatchesSelectedLocationAreas(DxTarget target)

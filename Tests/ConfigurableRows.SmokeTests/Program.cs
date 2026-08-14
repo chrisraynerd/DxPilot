@@ -1036,6 +1036,60 @@ using (var viewModel = new MainViewModel())
 
 var sourceRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 var mainWindowXaml = File.ReadAllText(Path.Combine(sourceRoot, "MainWindow.xaml"));
+var locationViewXaml = File.ReadAllText(Path.Combine(sourceRoot, "Views", "LocationView.xaml"));
+var locationViewCode = File.ReadAllText(Path.Combine(sourceRoot, "Views", "LocationView.xaml.cs"));
+if (!locationViewXaml.Contains("Columns=\"{Binding Location.PanelColumnCount}\"", StringComparison.Ordinal)
+    || !locationViewXaml.Contains("<Setter Property=\"Height\" Value=\"260\" />", StringComparison.Ordinal)
+    || !locationViewXaml.Contains("ColumnHeaderHeight=\"28\"", StringComparison.Ordinal)
+    || !locationViewXaml.Contains("ItemsSource=\"{Binding Location.Panels}\"", StringComparison.Ordinal)
+    || !locationViewXaml.Contains("Text=\"{Binding Candidates.Count}\"", StringComparison.Ordinal)
+    || !locationViewXaml.Contains("CurrentTargetStatus.SelectedTargetDisplay", StringComparison.Ordinal)
+    || !locationViewXaml.Contains("CurrentTargetStatus.AttemptCounterLabel", StringComparison.Ordinal)
+    || !locationViewXaml.Contains("CurrentTargetStatus.TxGateStatus", StringComparison.Ordinal)
+    || !locationViewCode.Contains("container.BringIntoView()", StringComparison.Ordinal)
+    || !locationViewCode.Contains("LocationPanelsScrollViewer.ScrollToTop()", StringComparison.Ordinal))
+{
+    failures.Add("Location Hunt did not retain four-column overview cards with six-row height, region counts, jump/focus navigation and live target-cycle status.");
+}
+
+var mainViewModelSource = File.ReadAllText(Path.Combine(sourceRoot, "ViewModels", "MainViewModel.cs"));
+var statusControlMethodStart = mainViewModelSource.IndexOf(
+    "private async Task ProcessJtdxStatusForCurrentTargetAsync",
+    StringComparison.Ordinal);
+var statusControlNoTargetBranch = statusControlMethodStart < 0
+    ? -1
+    : mainViewModelSource.IndexOf("if (_lockedTarget == null)", statusControlMethodStart, StringComparison.Ordinal);
+var stoppedMonitorOnlyGate = statusControlMethodStart < 0
+    ? -1
+    : mainViewModelSource.IndexOf("if (!_autoResume.IsRunning)", statusControlMethodStart, StringComparison.Ordinal);
+if (statusControlMethodStart < 0
+    || stoppedMonitorOnlyGate < statusControlMethodStart
+    || statusControlNoTargetBranch < 0
+    || stoppedMonitorOnlyGate > statusControlNoTargetBranch)
+{
+    failures.Add("Stopped monitor-only mode was not gated before normal JTDX status control can prevent CQ or click Enable TX.");
+}
+
+var inboundAdoptionMethodStart = mainViewModelSource.IndexOf(
+    "private void TryAdoptInboundQso",
+    StringComparison.Ordinal);
+var inboundAdoptionMethodEnd = inboundAdoptionMethodStart < 0
+    ? -1
+    : mainViewModelSource.IndexOf("private bool MessageInvolvesCurrentTarget", inboundAdoptionMethodStart, StringComparison.Ordinal);
+var stoppedInboundAdoptionGate = inboundAdoptionMethodStart < 0
+    ? -1
+    : mainViewModelSource.IndexOf(
+        "if (!_autoResume.IsRunning || !Settings.Settings.AcceptIncomingCalls)",
+        inboundAdoptionMethodStart,
+        StringComparison.Ordinal);
+if (inboundAdoptionMethodStart < 0
+    || inboundAdoptionMethodEnd < 0
+    || stoppedInboundAdoptionGate < inboundAdoptionMethodStart
+    || stoppedInboundAdoptionGate > inboundAdoptionMethodEnd)
+{
+    failures.Add("Stopped monitor-only mode could still adopt an inbound QSO lock.");
+}
+
 var compactStripXaml = File.ReadAllText(Path.Combine(sourceRoot, "Views", "CompactConditionsStrip.xaml"));
 var compactStripCode = File.ReadAllText(Path.Combine(sourceRoot, "Views", "CompactConditionsStrip.xaml.cs"));
 var compactStripCount = mainWindowXaml.Split("<views:CompactConditionsStrip", StringSplitOptions.None).Length - 1;
@@ -1371,6 +1425,15 @@ if (locationLayout.PanelColumnCount != 4
 {
     failures.Add("Location focus mode did not restore the four-column all-region overview.");
 }
+
+var allLocationDefinitions = typeof(MainViewModel).GetMethod(
+    "AllLocationPanelDefinitions",
+    BindingFlags.Static | BindingFlags.NonPublic)
+    ?? throw new InvalidOperationException("Missing complete Location monitor definitions.");
+var allLocationRegions = (System.Collections.IEnumerable)(allLocationDefinitions.Invoke(null, null)
+    ?? throw new InvalidOperationException("Complete Location monitor definitions returned null."));
+if (allLocationRegions.Cast<object>().Count() != 9)
+    failures.Add("Location monitoring did not retain all nine geographical overview cards independently of hunt-area selection.");
 
 var sessionOrdering = new SessionHistoryViewModel();
 sessionOrdering.AllOpportunities.Add(new SessionDxOpportunity

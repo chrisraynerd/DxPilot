@@ -7,40 +7,119 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,10">
-            <StackPanel>
-                <StackPanel>
-                    <TextBlock Text="LOCATION HUNT" Style="{StaticResource SectionEyebrow}" />
-                    <TextBlock Text="Choose where in the world DX Pilot should hunt" Style="{StaticResource WorkspaceTitle}" Margin="0,2,0,0" />
-                    <TextBlock Text="Selected regions are combined and ranked together; a contactable New DXCC anywhere still has absolute priority." Foreground="{StaticResource AppTextMuted}" TextWrapping="Wrap" Margin="0,3,0,0" />
-                    <TextBlock Text="{Binding Location.Status}" Margin="0,5,0,0" FontWeight="SemiBold" TextWrapping="Wrap" />
+        <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,8" Padding="12,9">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="LOCATION HUNT" Style="{StaticResource SectionEyebrow}"
+                               VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <TextBlock Text="Choose where DX Pilot should hunt" FontSize="17"
+                               FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Location.Status}" Foreground="{StaticResource AppTextMuted}"
+                               VerticalAlignment="Center" Margin="14,0,0,0"
+                               TextTrimming="CharacterEllipsis" />
                 </StackPanel>
-                <Expander Header="{Binding Location.SelectedAreasDisplay, StringFormat=Hunt-area filters — {0}}"
-                          IsExpanded="False" Margin="0,9,0,0">
-                    <DockPanel Margin="0,8,0,0">
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0">
-                            <Button Content="All areas" Command="{Binding Location.SelectAllAreasCommand}" MinWidth="70" Padding="8,4" />
-                            <Button Content="None" Command="{Binding Location.ClearAllAreasCommand}" MinWidth="55" Padding="8,4" Margin="0" />
-                        </StackPanel>
-                        <ItemsControl ItemsSource="{Binding Location.Areas}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <CheckBox Content="{Binding Title}"
-                                              IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                              Style="{StaticResource ChoiceChipCheckBox}" />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </DockPanel>
+
+                <Expander Grid.Column="1"
+                          Header="{Binding Location.SelectedAreasDisplay, StringFormat=Choose regions - {0}}"
+                          IsExpanded="False" Margin="12,0,0,0" HorizontalAlignment="Right">
+                    <Border BorderBrush="{StaticResource AppBorder}" BorderThickness="1" CornerRadius="4"
+                            Background="White" Padding="10" Margin="0,6,0,0" MaxWidth="980">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0">
+                                <Button Content="All areas" Command="{Binding Location.SelectAllAreasCommand}"
+                                        MinWidth="70" Padding="8,4" />
+                                <Button Content="None" Command="{Binding Location.ClearAllAreasCommand}"
+                                        MinWidth="55" Padding="8,4" Margin="0" />
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding Location.Areas}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Title}"
+                                                  IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  Style="{StaticResource ChoiceChipCheckBox}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DockPanel>
+                    </Border>
                 </Expander>
-            </StackPanel>
+
+                <ItemsControl Grid.Row="1" Grid.ColumnSpan="2" ItemsSource="{Binding Location.Panels}"
+                              Margin="0,8,0,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Click="RegionOverview_Click" Padding="9,4" Margin="0,0,6,5"
+                                    ToolTip="Jump to this region's station list">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                               VerticalAlignment="Center" />
+                                    <Border Background="#DCEAF5" CornerRadius="9" Padding="6,1"
+                                            Margin="7,0,0,0">
+                                        <TextBlock Text="{Binding Candidates.Count}" FontWeight="SemiBold"
+                                                   Foreground="#173B57" />
+                                    </Border>
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Border Grid.Row="2" Grid.ColumnSpan="2" BorderBrush="{StaticResource AppBorder}"
+                        BorderThickness="0,1,0,0" Margin="0,4,0,0" Padding="0,7,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.2*" />
+                            <ColumnDefinition Width="1.8*" />
+                            <ColumnDefinition Width="2.5*" />
+                            <ColumnDefinition Width="1.5*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="MODE" Style="{StaticResource SectionEyebrow}" />
+                            <TextBlock Text="{Binding CurrentTargetStatus.OperatingMode}" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="LOCKED TARGET" Style="{StaticResource SectionEyebrow}" />
+                            <TextBlock Text="{Binding CurrentTargetStatus.SelectedTargetDisplay}"
+                                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="CALLING / QSO SEQUENCE" Style="{StaticResource SectionEyebrow}" />
+                            <TextBlock Text="{Binding CurrentTargetStatus.AttemptCounterLabel}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding CurrentTargetStatus.PlainStatusMessage}"
+                                       Foreground="{StaticResource AppTextMuted}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="3">
+                            <TextBlock Text="TX / JTDX" Style="{StaticResource SectionEyebrow}" />
+                            <TextBlock Text="{Binding CurrentTargetStatus.TxGateStatus}"
+                                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding CurrentTargetStatus.ActualJtdxDxCall, StringFormat=JTDX target: {0}}"
+                                       Foreground="{StaticResource AppTextMuted}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
         </Border>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <ItemsControl ItemsSource="{Binding Location.VisiblePanels}">
+        <ScrollViewer x:Name="LocationPanelsScrollViewer" Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="LocationPanelsItemsControl" ItemsSource="{Binding Location.VisiblePanels}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <UniformGrid Columns="{Binding Location.PanelColumnCount}" />
@@ -51,7 +130,7 @@
                         <Border Margin="0,0,8,8">
                             <Border.Style>
                                 <Style TargetType="Border" BasedOn="{StaticResource PanelBorder}">
-                                    <Setter Property="Height" Value="188" />
+                                    <Setter Property="Height" Value="260" />
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsFocused}" Value="True">
                                             <Setter Property="Height" Value="560" />
@@ -64,16 +143,22 @@
                             </Border.Style>
                             <DockPanel>
                                 <Grid DockPanel.Dock="Top" Margin="0,0,0,7">
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
                                     <StackPanel>
                                         <TextBlock Text="HUNT REGION" Style="{StaticResource SectionEyebrow}" />
-                                        <TextBlock Text="{Binding Title}" FontSize="17" FontWeight="SemiBold" Margin="0,1,0,0" />
-                                        <TextBlock Text="{Binding Summary}" Foreground="{StaticResource AppTextMuted}" FontSize="11" />
+                                        <TextBlock Text="{Binding Title}" FontSize="17" FontWeight="SemiBold"
+                                                   Margin="0,1,0,0" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Summary}" Foreground="{StaticResource AppTextMuted}"
+                                                   FontSize="11" />
                                     </StackPanel>
                                     <Button Grid.Column="1" Content="{Binding FocusButtonText}"
                                             Command="{Binding DataContext.Location.TogglePanelFocusCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            CommandParameter="{Binding}" MinWidth="64" MinHeight="26" Padding="8,3" Margin="8,0,0,0"
-                                            VerticalAlignment="Top" />
+                                            CommandParameter="{Binding}" MinWidth="64" MinHeight="26"
+                                            Padding="8,3" Margin="8,0,0,0" VerticalAlignment="Top"
+                                            Click="RegionFocus_Click" />
                                 </Grid>
                                 <DataGrid ItemsSource="{Binding Candidates}"
                                           Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -81,6 +166,8 @@
                                           AutoGenerateColumns="False"
                                           IsReadOnly="True"
                                           CanUserAddRows="False"
+                                          RowHeight="22"
+                                          ColumnHeaderHeight="28"
                                           MouseDoubleClick="LocationGrid_MouseDoubleClick"
                                           PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
                                     <DataGrid.ContextMenu>
@@ -102,7 +189,8 @@
                                     </DataGrid.ContextMenu>
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="#" Binding="{Binding RankText}" Width="34" />
-                                        <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignCallTemplate}" SortMemberPath="Call" Width="70" />
+                                        <DataGridTemplateColumn Header="Call" CellTemplate="{StaticResource WorkedCallsignCallTemplate}"
+                                                                SortMemberPath="Call" Width="70" />
                                         <DataGridTextColumn Header="Country" Binding="{Binding Country}" Width="88" />
                                         <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="48" />
                                         <DataGridTemplateColumn Width="44">
