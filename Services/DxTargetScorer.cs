@@ -119,6 +119,10 @@ public sealed class DxTargetScorer
         var dxccStatus = DetermineDxccStatus(decode, indexes);
         decode.IsNewDxcc = dxccStatus == DxccCandidateStatus.NotWorked;
         decode.IsUnconfirmedDxcc = dxccStatus == DxccCandidateStatus.WorkedUnconfirmed;
+        decode.AchievementProfileLabel = indexes.AchievementProfileLabel;
+        decode.IsNewToCallsign = dxccStatus == DxccCandidateStatus.NotWorked
+            && indexes.IsCallsignScoped
+            && indexes.OverallWorkedDxcc.Contains(decode.Dxcc);
         var normalizedGrid = MaidenheadGrid.Normalize(decode.Grid);
         decode.IsNewGrid = normalizedGrid.IsValid
             && (!indexes.Grids.TryGetValue(normalizedGrid.Grid4, out var gridStatus) || !gridStatus.ConfirmedAny);
@@ -154,6 +158,10 @@ public sealed class DxTargetScorer
         ranking.DxccStatus = DetermineDxccStatus(decode, indexes);
         ranking.DxccWorked = ranking.DxccStatus is DxccCandidateStatus.WorkedUnconfirmed or DxccCandidateStatus.Confirmed;
         ranking.DxccConfirmed = ranking.DxccStatus == DxccCandidateStatus.Confirmed;
+        ranking.AchievementProfileLabel = indexes.AchievementProfileLabel;
+        ranking.IsNewToCallsign = ranking.DxccStatus == DxccCandidateStatus.NotWorked
+            && indexes.IsCallsignScoped
+            && indexes.OverallWorkedDxcc.Contains(decode.Dxcc);
         if (!string.IsNullOrWhiteSpace(decode.Dxcc) && indexes.Dxcc.TryGetValue(decode.Dxcc, out var dxccWorked))
             ranking.DxccConfirmationSource = dxccWorked.Source;
 
@@ -196,15 +204,23 @@ public sealed class DxTargetScorer
 
         if (ranking.DxccStatus is DxccCandidateStatus.NotWorked or DxccCandidateStatus.WorkedUnconfirmed)
         {
-            ranking.PriorityTier = 10;
-            ranking.PriorityTierName = ranking.DxccStatus == DxccCandidateStatus.NotWorked
-                ? "Tier 1A: New DXCC, never worked"
-                : "Tier 1A: Unconfirmed DXCC";
+            ranking.PriorityTier = ranking.IsNewToCallsign ? 11 : 10;
+            ranking.PriorityTierName = ranking.IsNewToCallsign
+                ? $"Tier 1B: New DXCC for {ranking.AchievementProfileLabel}"
+                : ranking.DxccStatus == DxccCandidateStatus.NotWorked
+                    ? "Tier 1A: New DXCC, never worked"
+                    : indexes.IsCallsignScoped
+                        ? $"Tier 1A: Unconfirmed DXCC for {ranking.AchievementProfileLabel}"
+                        : "Tier 1A: Unconfirmed DXCC";
             ranking.WantedScope = WantedScope.Overall;
             ranking.NeedStatus = ranking.DxccStatus == DxccCandidateStatus.NotWorked
                 ? NeedStatus.NeverWorked
                 : NeedStatus.WorkedNotLoTWConfirmed;
-            ranking.AllWantedReasons.Add(TargetReasonFormatter.FormatDxcc(ranking.DxccStatus, decode.EntityName));
+            ranking.AllWantedReasons.Add(ranking.IsNewToCallsign
+                ? $"New DXCC for {ranking.AchievementProfileLabel}: {decode.EntityName} - worked under another callsign, not this profile"
+                : indexes.IsCallsignScoped && ranking.DxccStatus == DxccCandidateStatus.WorkedUnconfirmed
+                    ? $"Unconfirmed DXCC for {ranking.AchievementProfileLabel}: {decode.EntityName} - worked with this callsign but not confirmed under the selected rule"
+                    : TargetReasonFormatter.FormatDxcc(ranking.DxccStatus, decode.EntityName));
             return;
         }
 
@@ -479,6 +495,7 @@ public sealed class DxTargetScorer
         return ranking.PriorityTier switch
         {
             10 => $"{ranking.PriorityTierName} beats worked-but-unconfirmed DXCC, grid, state, band, callsign and general DX needs; adjusted DX value breaks ties.",
+            11 => $"{ranking.PriorityTierName} is already credited elsewhere in the combined log, but remains a high-priority DXCC need for the selected callsign.",
             12 or 13 or 14 => $"{ranking.PriorityTierName} is enabled as an optional scoped DXCC target and follows only a globally new DXCC.",
             15 => $"{ranking.PriorityTierName} beats grid, state, band, callsign and general DX needs under the selected confirmation mode.",
             20 => "Rare-country repeat chasing is enabled; no needed DXCC is higher in this candidate set.",

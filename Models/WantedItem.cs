@@ -13,6 +13,8 @@ public sealed class WantedItem : INotifyPropertyChanged
     private bool _isPermanentlySuppressed;
     private string _rankText = "";
     private bool _wasCallWorkedBefore;
+    private bool _wasCallWorkedInSelectedProfile;
+    private bool _wasCallWorkedUnderAnotherProfileOnly;
     private string _workedCallToolTip = "";
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -49,6 +51,30 @@ public sealed class WantedItem : INotifyPropertyChanged
             OnPropertyChanged();
         }
     }
+    public bool WasCallWorkedInSelectedProfile
+    {
+        get => _wasCallWorkedInSelectedProfile;
+        set
+        {
+            if (_wasCallWorkedInSelectedProfile == value)
+                return;
+
+            _wasCallWorkedInSelectedProfile = value;
+            OnPropertyChanged();
+        }
+    }
+    public bool WasCallWorkedUnderAnotherProfileOnly
+    {
+        get => _wasCallWorkedUnderAnotherProfileOnly;
+        set
+        {
+            if (_wasCallWorkedUnderAnotherProfileOnly == value)
+                return;
+
+            _wasCallWorkedUnderAnotherProfileOnly = value;
+            OnPropertyChanged();
+        }
+    }
     public string WorkedCallToolTip
     {
         get => _workedCallToolTip;
@@ -66,6 +92,8 @@ public sealed class WantedItem : INotifyPropertyChanged
     public string WantedValue { get; set; } = "";
     public string WantedDetail { get; set; } = "";
     public string WantedReason { get; set; } = "";
+    public bool IsNewToCallsign { get; set; }
+    public string AchievementProfileLabel { get; set; } = "All callsigns";
     public NeedStatus NeedStatus { get; set; } = NeedStatus.Unknown;
     public string NeedStatusText => NeedStatus switch
     {
@@ -209,7 +237,9 @@ public sealed class WantedItem : INotifyPropertyChanged
     }
     public string WantedReasonDisplay =>
         Section.Equals("DXCC", StringComparison.OrdinalIgnoreCase)
-            ? NeedStatus == NeedStatus.NeverWorked ? "New DXCC" : "Unconfirmed DXCC"
+            ? IsNewToCallsign
+                ? $"New to {AchievementProfileLabel}"
+                : NeedStatus == NeedStatus.NeverWorked ? "New DXCC" : "Unconfirmed DXCC"
             : Section.Equals("Grid", StringComparison.OrdinalIgnoreCase)
                 ? $"{(NeedStatus == NeedStatus.NeverWorked ? "New" : "Unconfirmed")} grid {WantedValue}".Trim()
                 : Section.Equals("USA State", StringComparison.OrdinalIgnoreCase)

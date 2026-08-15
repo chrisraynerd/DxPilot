@@ -1136,6 +1136,79 @@ foreach (var expectation in kg4ExpectedEntities)
 var rarity = new DxccRarityService();
 rarity.Load("", resolver);
 var scorer = new DxTargetScorer(resolver, rarity, new GridDistanceCalculator());
+
+var stationCallsignAdif = Path.GetTempFileName();
+try
+{
+    File.WriteAllText(stationCallsignAdif,
+        "<CALL:5>VP8NO <BAND:3>20m <MODE:3>FT8 <DXCC:3>141 <COUNTRY:16>Falkland Islands <STATION_CALLSIGN:6>2E0CCD <OPERATOR:5>G1CEC <QSO_DATE:8>20200101 <TIME_ON:6>120000 <LOTW_QSL_RCVD:1>Y <EOR>");
+    var parsedStationQso = new AdifLogbookReader().Load(stationCallsignAdif).SingleOrDefault();
+    if (parsedStationQso == null
+        || parsedStationQso.StationCallsign != "2E0CCD"
+        || parsedStationQso.OperatorCallsign != "G1CEC")
+    {
+        failures.Add("ADIF STATION_CALLSIGN/OPERATOR identity fields were not preserved.");
+    }
+}
+finally
+{
+    File.Delete(stationCallsignAdif);
+}
+
+var identityQsos = new List<AdifQso>
+{
+    new() { Call = "VP8NO", Band = "20m", Mode = "FT8", Dxcc = "141", Country = "Falkland Islands", StationCallsign = "2E0CCD", LotwConfirmed = true },
+    new() { Call = "VP8NO", Band = "20m", Mode = "FT8", Dxcc = "141", Country = "Falkland Islands", StationCallsign = "2E0CCD/NHS", LotwConfirmed = true },
+    new() { Call = "JA1AAA", Band = "20m", Mode = "FT8", Dxcc = "339", Country = "Japan", StationCallsign = "G1CEC", LotwConfirmed = true },
+    new() { Call = "JA1AAB", Band = "17m", Mode = "FT8", Dxcc = "339", Country = "Japan", StationCallsign = "SV5/G1CEC", LotwConfirmed = true },
+    new() { Call = "K1AAA", Band = "20m", Mode = "FT8", Dxcc = "291", Country = "United States", StationCallsign = "", LotwConfirmed = true }
+};
+var identitySettings = new AppSettings
+{
+    MyCallsign = "G1CEC",
+    AchievementCallsignProfile = "G1CEC",
+    DxccConfirmationMode = "LoTWOnly",
+    GridConfirmationMode = "LoTWOnly",
+    StateConfirmationMode = "LoTWOnly",
+    IotaConfirmationMode = "LoTWOnly"
+};
+var identityResult = new AdifWorkedStatusBuilder().Build(identityQsos, [], identitySettings);
+var g1cecProfile = identityResult.CallsignProfiles.SingleOrDefault(profile => profile.Key == "G1CEC");
+var oldCallProfile = identityResult.CallsignProfiles.SingleOrDefault(profile => profile.Key == "2E0CCD");
+if (g1cecProfile?.QsoCount != 2
+    || oldCallProfile?.QsoCount != 2
+    || !g1cecProfile.Variants.Contains("SV5/G1CEC")
+    || !oldCallProfile.Variants.Contains("2E0CCD/NHS")
+    || identityResult.UnassignedStationCallsignCount != 1
+    || identityResult.Indexes.Dxcc.ContainsKey("141")
+    || !identityResult.OverallIndexes.Dxcc.TryGetValue("141", out var overallFalklands)
+    || !overallFalklands.LoTWConfirmedAny)
+{
+    failures.Add("Station callsign profiles did not group variants or separate active and overall award credit correctly.");
+}
+
+var newToG1cecTarget = scorer.Score(
+    new DecodeMessage
+    {
+        ReceivedAt = DateTime.Now,
+        Callsign = "VP8NO",
+        ContactableCall = "VP8NO",
+        Grid = "GD18",
+        RawText = "CQ VP8NO GD18",
+        Targetable = true,
+        ParseConfidence = ParseConfidence.High
+    },
+    identityResult.ActiveQsos,
+    identityResult.Indexes,
+    [],
+    identitySettings);
+if (!newToG1cecTarget.Ranking.IsNewToCallsign
+    || newToG1cecTarget.Ranking.PriorityTier != 11
+    || !newToG1cecTarget.Ranking.PrimaryWantedReason.Contains("New DXCC for G1CEC", StringComparison.Ordinal))
+{
+    failures.Add("A DXCC confirmed under an old callsign was not classified as New DXCC for the selected current callsign.");
+}
+
 var unconfirmedDxccIndexes = new WorkedStatusIndexes();
 unconfirmedDxccIndexes.Dxcc["321"] = new DxccWorkedStatus
 {
@@ -1795,10 +1868,11 @@ var conditionsSettings = new AppSettings();
 if (conditionsSettings.ConditionsSearchUsePskProbes)
     failures.Add("Automatic PSK CQ probing was not opt-in for an upgraded installation.");
 var conditionsViewModel = new BandAnalysisViewModel(conditionsSettings);
-if (conditionsViewModel.ConditionsIndicators.Count != 5
-    || conditionsViewModel.ConditionsIndicators.Select(item => item.Key).Distinct().Count() != 5)
+if (conditionsViewModel.ConditionsIndicators.Count != 6
+    || conditionsViewModel.ConditionsIndicators.Select(item => item.Key).Distinct().Count() != 6
+    || conditionsViewModel.ConditionsIndicators.All(item => item.Key != "productivity"))
 {
-    failures.Add("The clearer dashboard did not expose all five distinct Conditions Search trigger indicators.");
+    failures.Add("The clearer dashboard did not expose all six distinct Conditions Search trigger indicators, including completed-QSO productivity.");
 }
 var unansweredIndicator = conditionsViewModel.ConditionsIndicators.First(item => item.Key == "unanswered");
 unansweredIndicator.Update(25, "6/8 attempts · 2/3 different stations");
@@ -1809,9 +1883,16 @@ if (unansweredIndicator.State != "Ready")
     failures.Add("An exhausted Conditions Search counter did not display its trigger-ready state.");
 conditionsViewModel.ConditionsSearchUsePskProbes = true;
 conditionsViewModel.ConditionsSearchLowActivityPersistMinutes = 4;
+conditionsViewModel.ConditionsSearchNoCompletedQsoMinutes = 25;
+conditionsViewModel.ConditionsSearchIncompleteQsoThreshold = 3;
 conditionsViewModel.SaveTo(conditionsSettings);
-if (!conditionsSettings.ConditionsSearchUsePskProbes || conditionsSettings.ConditionsSearchLowActivityPersistMinutes != 4)
-    failures.Add("Automatic full-analysis permission or the clearly exposed quiet-band duration did not survive settings save.");
+if (!conditionsSettings.ConditionsSearchUsePskProbes
+    || conditionsSettings.ConditionsSearchLowActivityPersistMinutes != 4
+    || conditionsSettings.ConditionsSearchNoCompletedQsoMinutes != 25
+    || conditionsSettings.ConditionsSearchIncompleteQsoThreshold != 3)
+{
+    failures.Add("Automatic full-analysis permission or the clearly exposed quiet-band/productivity settings did not survive settings save.");
+}
 var silentTrigger = ConditionsSearchPolicy.DetectTrigger(
     scheduledDue: false,
     startupDue: false,
@@ -1829,6 +1910,22 @@ var broadFailureTrigger = ConditionsSearchPolicy.DetectTrigger(
     false, false, TimeSpan.FromMinutes(15), TimeSpan.Zero, TimeSpan.Zero, 20, TimeSpan.Zero, 8, 3, conditionsSettings);
 if (silentTrigger?.Priority != 80 || oneHardTargetTrigger != null || broadFailureTrigger?.Priority != 70)
     failures.Add("Conditions Search trigger policy did not distinguish a silent band or broad calling failure from repeated calls to one difficult station.");
+
+var prematureProductivityTrigger = ConditionsSearchPolicy.DetectCompletedQsoTrigger(
+    TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(24), 12, 3, conditionsSettings);
+var insufficientProductivityEvidence = ConditionsSearchPolicy.DetectCompletedQsoTrigger(
+    TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(25), 2, 2, conditionsSettings);
+var incompleteQsoProductivityTrigger = ConditionsSearchPolicy.DetectCompletedQsoTrigger(
+    TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(25), 2, 3, conditionsSettings);
+var repeatedCallingProductivityTrigger = ConditionsSearchPolicy.DetectCompletedQsoTrigger(
+    TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(25), 8, 0, conditionsSettings);
+if (prematureProductivityTrigger != null
+    || insufficientProductivityEvidence != null
+    || incompleteQsoProductivityTrigger?.Priority != 65
+    || repeatedCallingProductivityTrigger?.Priority != 65)
+{
+    failures.Add("Completed-QSO productivity did not require both elapsed time and sufficient calling or incomplete-exchange evidence.");
+}
 
 var newDxccQuality = bandQualityAnalyzer.Analyze("30m",
 [

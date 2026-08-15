@@ -10,6 +10,8 @@ public sealed class SessionDxOpportunity
     public double LastSeenAgeSeconds => Math.Max(0, (DateTime.UtcNow - LastSeenUtc).TotalSeconds);
     public string Call { get; set; } = "";
     public bool WasCallWorkedBefore { get; set; }
+    public bool WasCallWorkedInSelectedProfile { get; set; }
+    public bool WasCallWorkedUnderAnotherProfileOnly { get; set; }
     public string WorkedCallToolTip { get; set; } = "";
     public int? UniversalRank { get; set; }
     public string RankText { get; set; } = "";

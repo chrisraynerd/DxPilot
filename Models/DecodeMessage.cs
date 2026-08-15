@@ -109,6 +109,8 @@ public sealed class DecodeMessage
     public double? DistanceMiles => DistanceKm / 1.609344;
     public bool IsNewDxcc { get; set; }
     public bool IsUnconfirmedDxcc { get; set; }
+    public bool IsNewToCallsign { get; set; }
+    public string AchievementProfileLabel { get; set; } = "All callsigns";
     public bool IsNewGrid { get; set; }
     public bool IsNewState { get; set; }
     public bool IsPermanentlySuppressed { get; set; }
@@ -121,6 +123,8 @@ public sealed class DecodeMessage
     public string WantedReasonDisplay { get; set; } = "";
     public string StationStatusDisplay { get; set; } = "";
     public bool WasCallWorkedBefore { get; set; }
+    public bool WasCallWorkedInSelectedProfile { get; set; }
+    public bool WasCallWorkedUnderAnotherProfileOnly { get; set; }
     public string WorkedCallToolTip { get; set; } = "";
     public string CountryDisplay => string.IsNullOrWhiteSpace(EntityName) ? PrimaryDisplayEntity : EntityName;
     public bool LowConfidence { get; set; }

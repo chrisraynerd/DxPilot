@@ -64,6 +64,14 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          $manualPdf = Get-ChildItem -LiteralPath manuals -Filter "DX_Pilot_for_JTDX_User_Manual_*.pdf" -File |
+            Sort-Object Name -Descending |
+            Select-Object -First 1
+          if ($null -eq $manualPdf) {
+            throw "The illustrated DX Pilot PDF user manual is missing."
+          }
+          Copy-Item -LiteralPath $manualPdf.FullName `
+            -Destination "$env:RUNNER_TEMP\dxpilot-publish\DX-Pilot-User-Manual.pdf" -Force
           $zip = "artifacts\DXPilot-for-JTDX-$env:GITHUB_REF_NAME-win-x64.zip"
           Compress-Archive -Path "$env:RUNNER_TEMP\dxpilot-publish\*" -DestinationPath $zip -Force
           "RELEASE_ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -73,6 +81,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create $env:GITHUB_REF_NAME $env:RELEASE_ZIP `
+          $manualPdf = Get-ChildItem -LiteralPath manuals -Filter "DX_Pilot_for_JTDX_User_Manual_*.pdf" -File |
+            Sort-Object Name -Descending |
+            Select-Object -First 1
+          $manualDocx = Get-ChildItem -LiteralPath manuals -Filter "DX_Pilot_for_JTDX_User_Manual_*.docx" -File |
+            Sort-Object Name -Descending |
+            Select-Object -First 1
+          gh release create $env:GITHUB_REF_NAME $env:RELEASE_ZIP $manualPdf.FullName $manualDocx.FullName `
             --title "DX Pilot for JTDX $env:GITHUB_REF_NAME" `
             --generate-notes

@@ -105,6 +105,33 @@ public static class ConditionsSearchPolicy
         return null;
     }
 
+    public static ConditionsSearchTrigger? DetectCompletedQsoTrigger(
+        TimeSpan timeOnBand,
+        TimeSpan sinceCompletedQso,
+        int callingAttemptsSinceCompletedQso,
+        int incompleteExchanges,
+        AppSettings settings)
+    {
+        if (timeOnBand < TimeSpan.FromMinutes(settings.ConditionsSearchMonitoringWindowMinutes)
+            || sinceCompletedQso < TimeSpan.FromMinutes(settings.ConditionsSearchNoCompletedQsoMinutes))
+        {
+            return null;
+        }
+
+        var enoughCallingEffort = callingAttemptsSinceCompletedQso >= settings.ConditionsSearchPoorReplyAttempts;
+        var enoughIncompleteExchanges = incompleteExchanges >= settings.ConditionsSearchIncompleteQsoThreshold;
+        if (!enoughCallingEffort && !enoughIncompleteExchanges)
+            return null;
+
+        var evidence = incompleteExchanges > 0
+            ? $"{incompleteExchanges} incomplete exchange{(incompleteExchanges == 1 ? "" : "s")}, {callingAttemptsSinceCompletedQso} calling attempts"
+            : $"{callingAttemptsSinceCompletedQso} calling attempts";
+        return new ConditionsSearchTrigger(
+            $"no completed QSO for {settings.ConditionsSearchNoCompletedQsoMinutes} minutes despite {evidence}",
+            false,
+            65);
+    }
+
     public static double Score(BandQualitySnapshot snapshot, HuntingOperatingMode mode, int trendScore)
     {
         if (snapshot.NewDxccStations > 0)

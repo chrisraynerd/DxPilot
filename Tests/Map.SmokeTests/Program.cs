@@ -329,6 +329,30 @@ psk20.ApplyPsk(new PskReporterMetrics
     PropagationScore = 48,
     Assessment = "Usable outward propagation"
 });
+var clearedPskProperties = new HashSet<string>(StringComparer.Ordinal);
+psk20.PropertyChanged += (_, eventArgs) =>
+{
+    if (!string.IsNullOrWhiteSpace(eventArgs.PropertyName))
+        clearedPskProperties.Add(eventArgs.PropertyName);
+};
+psk20.ResetSurvey();
+Require(!psk20.PskMeasured
+        && psk20.PskReceiversDisplay == "—"
+        && psk20.PskReachDisplay == "—"
+        && psk20.PskScoreDisplay == "—",
+    "Starting a new Band Analysis did not clear the previous live PSK values.");
+Require(clearedPskProperties.Contains(nameof(BandAnalysisBandViewModel.PskMeasured))
+        && clearedPskProperties.Contains(nameof(BandAnalysisBandViewModel.PskReceiversDisplay))
+        && clearedPskProperties.Contains(nameof(BandAnalysisBandViewModel.PskReachDisplay))
+        && clearedPskProperties.Contains(nameof(BandAnalysisBandViewModel.PskScoreDisplay)),
+    "Clearing a Band Analysis did not notify the live table that its PSK values changed.");
+psk20.ApplyPsk(new PskReporterMetrics
+{
+    Measured = true,
+    UniqueReceivers = 1,
+    PropagationScore = 48,
+    Assessment = "Usable outward propagation"
+});
 var pskMap = new PskReporterMapViewModel();
 var probeTime = new DateTime(2026, 8, 9, 12, 0, 15, DateTimeKind.Utc);
 List<PskReporterSpot> pskSpots =

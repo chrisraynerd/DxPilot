@@ -275,16 +275,53 @@
             <Setter Property="ToolTipService.ShowDuration" Value="20000" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding WasCallWorkedBefore}" Value="True">
+                    <Setter Property="ToolTip" Value="{Binding WorkedCallToolTip}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding WasCallWorkedInSelectedProfile}" Value="True">
                     <Setter Property="TextDecorations" Value="Strikethrough" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding WasCallWorkedUnderAnotherProfileOnly}" Value="True">
+                    <Setter Property="Foreground" Value="#718096" />
+                    <Setter Property="TextDecorations">
+                        <Setter.Value>
+                            <TextDecorationCollection>
+                                <TextDecoration Location="Strikethrough">
+                                    <TextDecoration.Pen>
+                                        <Pen Brush="#8A98A8" Thickness="1" DashStyle="{x:Static DashStyles.Dash}" />
+                                    </TextDecoration.Pen>
+                                </TextDecoration>
+                            </TextDecorationCollection>
+                        </Setter.Value>
+                    </Setter>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="WorkedOtherCallsignMarkerStyle" TargetType="TextBlock">
+            <Setter Property="Text" Value="↺" />
+            <Setter Property="Foreground" Value="#718096" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="4,0,0,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Setter Property="ToolTipService.ShowDuration" Value="20000" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding WasCallWorkedUnderAnotherProfileOnly}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
                     <Setter Property="ToolTip" Value="{Binding WorkedCallToolTip}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
         <DataTemplate x:Key="WorkedCallsignCallTemplate">
-            <TextBlock Text="{Binding Call}" Style="{StaticResource WorkedCallsignTextStyle}" />
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding Call}" Style="{StaticResource WorkedCallsignTextStyle}" />
+                <TextBlock Style="{StaticResource WorkedOtherCallsignMarkerStyle}" />
+            </StackPanel>
         </DataTemplate>
         <DataTemplate x:Key="WorkedCallsignContactableCallTemplate">
-            <TextBlock Text="{Binding ContactableCall}" Style="{StaticResource WorkedCallsignTextStyle}" />
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding ContactableCall}" Style="{StaticResource WorkedCallsignTextStyle}" />
+                <TextBlock Style="{StaticResource WorkedOtherCallsignMarkerStyle}" />
+            </StackPanel>
         </DataTemplate>
         <Style x:Key="SemanticStationRowStyle" TargetType="DataGridRow">
             <Setter Property="Background" Value="{StaticResource SemanticNeutralBackground}" />

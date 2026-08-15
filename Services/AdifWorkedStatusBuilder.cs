@@ -49,7 +49,28 @@ public sealed class AdifWorkedStatusBuilder
         AppSettings settings)
     {
         var merged = MergeDeduplicate(fullQsos, liveQsos, out var duplicateCount);
-        var indexes = BuildIndexes(merged, settings);
+        var profiles = StationCallsignIdentity.BuildProfiles(merged, settings.MyCallsign);
+        var requestedProfile = string.IsNullOrWhiteSpace(settings.AchievementCallsignProfile)
+            ? StationCallsignIdentity.AllCallsignsKey
+            : settings.AchievementCallsignProfile.Trim().ToUpperInvariant();
+        var selectedProfile = profiles.FirstOrDefault(profile => profile.Key.Equals(requestedProfile, StringComparison.OrdinalIgnoreCase))
+            ?? profiles.First(profile => profile.IsAllCallsigns);
+        var overallIndexes = BuildIndexes(merged, settings);
+        overallIndexes.AchievementProfileKey = StationCallsignIdentity.AllCallsignsKey;
+        overallIndexes.AchievementProfileLabel = "All callsigns";
+        foreach (var dxcc in overallIndexes.Dxcc.Keys)
+            overallIndexes.OverallWorkedDxcc.Add(dxcc);
+
+        var activeQsos = selectedProfile.IsAllCallsigns
+            ? merged
+            : merged.Where(qso => StationCallsignIdentity.Matches(qso.StationCallsign, selectedProfile.Key)).ToList();
+        var indexes = selectedProfile.IsAllCallsigns
+            ? overallIndexes
+            : BuildIndexes(activeQsos, settings);
+        indexes.AchievementProfileKey = selectedProfile.Key;
+        indexes.AchievementProfileLabel = selectedProfile.IsAllCallsigns ? "All callsigns" : selectedProfile.Callsign;
+        foreach (var dxcc in overallIndexes.Dxcc.Keys)
+            indexes.OverallWorkedDxcc.Add(dxcc);
 
         return new AdifMergeResult
         {
@@ -57,7 +78,11 @@ public sealed class AdifWorkedStatusBuilder
             LiveQsoCount = liveQsos.Count,
             DuplicateCount = duplicateCount,
             UniqueQsos = merged,
-            Indexes = indexes
+            ActiveQsos = activeQsos,
+            Indexes = indexes,
+            OverallIndexes = overallIndexes,
+            CallsignProfiles = profiles,
+            UnassignedStationCallsignCount = merged.Count(qso => string.IsNullOrWhiteSpace(qso.StationCallsign))
         };
     }
 
@@ -294,6 +319,8 @@ public sealed class AdifWorkedStatusBuilder
         target.Grid = Prefer(target.Grid, source.Grid);
         target.State = Prefer(target.State, source.State);
         target.Iota = Prefer(target.Iota, source.Iota);
+        target.StationCallsign = Prefer(target.StationCallsign, source.StationCallsign);
+        target.OperatorCallsign = Prefer(target.OperatorCallsign, source.OperatorCallsign);
         target.Freq = Prefer(target.Freq, source.Freq);
         target.Mode = Prefer(target.Mode, source.Mode);
         target.Submode = Prefer(target.Submode, source.Submode);
@@ -322,6 +349,8 @@ public sealed class AdifWorkedStatusBuilder
             Grid = qso.Grid,
             State = qso.State,
             Iota = qso.Iota,
+            StationCallsign = qso.StationCallsign,
+            OperatorCallsign = qso.OperatorCallsign,
             LotwConfirmed = qso.LotwConfirmed,
             PaperConfirmed = qso.PaperConfirmed,
             EqslConfirmed = qso.EqslConfirmed,

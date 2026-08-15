@@ -50,6 +50,7 @@ public sealed class AppSettings
     public int MaxTargetAcquisitionCycles { get; set; } = 1;
     public int MaxUdpReplyNudgesBeforeConfirmed { get; set; } = 2;
     public string MyCallsign { get; set; } = "G1CEC";
+    public string AchievementCallsignProfile { get; set; } = "ALL";
     public string HomeGrid { get; set; } = "";
     public int MapStaleMinutes { get; set; } = 2;
     public int MapDefaultsVersion { get; set; } = 2;
@@ -186,6 +187,8 @@ public sealed class AppSettings
     public int ConditionsSearchLowActivityPersistMinutes { get; set; } = 3;
     public int ConditionsSearchPoorReplyAttempts { get; set; } = 8;
     public int ConditionsSearchPoorReplyDistinctStations { get; set; } = 3;
+    public int ConditionsSearchNoCompletedQsoMinutes { get; set; } = 20;
+    public int ConditionsSearchIncompleteQsoThreshold { get; set; } = 2;
     public int ConditionsSearchSilentMinutes { get; set; } = 4;
     public int ConditionsSearchSwitchImprovementPercent { get; set; } = 20;
     public bool ConditionsSearchUseQuickSurvey { get; set; } = true;

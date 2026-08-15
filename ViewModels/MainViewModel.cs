@@ -40,11 +40,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private sealed class WorkedCallDisplayInfo
     {
         public int QsoCount { get; set; }
+        public int SelectedProfileQsoCount { get; set; }
         public bool LoTWConfirmedAny { get; set; }
         public bool PaperConfirmedAny { get; set; }
         public bool EqslConfirmedAny { get; set; }
         public DateTime? LastWorkedDate { get; set; }
         public HashSet<string> Sources { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public List<WorkedCallQsoDisplay> Qsos { get; } = new();
+    }
+
+    private sealed class WorkedCallQsoDisplay
+    {
+        public string StationCallsign { get; init; } = "";
+        public DateTime? Date { get; init; }
+        public string Band { get; init; } = "";
+        public string Mode { get; init; } = "";
+        public bool LoTWConfirmed { get; init; }
+        public bool IsSelectedProfile { get; init; }
     }
 
     private readonly Dispatcher _uiDispatcher;
@@ -101,6 +113,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _sessionArchiveDirty;
     private bool _disposed;
     private bool _huntTickRunning;
+    private bool _refreshingAchievementProfiles;
     private BandScheduleItem? _selectedScheduleItem;
     private DxTarget? _selectedIntendedTarget;
     private DxTarget? _lockedTarget;
@@ -212,15 +225,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _bandSurveyCancellation;
     private bool _bandAnalysisOperationInProgress;
     private string _bandSurveyActiveBand = "";
+    private DateTime _bandAnalysisCurrentSurveyStartedUtc = DateTime.MinValue;
+    private bool _bandAnalysisCurrentSurveyAutomatic;
+    private string _bandAnalysisCurrentSurveyReason = "";
     private DateTime _bandSurveyFirstEligibleSlotStart = DateTime.MaxValue;
     private TaskCompletionSource<bool>? _bandSurveyFirstFullDecodeSignal;
     private readonly List<DecodeMessage> _conditionsMonitorDecodes = [];
     private readonly List<(DateTime AtUtc, string Callsign)> _conditionsCallAttempts = [];
+    private readonly List<(DateTime AtUtc, string Callsign)> _conditionsIncompleteExchanges = [];
+    private readonly HashSet<string> _conditionsKnownLiveQsoKeys = new(StringComparer.OrdinalIgnoreCase);
+    private bool _conditionsLiveQsoBaselineEstablished;
     private DateTime _conditionsBandEnteredAtUtc = DateTime.UtcNow;
     private DateTime _conditionsLastDecodeAtUtc = DateTime.UtcNow;
     private DateTime _conditionsLastUsefulTargetAtUtc = DateTime.UtcNow;
     private string _conditionsLastUsefulTargetCallsign = "";
     private DateTime _conditionsLastReplyOrProgressAtUtc = DateTime.UtcNow;
+    private DateTime _conditionsLastCompletedQsoAtUtc = DateTime.UtcNow;
+    private string _conditionsLastCompletedQsoCallsign = "";
+    private bool _conditionsProductivityHandoverRequested;
+    private bool _conditionsSafeHandoverRequested;
     private DateTime _conditionsLowActivitySinceUtc = DateTime.MinValue;
     private DateTime _conditionsLastSurveyCompletedAtUtc = DateTime.MinValue;
     private DateTime _conditionsLastStatusUpdateAtUtc = DateTime.MinValue;
@@ -473,6 +496,74 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public BandAnalysisViewModel BandAnalysis { get; }
     public SettingsViewModel Settings { get; }
     public TargetStatusSummaryViewModel CurrentTargetStatus { get; } = new();
+
+    public string SelectedAchievementProfileKey
+    {
+        get => string.IsNullOrWhiteSpace(Settings.Settings.AchievementCallsignProfile)
+            ? StationCallsignIdentity.AllCallsignsKey
+            : Settings.Settings.AchievementCallsignProfile;
+        set
+        {
+            if (_refreshingAchievementProfiles)
+                return;
+            var requested = string.IsNullOrWhiteSpace(value)
+                ? StationCallsignIdentity.AllCallsignsKey
+                : value.Trim().ToUpperInvariant();
+            if (SelectedAchievementProfileKey.Equals(requested, StringComparison.OrdinalIgnoreCase))
+                return;
+            if (!CanChangeAchievementProfile)
+            {
+                OnPropertyChanged();
+                Wanted.Status = "Finish or stop the current assistance operation before changing achievement profile.";
+                return;
+            }
+
+            Settings.Settings.AchievementCallsignProfile = requested;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SelectedAchievementProfileDisplayLabel));
+            ApplyAchievementProfileChange();
+        }
+    }
+
+    public bool CanChangeAchievementProfile => !_autoResume.IsRunning
+        && !_callNowSession.IsOneShot
+        && _huntState == HuntState.Idle
+        && !BandAnalysis.IsRunning;
+
+    public string SelectedAchievementProfileDisplayLabel
+    {
+        get
+        {
+            var selected = Wanted.AchievementProfiles.FirstOrDefault(profile =>
+                profile.Key.Equals(SelectedAchievementProfileKey, StringComparison.OrdinalIgnoreCase));
+            if (selected != null)
+                return selected.DisplayLabel;
+
+            return SelectedAchievementProfileKey.Equals(StationCallsignIdentity.AllCallsignsKey, StringComparison.OrdinalIgnoreCase)
+                ? "All callsigns"
+                : SelectedAchievementProfileKey;
+        }
+    }
+
+    public string AchievementProfileSummary
+    {
+        get
+        {
+            var selected = Wanted.AchievementProfiles.FirstOrDefault(profile =>
+                profile.Key.Equals(SelectedAchievementProfileKey, StringComparison.OrdinalIgnoreCase));
+            if (selected == null)
+                return "Load an ADIF log to discover station callsigns.";
+
+            var identity = selected.IsAllCallsigns ? "every station callsign" : selected.Callsign;
+            var variants = selected.Variants.Count > 1
+                ? $" · variants: {string.Join(", ", selected.Variants)}"
+                : "";
+            var unassigned = _adifMergeResult.UnassignedStationCallsignCount > 0
+                ? $" · {_adifMergeResult.UnassignedStationCallsignCount:N0} unassigned QSOs remain overall-only"
+                : "";
+            return $"Reviewing {identity}: {selected.QsoCount:N0} QSOs{variants}{unassigned}.";
+        }
+    }
 
     public ObservableCollection<string> RecentActions => DxAssist.RecentActions;
     public ObservableCollection<string> DxAssistRecentActions { get; } = new();
@@ -1440,6 +1531,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsDxAssistActive));
         OnPropertyChanged(nameof(IsWantedSniperActive));
         OnPropertyChanged(nameof(IsLocationHuntActive));
+        OnPropertyChanged(nameof(CanChangeAchievementProfile));
     }
 
     private void PromoteManualCallNowToAutomation(string modeName)
@@ -2902,6 +2994,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             AddAction($"{source} target {target.Callsign} ignored because receive-only Band Analysis is running.");
             BandAnalysis.Status = "Target calling remains disabled during a receive-only band survey.";
+            return;
+        }
+
+        var manualSelection = source.Contains("Manual", StringComparison.OrdinalIgnoreCase);
+        var newDxccPriority = target.Decode.IsNewDxcc;
+        var automaticAnalysisNeedsHandover = BandAnalysis.ConditionsSearchEnabled
+            && _autoResume.IsRunning
+            && !_callNowSession.IsOneShot
+            && !manualSelection
+            && !newDxccPriority
+            && (_conditionsProductivityHandoverRequested || _conditionsSafeHandoverRequested);
+        if (automaticAnalysisNeedsHandover)
+        {
+            AddAction($"Ordinary target {target.Callsign} held so pending Band Analysis can use the next safe receive handover.");
+            _ = EvaluateConditionsSearchAsync();
             return;
         }
 
@@ -4818,6 +4925,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (adifConfirmed)
             {
+                RecordConditionsCompletedQso(_lockedTarget.Callsign);
                 _sessionWorked.Add(_lockedTarget.Callsign);
                 TrackOpportunityWorked(_lockedTarget, reason);
             }
@@ -4839,6 +4947,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (!string.IsNullOrWhiteSpace(reason))
             AddAction(reason);
 
+        RecordConditionsTargetOutcome(_lockedTarget, reason);
         TrackOpportunityReleased(_lockedTarget, reason);
 
         _lockedTarget = null;
@@ -5043,18 +5152,70 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        _liveLogbook.AddRange(WithSource(loaded, "Live"));
+        _liveLogbook.AddRange(WithSource(loaded, "Live", Settings.Settings.MyCallsign));
+        ObserveNewLiveAdifQsos(_liveLogbook);
         _lastLiveAdifReloadAt = DateTime.Now;
         _lastLiveAdifWriteUtc = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
         AddAction($"Live JTDX ADIF loaded: {_liveLogbook.Count} QSOs from {path}");
     }
 
+    private void ObserveNewLiveAdifQsos(IEnumerable<AdifQso> qsos)
+    {
+        var entries = qsos
+            .Select(qso => (Qso: qso, Key: ConditionsLiveQsoKey(qso)))
+            .Where(item => !string.IsNullOrWhiteSpace(item.Key))
+            .ToList();
+        if (!_conditionsLiveQsoBaselineEstablished)
+        {
+            foreach (var entry in entries)
+                _conditionsKnownLiveQsoKeys.Add(entry.Key);
+            _conditionsLiveQsoBaselineEstablished = true;
+            return;
+        }
+
+        var currentBand = CurrentReportedBand();
+        foreach (var entry in entries)
+        {
+            if (!_conditionsKnownLiveQsoKeys.Add(entry.Key)
+                || !_autoResume.IsRunning
+                || _callNowSession.IsOneShot
+                || !BandAnalysis.ConditionsSearchEnabled
+                || !entry.Qso.Band.Equals(currentBand, StringComparison.OrdinalIgnoreCase)
+                || !TryGetQsoDateTimeUtc(entry.Qso, out var qsoUtc)
+                || qsoUtc < _conditionsBandEnteredAtUtc.AddMinutes(-2)
+                || DateTime.UtcNow - qsoUtc > TimeSpan.FromMinutes(10))
+            {
+                continue;
+            }
+
+            RecordConditionsCompletedQso(entry.Qso.Call);
+        }
+    }
+
+    private static string ConditionsLiveQsoKey(AdifQso qso)
+    {
+        var call = CallsignNormalizer.Normalize(qso.Call);
+        if (string.IsNullOrWhiteSpace(call))
+            return "";
+
+        return string.Join('|',
+            call,
+            qso.QsoDateText.Trim(),
+            qso.TimeOn.Trim(),
+            qso.Band.Trim().ToUpperInvariant(),
+            qso.EffectiveMode.Trim().ToUpperInvariant(),
+            qso.Freq.Trim());
+    }
+
     private void RebuildCombinedAdifIndex(string reason)
     {
         _adifMergeResult = _adifStatusBuilder.Build(_fullLogbook, _liveLogbook, Settings.Settings);
+        if (!_adifMergeResult.Indexes.AchievementProfileKey.Equals(SelectedAchievementProfileKey, StringComparison.OrdinalIgnoreCase))
+            Settings.Settings.AchievementCallsignProfile = _adifMergeResult.Indexes.AchievementProfileKey;
+        RefreshAchievementProfiles();
         RefreshMapLotwConfirmedGrids();
         _logbook.Clear();
-        _logbook.AddRange(_adifMergeResult.UniqueQsos);
+        _logbook.AddRange(_adifMergeResult.ActiveQsos);
         RebuildWorkedCallDisplayIndex();
 
         foreach (var decode in _decodeHistory)
@@ -5062,7 +5223,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         RefreshRecentDecodeRows();
         UpdateAdifDiagnostics();
-        AddAction($"{reason}: {_logbook.Count} unique QSOs, {_adifMergeResult.DuplicateCount} duplicates merged.");
+        AddAction($"{reason}: {_adifMergeResult.UniqueQsos.Count} unique QSOs overall, {_logbook.Count} in achievement profile {_adifMergeResult.Indexes.AchievementProfileLabel}, {_adifMergeResult.DuplicateCount} duplicates merged.");
         AddAction($"Confirmation modes applied: DXCC {Settings.Settings.DxccConfirmationMode}, grid {Settings.Settings.GridConfirmationMode}, state {Settings.Settings.StateConfirmationMode}, IOTA {Settings.Settings.IotaConfirmationMode}.");
         ExpireWantedItems();
         UpdateNextBestTargets();
@@ -5168,13 +5329,59 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         return path;
     }
 
-    private static IEnumerable<AdifQso> WithSource(IEnumerable<AdifQso> qsos, string source)
+    private static IEnumerable<AdifQso> WithSource(IEnumerable<AdifQso> qsos, string source, string fallbackStationCallsign = "")
     {
         foreach (var qso in qsos)
         {
             qso.Source = source;
+            if (string.IsNullOrWhiteSpace(qso.StationCallsign) && !string.IsNullOrWhiteSpace(fallbackStationCallsign))
+                qso.StationCallsign = fallbackStationCallsign.Trim().ToUpperInvariant();
             yield return qso;
         }
+    }
+
+    private void RefreshAchievementProfiles()
+    {
+        _refreshingAchievementProfiles = true;
+        try
+        {
+            Wanted.AchievementProfiles.Clear();
+            foreach (var profile in _adifMergeResult.CallsignProfiles)
+                Wanted.AchievementProfiles.Add(profile);
+        }
+        finally
+        {
+            _refreshingAchievementProfiles = false;
+        }
+
+        OnPropertyChanged(nameof(SelectedAchievementProfileKey));
+        OnPropertyChanged(nameof(SelectedAchievementProfileDisplayLabel));
+        OnPropertyChanged(nameof(AchievementProfileSummary));
+    }
+
+    private void ApplyAchievementProfileChange()
+    {
+        _settingsService.SaveSettings(Settings.Settings);
+        Wanted.WantedDxcc.Clear();
+        Wanted.WantedGrids.Clear();
+        Wanted.WantedStates.Clear();
+        Wanted.WantedBandMode.Clear();
+        RebuildCombinedAdifIndex($"Achievement profile changed to {SelectedAchievementProfileKey}");
+
+        _rebuildingWantedScopes = true;
+        try
+        {
+            foreach (var decode in CurrentCandidateDecodes().OrderBy(decode => decode.ReceivedAt))
+                UpdateWantedItems(decode);
+        }
+        finally
+        {
+            _rebuildingWantedScopes = false;
+        }
+
+        Wanted.Status = $"Wanted opportunities now use {AchievementProfileSummary}";
+        AddAction(Wanted.Status);
+        RequestNextBestTargetsUpdate();
     }
 
     private void UpdateAdifDiagnostics()
@@ -5194,13 +5401,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 : "needed"
             : "not included";
 
-        LogbookStatus = $"Full {_adifMergeResult.FullQsoCount} + live {_adifMergeResult.LiveQsoCount} = {_logbook.Count} unique QSOs.";
+        LogbookStatus = $"Full {_adifMergeResult.FullQsoCount} + live {_adifMergeResult.LiveQsoCount} = {_adifMergeResult.UniqueQsos.Count} unique QSOs overall; {_logbook.Count} in {_adifMergeResult.Indexes.AchievementProfileLabel}.";
         AdifDiagnostics =
             $"Full ADIF path: {DisplayPath(fullPath)}\n"
             + $"Full ADIF loaded: {_fullLogbook.Count > 0}  QSOs: {_adifMergeResult.FullQsoCount}  Last loaded: {DisplayTime(_lastFullAdifLoadedAt)}  Exists: {FileExists(fullPath)}\n"
             + $"Live JTDX ADIF path: {DisplayPath(livePath)}\n"
             + $"Live JTDX ADIF watched: {Settings.Settings.WatchLiveJtdxAdif}  QSOs: {_adifMergeResult.LiveQsoCount}  Last loaded: {DisplayTime(_lastLiveAdifReloadAt)}  Exists: {FileExists(livePath)}\n"
-            + $"Combined unique QSOs: {_logbook.Count}  Duplicates merged: {_adifMergeResult.DuplicateCount}\n"
+            + $"Combined unique QSOs: {_adifMergeResult.UniqueQsos.Count}  Active profile QSOs: {_logbook.Count} ({_adifMergeResult.Indexes.AchievementProfileLabel})  Unassigned station callsign: {_adifMergeResult.UnassignedStationCallsignCount}  Duplicates merged: {_adifMergeResult.DuplicateCount}\n"
             + $"DXCC worked: {_adifMergeResult.Indexes.Dxcc.Count}  DXCC confirmed: {dxccConfirmed}  Grids worked: {_adifMergeResult.Indexes.Grids.Count}  States worked: {_adifMergeResult.Indexes.States.Count}  IOTA worked: {_adifMergeResult.Indexes.Iotas.Count}\n"
             + $"WAS progress ({Settings.Settings.StateConfirmationMode}): {wasSatisfiedStates.Count}/50 satisfied; missing: {(wasMissingStates.Count == 0 ? "none" : string.Join(", ", wasMissingStates))}; DC: {dcStatus}\n"
             + $"Confirmation modes: DXCC {Settings.Settings.DxccConfirmationMode}, Grid {Settings.Settings.GridConfirmationMode}, State {Settings.Settings.StateConfirmationMode}, IOTA {Settings.Settings.IotaConfirmationMode}";
@@ -5303,6 +5510,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void UpdateHuntStateDisplay()
     {
+        OnPropertyChanged(nameof(CanChangeAchievementProfile));
         SynchronizeMapActiveTarget();
         Dashboard.HuntState = _lockedTarget == null
             ? $"{_huntState}"
@@ -5656,6 +5864,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             decode.WantedReasonDisplay = row?.WantedReason ?? DecodeWantedReason(decode);
             decode.StationStatusDisplay = row?.TargetStatus ?? DecodeStationStatus(decode);
             decode.WasCallWorkedBefore = workedCall.Worked;
+            decode.WasCallWorkedInSelectedProfile = workedCall.InSelectedProfile;
+            decode.WasCallWorkedUnderAnotherProfileOnly = workedCall.UnderAnotherProfileOnly;
             decode.WorkedCallToolTip = workedCall.ToolTip;
         }
 
@@ -5668,6 +5878,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var workedCall = WorkedCallDisplay(call);
             item.RankText = DisplayRankText(call);
             item.WasCallWorkedBefore = workedCall.Worked;
+            item.WasCallWorkedInSelectedProfile = workedCall.InSelectedProfile;
+            item.WasCallWorkedUnderAnotherProfileOnly = workedCall.UnderAnotherProfileOnly;
             item.WorkedCallToolTip = workedCall.ToolTip;
             item.RefreshVisualFields();
         }
@@ -5685,6 +5897,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 item.UniversalRank = currentRank;
             item.RankText = currentRank?.ToString() ?? "—";
             item.WasCallWorkedBefore = workedCall.Worked;
+            item.WasCallWorkedInSelectedProfile = workedCall.InSelectedProfile;
+            item.WasCallWorkedUnderAnotherProfileOnly = workedCall.UnderAnotherProfileOnly;
             item.WorkedCallToolTip = workedCall.ToolTip;
             var latestDecode = _decodeHistory
                 .Where(decode => DecodeTargetCall(decode).Equals(item.Call, StringComparison.OrdinalIgnoreCase))
@@ -5694,18 +5908,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private (bool Worked, string ToolTip) WorkedCallDisplay(string callsign)
+    private (bool Worked, bool InSelectedProfile, bool UnderAnotherProfileOnly, string ToolTip) WorkedCallDisplay(string callsign)
     {
         var call = CallsignNormalizer.Normalize(callsign);
         if (string.IsNullOrWhiteSpace(call)
             || !_workedCallDisplayByCall.TryGetValue(call, out var status))
         {
-            return (false, "");
+            return (false, false, false, "");
         }
 
         var qsoLabel = status.QsoCount == 1 ? "QSO" : "QSOs";
         var lastWorked = status.LastWorkedDate?.ToString("dd MMM yyyy") ?? "Date unavailable";
-        var lotw = status.LoTWConfirmedAny ? "Confirmed" : "Not confirmed";
         var otherConfirmations = new List<string>();
         if (status.PaperConfirmedAny)
             otherConfirmations.Add("paper QSL");
@@ -5715,19 +5928,111 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ? "None recorded"
             : string.Join(", ", otherConfirmations);
 
-        return (true,
-            $"Worked before: {status.QsoCount} {qsoLabel}\n"
-            + $"Last worked: {lastWorked}\n"
-            + $"LoTW: {lotw}\n"
-            + $"Other confirmations: {other}\n"
-            + $"Log source: {string.Join(" + ", status.Sources.OrderBy(source => source).Select(DisplaySource))}\n"
-            + "Visual marker only — ranking and targeting are unchanged.");
+        var selectedProfile = _adifMergeResult.Indexes.AchievementProfileLabel;
+        var isCallsignScoped = _adifMergeResult.Indexes.IsCallsignScoped;
+        var underAnotherProfileOnly = isCallsignScoped && status.SelectedProfileQsoCount == 0;
+        var builder = new StringBuilder()
+            .Append("Worked before: ").Append(status.QsoCount).Append(' ').Append(qsoLabel).AppendLine()
+            .Append("Last worked: ").Append(lastWorked).AppendLine();
+
+        if (isCallsignScoped)
+        {
+            var selectedLabel = status.SelectedProfileQsoCount == 1 ? "QSO" : "QSOs";
+            var otherProfileCount = status.QsoCount - status.SelectedProfileQsoCount;
+            var otherLabel = otherProfileCount == 1 ? "QSO" : "QSOs";
+            var selectedLotw = status.Qsos.Any(qso => qso.IsSelectedProfile && qso.LoTWConfirmed)
+                ? "Confirmed"
+                : "Not confirmed";
+            var overallLotw = status.LoTWConfirmedAny ? "Confirmed" : "Not confirmed";
+            builder.Append(selectedProfile).Append(": ")
+                .Append(status.SelectedProfileQsoCount).Append(' ').Append(selectedLabel).AppendLine()
+                .Append("Other callsigns: ").Append(otherProfileCount).Append(' ').Append(otherLabel).AppendLine()
+                .Append("LoTW for ").Append(selectedProfile).Append(": ").Append(selectedLotw).AppendLine()
+                .Append("LoTW under any callsign: ").Append(overallLotw).AppendLine();
+        }
+        else
+        {
+            builder.Append("LoTW: ")
+                .Append(status.LoTWConfirmedAny ? "Confirmed" : "Not confirmed")
+                .AppendLine();
+        }
+
+        builder.Append("Other confirmations: ").Append(other).AppendLine();
+
+        builder.Append("Log source: ")
+            .Append(string.Join(" + ", status.Sources.OrderBy(source => source).Select(DisplaySource)))
+            .AppendLine()
+            .AppendLine();
+
+        AppendWorkedCallQsoHistory(builder, status, selectedProfile, isCallsignScoped);
+
+        return (true, status.SelectedProfileQsoCount > 0, underAnotherProfileOnly, builder.ToString().TrimEnd());
+    }
+
+    private static void AppendWorkedCallQsoHistory(
+        StringBuilder builder,
+        WorkedCallDisplayInfo status,
+        string selectedProfile,
+        bool isCallsignScoped)
+    {
+        const int maximumDisplayedQsos = 20;
+        var ordered = status.Qsos
+            .OrderByDescending(qso => qso.Date ?? DateTime.MinValue)
+            .ThenByDescending(qso => qso.IsSelectedProfile)
+            .ToList();
+
+        if (isCallsignScoped)
+        {
+            AppendQsoSection(builder, $"{selectedProfile} QSO history", ordered.Where(qso => qso.IsSelectedProfile), maximumDisplayedQsos);
+            AppendQsoSection(builder, "Other callsign QSO history", ordered.Where(qso => !qso.IsSelectedProfile), maximumDisplayedQsos);
+        }
+        else
+        {
+            AppendQsoSection(builder, "QSO history", ordered, maximumDisplayedQsos);
+        }
+    }
+
+    private static void AppendQsoSection(
+        StringBuilder builder,
+        string heading,
+        IEnumerable<WorkedCallQsoDisplay> qsos,
+        int maximumDisplayedQsos)
+    {
+        var history = qsos.ToList();
+        if (history.Count == 0)
+            return;
+
+        builder.AppendLine(heading);
+        foreach (var qso in history.Take(maximumDisplayedQsos))
+        {
+            var stationCallsign = string.IsNullOrWhiteSpace(qso.StationCallsign)
+                ? "Unknown callsign"
+                : qso.StationCallsign;
+            var date = qso.Date?.ToString("dd/MM/yyyy") ?? "Date unavailable";
+            var band = string.IsNullOrWhiteSpace(qso.Band) ? "Band unavailable" : qso.Band;
+            var mode = string.IsNullOrWhiteSpace(qso.Mode) ? "Mode unavailable" : qso.Mode;
+            var confirmation = qso.LoTWConfirmed ? " — LoTW confirmed" : "";
+            builder.Append(stationCallsign).Append(", ")
+                .Append(date).Append(", ")
+                .Append(band).Append(", ")
+                .Append(mode).Append(confirmation).AppendLine();
+        }
+
+        if (history.Count > maximumDisplayedQsos)
+            builder.Append("… and ").Append(history.Count - maximumDisplayedQsos).AppendLine(" earlier QSOs");
+
+        builder.AppendLine();
     }
 
     private void RebuildWorkedCallDisplayIndex()
     {
         _workedCallDisplayByCall.Clear();
-        foreach (var qso in _logbook)
+        var selectedProfileKey = _adifMergeResult.Indexes.AchievementProfileKey;
+        var allCallsignsSelected = selectedProfileKey.Equals(
+            StationCallsignIdentity.AllCallsignsKey,
+            StringComparison.OrdinalIgnoreCase);
+
+        foreach (var qso in _adifMergeResult.UniqueQsos)
         {
             var call = CallsignNormalizer.Normalize(qso.Call);
             if (string.IsNullOrWhiteSpace(call))
@@ -5739,7 +6044,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 _workedCallDisplayByCall[call] = status;
             }
 
+            var isSelectedProfile = allCallsignsSelected
+                || (!string.IsNullOrWhiteSpace(qso.StationCallsign)
+                    && StationCallsignIdentity.Matches(qso.StationCallsign, selectedProfileKey));
             status.QsoCount++;
+            if (isSelectedProfile)
+                status.SelectedProfileQsoCount++;
             status.LoTWConfirmedAny |= qso.LotwConfirmed;
             status.PaperConfirmedAny |= qso.PaperConfirmed;
             status.EqslConfirmedAny |= qso.EqslConfirmed;
@@ -5751,11 +6061,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             foreach (var source in qso.Source.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 status.Sources.Add(source);
+
+            status.Qsos.Add(new WorkedCallQsoDisplay
+            {
+                StationCallsign = string.IsNullOrWhiteSpace(qso.StationCallsign)
+                    ? qso.OperatorCallsign.Trim().ToUpperInvariant()
+                    : qso.StationCallsign.Trim().ToUpperInvariant(),
+                Date = qso.QsoDate,
+                Band = qso.Band.Trim(),
+                Mode = qso.EffectiveMode.Trim(),
+                LoTWConfirmed = qso.LotwConfirmed,
+                IsSelectedProfile = isSelectedProfile
+            });
         }
     }
 
     private static string DecodeWantedReason(DecodeMessage decode)
     {
+        if (decode.IsNewToCallsign)
+            return $"New to {decode.AchievementProfileLabel}";
         if (decode.IsNewDxcc)
             return "New DXCC";
         if (decode.IsUnconfirmedDxcc)
@@ -5983,6 +6307,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             RankText = displayRank?.ToString() ?? "—",
             Call = target.Callsign,
             WasCallWorkedBefore = workedCall.Worked,
+            WasCallWorkedInSelectedProfile = workedCall.InSelectedProfile,
+            WasCallWorkedUnderAnotherProfileOnly = workedCall.UnderAnotherProfileOnly,
             WorkedCallToolTip = workedCall.ToolTip,
             Country = string.IsNullOrWhiteSpace(decode.EntityName) ? decode.PrimaryDisplayEntity : decode.EntityName,
             Continent = decode.Continent,
@@ -6080,6 +6406,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private static string FriendlyWantedReason(DxTarget target, string dxccStatus, string gridStatus, string stateStatus)
     {
+        if (target.Ranking.IsNewToCallsign)
+            return $"New DXCC for {target.Ranking.AchievementProfileLabel}";
         if (dxccStatus == "Not worked")
             return "New DXCC";
         if (dxccStatus == "Worked, unconfirmed")
@@ -6353,6 +6681,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         item.Call = target.Callsign;
         var workedCall = WorkedCallDisplay(target.Callsign);
         item.WasCallWorkedBefore = workedCall.Worked;
+        item.WasCallWorkedInSelectedProfile = workedCall.InSelectedProfile;
+        item.WasCallWorkedUnderAnotherProfileOnly = workedCall.UnderAnotherProfileOnly;
         item.WorkedCallToolTip = workedCall.ToolTip;
         item.UniversalRank = DisplayRankValue(target.Callsign);
         item.RankText = DisplayRankText(target.Callsign);
@@ -6753,8 +7083,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (selected.HasValue)
             {
                 var (scope, need) = selected.Value;
+                var dxccReason = scored.Ranking.IsNewToCallsign && scope == WantedScope.Overall && need == NeedStatus.NeverWorked
+                    ? scored.Ranking.PrimaryWantedReason
+                    : BuildWantedReason(need, "DXCC", decode.EntityName, decode.Band, decode.Mode, scope);
                 UpsertWanted(Wanted.WantedDxcc, decode, scored, "DXCC", "Wanted DXCC",
-                    BuildWantedReason(need, "DXCC", decode.EntityName, decode.Band, decode.Mode, scope),
+                    dxccReason,
                     need, scope, decode.Dxcc);
             }
         }
@@ -6925,6 +7258,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     : detailValue;
         item.WantedDetail = detail;
         item.WantedReason = detail;
+        item.IsNewToCallsign = scored.Ranking.IsNewToCallsign;
+        item.AchievementProfileLabel = scored.Ranking.AchievementProfileLabel;
         item.NeedStatus = needStatus;
         item.WantedScope = scope;
         item.Grid = section.Equals("Grid", StringComparison.OrdinalIgnoreCase) && normalizedGrid.IsValid ? normalizedGrid.Grid4 : decode.Grid;
@@ -7722,7 +8057,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _conditionsLastDecodeAtUtc = enteredAtUtc;
         _conditionsLastUsefulTargetAtUtc = enteredAtUtc;
         _conditionsLastUsefulTargetCallsign = "";
+        _conditionsLastReplyOrProgressAtUtc = enteredAtUtc;
+        _conditionsLastCompletedQsoAtUtc = enteredAtUtc;
+        _conditionsLastCompletedQsoCallsign = "";
+        _conditionsProductivityHandoverRequested = false;
+        _conditionsSafeHandoverRequested = false;
         _conditionsLowActivitySinceUtc = DateTime.MinValue;
+        _conditionsCallAttempts.Clear();
+        _conditionsIncompleteExchanges.Clear();
         _conditionsMonitorDecodes.RemoveAll(decode =>
             decode.Band.Equals(band, StringComparison.OrdinalIgnoreCase));
         if (!_bandSurveyAutomatic)
@@ -7779,14 +8121,86 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         TrimConditionsEvidence(DateTime.UtcNow);
     }
 
+    private void RecordConditionsTargetOutcome(DxTarget? target, string reason)
+    {
+        if (target == null
+            || !_autoResume.IsRunning
+            || _callNowSession.IsOneShot
+            || !BandAnalysis.ConditionsSearchEnabled)
+        {
+            return;
+        }
+
+        var completed = reason.Contains("ADIF confirmed", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("newly logged", StringComparison.OrdinalIgnoreCase);
+        var progressed = _huntState == HuntState.InQso
+            || _qsoStage >= QsoStage.TargetReportSeen
+            || _lastQsoProgressAt != DateTime.MinValue;
+        var administrativeRelease = reason.Contains("DX Pilot stopped", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("Radio context changed", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("Settings import", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("New DXCC", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("override", StringComparison.OrdinalIgnoreCase);
+        if (completed || !progressed || administrativeRelease)
+            return;
+
+        var call = CallsignNormalizer.Normalize(target.Callsign);
+        if (string.IsNullOrWhiteSpace(call))
+            return;
+
+        _conditionsIncompleteExchanges.Add((DateTime.UtcNow, call));
+        _conditionsProductivityHandoverRequested = true;
+        TrimConditionsEvidence(DateTime.UtcNow);
+        AddAction($"Conditions Search productivity: {call} replied or progressed but no completed QSO was logged.");
+    }
+
+    private void RecordConditionsCompletedQso(string callsign)
+    {
+        if (!_autoResume.IsRunning
+            || _callNowSession.IsOneShot
+            || !BandAnalysis.ConditionsSearchEnabled)
+        {
+            return;
+        }
+
+        var nowUtc = DateTime.UtcNow;
+        var normalizedCall = CallsignNormalizer.Normalize(callsign);
+        if (!string.IsNullOrWhiteSpace(normalizedCall)
+            && normalizedCall.Equals(_conditionsLastCompletedQsoCallsign, StringComparison.OrdinalIgnoreCase)
+            && nowUtc - _conditionsLastCompletedQsoAtUtc < TimeSpan.FromSeconds(10))
+        {
+            return;
+        }
+
+        _conditionsLastCompletedQsoAtUtc = nowUtc;
+        _conditionsLastCompletedQsoCallsign = normalizedCall;
+        _conditionsCallAttempts.Clear();
+        _conditionsIncompleteExchanges.Clear();
+        _conditionsProductivityHandoverRequested = false;
+        if (_conditionsPendingReason.StartsWith("no completed QSO", StringComparison.OrdinalIgnoreCase))
+        {
+            _conditionsPendingReason = "";
+            _conditionsAutomaticStartAllowedAtUtc = DateTime.MinValue;
+            _conditionsSafeHandoverRequested = false;
+            BandAnalysis.HideAnalysisBanner();
+        }
+
+        AddAction($"Conditions Search productivity reset: {_conditionsLastCompletedQsoCallsign} was logged in JTDX ADIF.");
+    }
+
     private void TrimConditionsEvidence(DateTime nowUtc)
     {
         var retainMinutes = Math.Max(30,
-            Math.Max(Settings.Settings.ConditionsSearchNoUsefulTargetMinutes,
-                Settings.Settings.ConditionsSearchMonitoringWindowMinutes) * 2);
+            new[]
+            {
+                Settings.Settings.ConditionsSearchNoUsefulTargetMinutes,
+                Settings.Settings.ConditionsSearchMonitoringWindowMinutes,
+                Settings.Settings.ConditionsSearchNoCompletedQsoMinutes
+            }.Max() * 2);
         var cutoff = nowUtc.AddMinutes(-retainMinutes);
         _conditionsMonitorDecodes.RemoveAll(decode => decode.ReceivedAt.ToUniversalTime() < cutoff);
         _conditionsCallAttempts.RemoveAll(item => item.AtUtc < cutoff);
+        _conditionsIncompleteExchanges.RemoveAll(item => item.AtUtc < cutoff);
     }
 
     private async Task EvaluateConditionsSearchAsync()
@@ -7797,6 +8211,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         if (!BandAnalysis.ConditionsSearchEnabled)
         {
+            _conditionsProductivityHandoverRequested = false;
+            _conditionsSafeHandoverRequested = false;
             foreach (var indicator in BandAnalysis.ConditionsIndicators)
                 indicator.Update(100, "Automatic Conditions Search is off.", active: false);
             if (!BandAnalysis.IsRunning)
@@ -7811,6 +8227,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         if (!_autoResume.IsRunning || _callNowSession.IsOneShot)
         {
+            _conditionsProductivityHandoverRequested = false;
+            _conditionsSafeHandoverRequested = false;
             foreach (var indicator in BandAnalysis.ConditionsIndicators)
                 indicator.Update(100, "Waiting for a continuous assistance mode to start.", active: false);
             if (!BandAnalysis.IsRunning)
@@ -7826,12 +8244,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var currentBand = CurrentReportedBand();
             if (string.IsNullOrWhiteSpace(currentBand))
                 return;
-
-            // A target is "useful" only when the active assistance mode has
-            // actually accepted and locked it. Ordinary CQ decodes must not
-            // continually reset this trigger on a busy but unproductive band.
-            if (_lockedTarget != null && _huntState is HuntState.Calling or HuntState.InQso)
-                MarkConditionsUsefulTarget(_lockedTarget.Callsign);
 
             var windowCutoff = nowUtc.AddMinutes(-Settings.Settings.ConditionsSearchMonitoringWindowMinutes);
             var rolling = _conditionsMonitorDecodes
@@ -7863,11 +8275,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }.Max();
             var unanswered = _conditionsCallAttempts.Where(item => item.AtUtc >= attemptCutoff).ToList();
             var distinctUnanswered = unanswered.Select(item => item.Callsign).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+            var productivityCutoff = new[] { _conditionsBandEnteredAtUtc, _conditionsLastCompletedQsoAtUtc }.Max();
+            var attemptsSinceCompletedQso = _conditionsCallAttempts.Count(item => item.AtUtc >= productivityCutoff);
+            var incompleteExchanges = _conditionsIncompleteExchanges
+                .Where(item => item.AtUtc >= productivityCutoff)
+                .Select(item => item.Callsign)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
             UpdateConditionsIndicators(
                 nowUtc,
                 rollingUniqueStations,
                 unanswered.Count,
-                distinctUnanswered);
+                distinctUnanswered,
+                attemptsSinceCompletedQso,
+                incompleteExchanges);
             var scheduledReason = ScheduledConditionsReason(nowUtc);
             var startupDue = Settings.Settings.ConditionsSearchSurveyOnStartup
                 && _conditionsLastSurveyCompletedAtUtc == DateTime.MinValue
@@ -7883,6 +8304,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 unanswered.Count,
                 distinctUnanswered,
                 Settings.Settings);
+            var productivityTrigger = ConditionsSearchPolicy.DetectCompletedQsoTrigger(
+                nowUtc - _conditionsBandEnteredAtUtc,
+                nowUtc - _conditionsLastCompletedQsoAtUtc,
+                attemptsSinceCompletedQso,
+                incompleteExchanges,
+                Settings.Settings);
+            if (productivityTrigger != null && (trigger == null || productivityTrigger.Priority > trigger.Priority))
+                trigger = productivityTrigger;
             if (_conditionsFullConfirmationPending)
                 trigger = new ConditionsSearchTrigger("quick results were too close; full confirmation survey", true, 95);
 
@@ -7893,12 +8322,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 BandAnalysis.AutomaticStatus = $"Conditions recovered on {currentBand}; the pending automatic analysis was cancelled.";
                 _conditionsPendingReason = "";
                 _conditionsAutomaticStartAllowedAtUtc = DateTime.MinValue;
+                _conditionsProductivityHandoverRequested = false;
+                _conditionsSafeHandoverRequested = false;
                 BandAnalysis.HideAnalysisBanner();
                 return;
             }
 
             if (trigger == null && string.IsNullOrWhiteSpace(_conditionsPendingReason))
             {
+                _conditionsProductivityHandoverRequested = false;
+                _conditionsSafeHandoverRequested = false;
                 if (nowUtc - _conditionsLastStatusUpdateAtUtc >= TimeSpan.FromSeconds(10))
                 {
                     var nextAllowed = NextConditionsSurveyAllowedAtUtc();
@@ -7932,8 +8365,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 ? _conditionsAutomaticStartAllowedAtUtc
                 : new[] { nextSurveyAt, minimumBandUntil, _conditionsAutomaticStartAllowedAtUtc }.Max();
 
+            _conditionsProductivityHandoverRequested = productivityTrigger != null && nowUtc >= permittedAt;
+            _conditionsSafeHandoverRequested = nowUtc >= permittedAt;
+
             if (nowUtc < _conditionsUserDeferredUntilUtc)
             {
+                _conditionsProductivityHandoverRequested = false;
+                _conditionsSafeHandoverRequested = false;
                 BandAnalysis.AutomaticStatus = $"Automatic Band Analysis deferred by the user until {_conditionsUserDeferredUntilUtc.ToLocalTime():HH:mm}. Trigger: {reason}.";
                 BandAnalysis.HideAnalysisBanner();
                 return;
@@ -7941,6 +8379,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             if (nowUtc < permittedAt)
             {
+                _conditionsProductivityHandoverRequested = false;
+                _conditionsSafeHandoverRequested = false;
                 BandAnalysis.AutomaticStatus = $"Conditions Search pending: {reason}. Earliest safe automatic analysis {permittedAt.ToLocalTime():HH:mm}.";
                 var seconds = Math.Max(0, (int)Math.Ceiling((permittedAt - nowUtc).TotalSeconds));
                 BandAnalysis.ShowAnalysisBanner(
@@ -7967,6 +8407,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
 
             _conditionsPendingReason = "";
+            _conditionsProductivityHandoverRequested = false;
+            _conditionsSafeHandoverRequested = false;
             _conditionsAutomaticStartAllowedAtUtc = DateTime.MinValue;
             _conditionsFullConfirmationPending = false;
             MarkScheduledConditionsRun(nowUtc, scheduledReason);
@@ -8001,7 +8443,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         DateTime nowUtc,
         int rollingUniqueStations,
         int unansweredAttempts,
-        int distinctUnansweredStations)
+        int distinctUnansweredStations,
+        int attemptsSinceCompletedQso,
+        int incompleteExchanges)
     {
         static double RemainingPercent(TimeSpan remaining, TimeSpan total) =>
             total <= TimeSpan.Zero ? 0 : Math.Clamp(remaining.TotalSeconds / total.TotalSeconds * 100d, 0, 100);
@@ -8036,6 +8480,31 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             "unanswered",
             Math.Max(attemptsRemainingPercent, stationsRemainingPercent),
             $"{unansweredAttempts}/{attemptsTarget} attempts · {distinctUnansweredStations}/{stationsTarget} different stations");
+
+        var productivityTotal = TimeSpan.FromMinutes(Settings.Settings.ConditionsSearchNoCompletedQsoMinutes);
+        var productivityRemaining = _conditionsLastCompletedQsoAtUtc + productivityTotal - nowUtc;
+        if (productivityRemaining < TimeSpan.Zero)
+            productivityRemaining = TimeSpan.Zero;
+        var productivityTimeRemainingPercent = RemainingPercent(productivityRemaining, productivityTotal);
+        var productivityAttemptsRemainingPercent = Math.Clamp(
+            (attemptsTarget - attemptsSinceCompletedQso) / (double)attemptsTarget * 100d,
+            0,
+            100);
+        var incompleteTarget = Math.Max(1, Settings.Settings.ConditionsSearchIncompleteQsoThreshold);
+        var incompleteRemainingPercent = Math.Clamp(
+            (incompleteTarget - incompleteExchanges) / (double)incompleteTarget * 100d,
+            0,
+            100);
+        var effortRemainingPercent = Math.Min(productivityAttemptsRemainingPercent, incompleteRemainingPercent);
+        var productivityElapsedMinutes = Math.Max(0, (int)Math.Floor((productivityTotal - productivityRemaining).TotalMinutes));
+        BandAnalysis.UpdateConditionIndicator(
+            "productivity",
+            Math.Max(productivityTimeRemainingPercent, effortRemainingPercent),
+            $"No logged QSO for {productivityElapsedMinutes}/{Settings.Settings.ConditionsSearchNoCompletedQsoMinutes} min · "
+            + $"{attemptsSinceCompletedQso}/{attemptsTarget} attempts · {incompleteExchanges}/{incompleteTarget} incomplete exchanges"
+            + (string.IsNullOrWhiteSpace(_conditionsLastCompletedQsoCallsign)
+                ? ""
+                : $" · last completed {_conditionsLastCompletedQsoCallsign}"));
 
         var usefulTotal = TimeSpan.FromMinutes(Settings.Settings.ConditionsSearchNoUsefulTargetMinutes);
         var usefulRemaining = _conditionsLastUsefulTargetAtUtc + usefulTotal - nowUtc;
@@ -8149,6 +8618,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         BandAnalysis.HistorySummary = latest == null
             ? "No Band Analysis history yet. Trends appear after two observations of a band."
             : $"History retained for 60 days. Latest sample: {latest.ObservedAtUtc.ToLocalTime():g}; {latest.TriggerReason}.";
+        RefreshBandAnalysisHistoryChart();
     }
 
     private void RestoreConditionsSearchHistoryState()
@@ -8227,7 +8697,105 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             });
         }
         _bandAnalysisHistoryStore.Save(_bandAnalysisHistory);
+        _bandAnalysisCurrentSurveyStartedUtc = DateTime.MinValue;
         RefreshBandAnalysisTrends();
+    }
+
+    private void RefreshBandAnalysisHistoryChart()
+    {
+        const int maximumSurveys = 14;
+        var enabledBands = BandAnalysis.Bands
+            .Where(row => row.Enabled)
+            .Select(row => row.Band)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var surveyIds = _bandAnalysisHistory
+            .Where(entry => entry.SecondsObserved > 0)
+            .GroupBy(entry => entry.SurveyId, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new { SurveyId = group.Key, ObservedAtUtc = group.Max(entry => entry.ObservedAtUtc) })
+            .OrderByDescending(item => item.ObservedAtUtc)
+            .Take(maximumSurveys)
+            .Select(item => item.SurveyId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var series = new List<BandAnalysisChartSeries>();
+
+        foreach (var row in BandAnalysis.Bands.Where(row => enabledBands.Contains(row.Band)))
+        {
+            var points = _bandAnalysisHistory
+                .Where(entry => surveyIds.Contains(entry.SurveyId)
+                    && entry.SecondsObserved > 0
+                    && entry.Band.Equals(row.Band, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(entry => entry.ObservedAtUtc)
+                .Select(entry => new BandAnalysisChartPoint(
+                    entry.ObservedAtUtc,
+                    BandAnalysisChartScore(
+                        entry.NewDxccStations,
+                        entry.WantedStations,
+                        entry.ActivityScore,
+                        entry.DxReachScore,
+                        entry.PskMeasured,
+                        entry.PskPropagationScore),
+                    entry.SelectedBand.Equals(entry.Band, StringComparison.OrdinalIgnoreCase),
+                    false,
+                    $"Band: {entry.Band}\n"
+                    + $"Score {BandAnalysisChartScore(entry.NewDxccStations, entry.WantedStations, entry.ActivityScore, entry.DxReachScore, entry.PskMeasured, entry.PskPropagationScore):0} | "
+                    + $"{entry.UniqueStations} stations | DX reach {entry.DxReachScore} | wanted {entry.WantedStations} | PSK {entry.PskPropagationScore}\n"
+                    + $"{(entry.Automatic ? "Automatic" : "Manual")} | {entry.TriggerReason}\n{entry.Decision}"))
+                .ToList();
+
+            if (_bandAnalysisCurrentSurveyStartedUtc != DateTime.MinValue && row.SecondsObserved > 0)
+            {
+                var currentScore = BandAnalysisChartScore(
+                    row.NewDxccStations,
+                    row.WantedStations,
+                    row.ActivityScore,
+                    row.DxReachScore,
+                    row.PskMeasured,
+                    row.PskMetrics.PropagationScore);
+                points.Add(new BandAnalysisChartPoint(
+                    _bandAnalysisCurrentSurveyStartedUtc,
+                    currentScore,
+                    false,
+                    true,
+                    $"Band: {row.Band} | current analysis\nScore {currentScore:0} | {row.UniqueStations} stations | DX reach {row.DxReachScore} | wanted {row.WantedStations} | "
+                    + (row.PskMeasured ? $"PSK {row.PskMetrics.PropagationScore}" : "PSK pending")
+                    + $"\n{(_bandAnalysisCurrentSurveyAutomatic ? "Automatic" : "Manual")} | {_bandAnalysisCurrentSurveyReason}"));
+            }
+
+            if (points.Count > 0)
+                series.Add(new BandAnalysisChartSeries(row.Band, PskReporterMapViewModel.BandColour(row.Band), points));
+        }
+
+        var currentMeasured = _bandAnalysisCurrentSurveyStartedUtc == DateTime.MinValue
+            ? 0
+            : BandAnalysis.Bands.Count(row => row.Enabled && row.SecondsObserved > 0);
+        var status = _bandAnalysisCurrentSurveyStartedUtc != DateTime.MinValue
+            ? $"Current analysis is building live: {currentMeasured}/{enabledBands.Count} enabled bands measured. Hollow points are provisional; hover a point for details."
+            : series.Count == 0
+                ? "Complete a Band Analysis to begin the conditions graph."
+                : $"Showing the latest {Math.Min(maximumSurveys, surveyIds.Count)} completed analyses for enabled bands. Larger outlined points mark the selected destination band.";
+        BandAnalysis.SetHistoryChart(series, status);
+    }
+
+    private static double BandAnalysisChartScore(
+        int newDxccStations,
+        int wantedStations,
+        int activityScore,
+        int dxReachScore,
+        bool pskMeasured,
+        int pskPropagationScore)
+    {
+        var received = Math.Clamp(
+            activityScore * 0.25
+            + dxReachScore * 0.50
+            + Math.Min(3, wantedStations) * 8
+            + Math.Min(1, newDxccStations) * 20,
+            0,
+            100);
+        return Math.Clamp(pskMeasured
+            ? received * 0.70 + Math.Clamp(pskPropagationScore, 0, 100) * 0.30
+            : received,
+            0,
+            100);
     }
 
     private void OpenBandAnalysisHistory()
@@ -8435,56 +9003,69 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (!_udpListener.IsRunning)
-            await StartUdpAsync();
-        var udpStatusDeadline = DateTime.UtcNow.AddSeconds(6);
-        while (_udpListener.LastStatus == null && DateTime.UtcNow < udpStatusDeadline)
-            await Task.Delay(100);
-        if (_udpListener.LastStatus == null)
-        {
-            BandAnalysis.PskProbeStatus = "No live JTDX UDP status is available. Confirm JTDX is open and UDP reporting is enabled before transmitting a propagation survey.";
-            return;
-        }
-
-        if (_huntState != HuntState.Idle
-            || _lockedTarget != null
-            || _udpListener.LastStatus.Transmitting
-            || _udpListener.LastStatus.TxEnabled)
-        {
-            BandAnalysis.PskProbeStatus = "The PSK survey is waiting for the current call or QSO to finish and for JTDX Enable TX to be off.";
-            return;
-        }
-
-        if (!BandAnalysisViewModel.HasPskTransmitCalibration(Settings.Settings))
-        {
-            BandAnalysis.PskProbeStatus = "Map both JTDX's Tx timing selector and Tx1 reset button before starting a transmitted survey.";
-            return;
-        }
-
-        var enabledCount = BandAnalysis.Bands.Count(row => row.Enabled);
-        if (enabledCount == 0)
-        {
-            BandAnalysis.PskProbeStatus = "Select at least one band to survey.";
-            return;
-        }
-
-        var estimatedMinutes = enabledCount * BandAnalysis.PskPropagationProbeMinutes;
-        var answer = System.Windows.MessageBox.Show(
-            $"Full Band Analysis will listen and then transmit exactly two CQ propagation probes on each of {enabledCount} enabled bands.\n\n"
-            + $"Estimated minimum time: about {estimatedMinutes:0.#} minutes plus band-change synchronisation.\n\n"
-            + "DX Pilot will show a prominent transmission warning throughout and will stop for an absolute-priority New DXCC. Start Band Analysis?",
-            "Start full Band Analysis",
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Warning);
-        if (answer != System.Windows.MessageBoxResult.Yes)
-        {
-            BandAnalysis.PskProbeStatus = "Band Analysis cancelled before transmitting.";
-            return;
-        }
-
         _bandAnalysisOperationInProgress = true;
         try
         {
+            BandAnalysis.PskProbeStatus = "Manual Band Analysis requested; preparing JTDX now.";
+            if (!_udpListener.IsRunning)
+                await StartUdpAsync();
+            var udpStatusDeadline = DateTime.UtcNow.AddSeconds(6);
+            while (_udpListener.LastStatus == null && DateTime.UtcNow < udpStatusDeadline)
+                await Task.Delay(100);
+            if (_udpListener.LastStatus == null)
+            {
+                BandAnalysis.PskProbeStatus = "No live JTDX UDP status is available. Confirm JTDX is open and UDP reporting is enabled before transmitting a propagation survey.";
+                return;
+            }
+
+            if (!BandAnalysisViewModel.HasPskTransmitCalibration(Settings.Settings))
+            {
+                BandAnalysis.PskProbeStatus = "Map both JTDX's Tx timing selector and Tx1 reset button before starting a transmitted survey.";
+                return;
+            }
+
+            var enabledCount = BandAnalysis.Bands.Count(row => row.Enabled);
+            if (enabledCount == 0)
+            {
+                BandAnalysis.PskProbeStatus = "Select at least one band to survey.";
+                return;
+            }
+
+            var huntingNotice = _autoResume.IsRunning
+                ? "\n\nThe active hunting mode will pause now and resume on the selected band when analysis finishes. Any current ordinary target will be released safely."
+                : "";
+            var estimatedMinutes = enabledCount * BandAnalysis.PskPropagationProbeMinutes;
+            var answer = System.Windows.MessageBox.Show(
+                $"Full Band Analysis will listen and then transmit exactly two CQ propagation probes on each of {enabledCount} enabled bands.\n\n"
+                + $"Estimated minimum time: about {estimatedMinutes:0.#} minutes plus band-change synchronisation."
+                + huntingNotice
+                + "\n\nThis is a manual request: automatic trigger thresholds and cooldown do not apply. Start Band Analysis?",
+                "Start full Band Analysis now",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning);
+            if (answer != System.Windows.MessageBoxResult.Yes)
+            {
+                BandAnalysis.PskProbeStatus = "Band Analysis cancelled before transmitting.";
+                return;
+            }
+
+            _conditionsPendingReason = "";
+            _conditionsAutomaticStartAllowedAtUtc = DateTime.MinValue;
+            _conditionsProductivityHandoverRequested = false;
+            _conditionsSafeHandoverRequested = false;
+            BandAnalysis.HideAnalysisBanner();
+            if (_udpListener.LastStatus?.Transmitting == true)
+            {
+                BandAnalysis.PskProbeStatus = "Manual Band Analysis confirmed; allowing the current FT8 transmission to finish before taking control.";
+                var receiveDeadline = DateTime.UtcNow.AddSeconds(25);
+                while (_udpListener.LastStatus?.Transmitting == true && DateTime.UtcNow < receiveDeadline)
+                    await Task.Delay(100);
+                if (_udpListener.LastStatus?.Transmitting == true)
+                {
+                    BandAnalysis.PskProbeStatus = "Manual Band Analysis could not start because JTDX did not finish its current transmission safely.";
+                    return;
+                }
+            }
             await StartPskPropagationSurveyCoreAsync(automatic: false, triggerReason: "Manual full Band Analysis");
         }
         finally
@@ -8524,7 +9105,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _bandSurveyTriggerReason = triggerReason;
         _bandSurveyPriorityNewDxcc = null;
         _pskPropagationSurveyRunning = true;
+        _bandAnalysisCurrentSurveyStartedUtc = DateTime.UtcNow;
+        _bandAnalysisCurrentSurveyAutomatic = automatic;
+        _bandAnalysisCurrentSurveyReason = triggerReason;
         _bandButtonStripOverlay?.Close();
+        _bandSurveyDecodes.Clear();
+        foreach (var row in BandAnalysis.Bands)
+        {
+            row.ResetSurvey();
+            _bandSurveyDecodes[row.Band] = new List<DecodeMessage>();
+        }
+        BandAnalysis.PskMap.Clear();
+        BandAnalysis.OverallSummary = "Starting a new Band Analysis; previous live readings have been cleared. Saved surveys remain available in Conditions history.";
+        RefreshBandAnalysisHistoryChart();
         await PrepareForReceiveOnlyBandAnalysisAsync();
         _operatingMode = resumeMode;
         if (!_udpListener.IsRunning)
@@ -8533,6 +9126,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             BandAnalysis.PskProbeStatus = "Waiting for JTDX UDP status. Confirm JTDX is open and UDP reporting is enabled, then start again.";
             _pskPropagationSurveyRunning = false;
+            _bandAnalysisCurrentSurveyStartedUtc = DateTime.MinValue;
+            RefreshBandAnalysisHistoryChart();
             BandAnalysis.HideAnalysisBanner();
             return;
         }
@@ -8541,13 +9136,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _bandSurveyCancellation?.Dispose();
         _bandSurveyCancellation = new CancellationTokenSource();
         var cancellationToken = _bandSurveyCancellation.Token;
-        _bandSurveyDecodes.Clear();
-        foreach (var row in BandAnalysis.Bands)
-        {
-            row.ResetSurvey();
-            _bandSurveyDecodes[row.Band] = new List<DecodeMessage>();
-        }
-        BandAnalysis.PskMap.BeginSurvey();
 
         BandAnalysis.IsRunning = true;
         BandAnalysis.PskProgress = "Starting full Band Analysis";
@@ -9261,7 +9849,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _bandSurveyResumesAssistance = resumeAutomation;
         _bandSurveyTriggerReason = triggerReason;
         _bandSurveyPriorityNewDxcc = null;
+        _bandAnalysisCurrentSurveyStartedUtc = DateTime.UtcNow;
+        _bandAnalysisCurrentSurveyAutomatic = automatic;
+        _bandAnalysisCurrentSurveyReason = triggerReason;
         _bandButtonStripOverlay?.Close();
+        _bandSurveyDecodes.Clear();
+        foreach (var row in BandAnalysis.Bands)
+        {
+            row.ResetSurvey();
+            _bandSurveyDecodes[row.Band] = new List<DecodeMessage>();
+        }
+        BandAnalysis.OverallSummary = "Starting a new listen-only scan; previous live readings have been cleared. Saved surveys remain available in Conditions history.";
+        RefreshBandAnalysisHistoryChart();
         await PrepareForReceiveOnlyBandAnalysisAsync();
         _operatingMode = resumeMode;
         if (!_udpListener.IsRunning)
@@ -9270,6 +9869,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             BandAnalysis.Status = "Waiting for JTDX UDP status. Confirm JTDX is open and UDP reporting is enabled, then start again.";
             AddAction(BandAnalysis.Status);
+            _bandAnalysisCurrentSurveyStartedUtc = DateTime.MinValue;
+            RefreshBandAnalysisHistoryChart();
             _bandSurveyAutomatic = false;
             _bandSurveyResumesAssistance = false;
             _operatingMode = resumeMode;
@@ -9284,12 +9885,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _bandSurveyCancellation = new CancellationTokenSource();
         var cancellationToken = _bandSurveyCancellation.Token;
         var startingBand = CurrentReportedBand();
-        _bandSurveyDecodes.Clear();
-        foreach (var row in BandAnalysis.Bands)
-        {
-            row.ResetSurvey();
-            _bandSurveyDecodes[row.Band] = new List<DecodeMessage>();
-        }
 
         BandAnalysis.IsRunning = true;
         BandAnalysis.OverallSummary = "Survey in progress; results update after each received decode.";
@@ -9723,6 +10318,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (observed.Count == 0)
         {
             BandAnalysis.OverallSummary = "No completed band observations are available.";
+            RefreshBandAnalysisHistoryChart();
             return;
         }
 
@@ -9743,6 +10339,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             + (bestOutward == null
                 ? ""
                 : $" Best outward PSK propagation: {bestOutward.Band} ({bestOutward.PskAssessment}, heard by {bestOutward.PskUniqueReceivers}, reach {bestOutward.PskReachDisplay}, score {bestOutward.PskScoreDisplay}).");
+        RefreshBandAnalysisHistoryChart();
     }
 
     private string CurrentReportedBand()

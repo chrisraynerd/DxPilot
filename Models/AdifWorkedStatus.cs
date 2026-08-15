@@ -3,14 +3,22 @@ namespace JtdxAutoResume.V3.Models;
 public sealed class AdifMergeResult
 {
     public IReadOnlyList<AdifQso> UniqueQsos { get; init; } = Array.Empty<AdifQso>();
+    public IReadOnlyList<AdifQso> ActiveQsos { get; init; } = Array.Empty<AdifQso>();
     public int FullQsoCount { get; init; }
     public int LiveQsoCount { get; init; }
     public int DuplicateCount { get; init; }
     public WorkedStatusIndexes Indexes { get; init; } = new();
+    public WorkedStatusIndexes OverallIndexes { get; init; } = new();
+    public IReadOnlyList<CallsignLogProfile> CallsignProfiles { get; init; } = Array.Empty<CallsignLogProfile>();
+    public int UnassignedStationCallsignCount { get; init; }
 }
 
 public sealed class WorkedStatusIndexes
 {
+    public string AchievementProfileKey { get; set; } = Services.StationCallsignIdentity.AllCallsignsKey;
+    public string AchievementProfileLabel { get; set; } = "All callsigns";
+    public bool IsCallsignScoped => !AchievementProfileKey.Equals(Services.StationCallsignIdentity.AllCallsignsKey, StringComparison.OrdinalIgnoreCase);
+    public HashSet<string> OverallWorkedDxcc { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, DxccWorkedStatus> Dxcc { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, SimpleWorkedStatus> Grids { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, SimpleWorkedStatus> States { get; } = new(StringComparer.OrdinalIgnoreCase);

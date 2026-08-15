@@ -11,6 +11,8 @@ public sealed class DxCandidateRow : INotifyPropertyChanged
     public string RankText { get; set; } = "";
     public string Call { get; set; } = "";
     public bool WasCallWorkedBefore { get; set; }
+    public bool WasCallWorkedInSelectedProfile { get; set; }
+    public bool WasCallWorkedUnderAnotherProfileOnly { get; set; }
     public string WorkedCallToolTip { get; set; } = "";
     public string Country { get; set; } = "";
     public string Continent { get; set; } = "";
@@ -54,6 +56,16 @@ public sealed class DxCandidateRow : INotifyPropertyChanged
             WasCallWorkedBefore,
             source.WasCallWorkedBefore,
             value => WasCallWorkedBefore = value);
+        UpdateValue(
+            nameof(WasCallWorkedInSelectedProfile),
+            WasCallWorkedInSelectedProfile,
+            source.WasCallWorkedInSelectedProfile,
+            value => WasCallWorkedInSelectedProfile = value);
+        UpdateValue(
+            nameof(WasCallWorkedUnderAnotherProfileOnly),
+            WasCallWorkedUnderAnotherProfileOnly,
+            source.WasCallWorkedUnderAnotherProfileOnly,
+            value => WasCallWorkedUnderAnotherProfileOnly = value);
         UpdateValue(
             nameof(WorkedCallToolTip),
             WorkedCallToolTip,

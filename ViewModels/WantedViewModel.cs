@@ -12,6 +12,7 @@ public sealed class WantedViewModel : ObservableObject
     public ObservableCollection<WantedItem> WantedGrids { get; } = new();
     public ObservableCollection<WantedItem> WantedStates { get; } = new();
     public ObservableCollection<WantedItem> WantedBandMode { get; } = new();
+    public ObservableCollection<CallsignLogProfile> AchievementProfiles { get; } = new();
 
     public string Status
     {

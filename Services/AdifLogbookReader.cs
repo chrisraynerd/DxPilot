@@ -79,6 +79,8 @@ public sealed partial class AdifLogbookReader
             Grid = Get(fields, "GRIDSQUARE").ToUpperInvariant(),
             State = Get(fields, "STATE").ToUpperInvariant(),
             Iota = Get(fields, "IOTA").ToUpperInvariant(),
+            StationCallsign = Get(fields, "STATION_CALLSIGN").ToUpperInvariant(),
+            OperatorCallsign = Get(fields, "OPERATOR").ToUpperInvariant(),
             LotwConfirmed = IsConfirmed(Get(fields, "LOTW_QSL_RCVD")),
             PaperConfirmed = IsConfirmed(Get(fields, "QSL_RCVD")),
             EqslConfirmed = IsConfirmed(Get(fields, "EQSL_QSL_RCVD")),

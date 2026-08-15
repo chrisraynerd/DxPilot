@@ -4,7 +4,32 @@
              xmlns:views="clr-namespace:JtdxAutoResume.V3.Views">
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
         <StackPanel>
-            <Expander Header="Mapping and diagnostic tools" Margin="0,0,0,12" IsExpanded="False" FontWeight="SemiBold">
+            <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                        <TextBlock Text="Band Analysis" FontSize="21" FontWeight="SemiBold" />
+                        <TextBlock Margin="0,4,0,0" Foreground="#526577" TextWrapping="Wrap"
+                                   Text="Compare received opportunities with two controlled PSK Reporter CQ probes on every enabled band. This manual command starts when you confirm it; automatic trigger thresholds and cooldown apply only to Automatic Conditions Search." />
+                        <TextBlock Text="{Binding BandAnalysis.PskProbeStatus}" Margin="0,9,0,0" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding BandAnalysis.PskProgress}" Margin="0,4,0,0" Foreground="#315B75" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button Content="Start Band Analysis" Command="{Binding StartPskPropagationSurveyCommand}"
+                                Background="#2563EB" Foreground="White" BorderBrush="#1D4ED8" FontWeight="SemiBold"
+                                Padding="20,9" />
+                        <Button Content="Stop analysis" Command="{Binding StopBandSurveyCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Expander Header="Band Analysis setup, automatic conditions and diagnostic tools"
+                      Margin="0,0,0,12" IsExpanded="False" FontWeight="SemiBold">
+            <StackPanel Margin="0,6,0,0">
+            <Expander Header="JTDX control mapping" Margin="0,0,0,12" IsExpanded="False" FontWeight="SemiBold">
             <Border Style="{StaticResource PanelBorder}" Margin="0,6,0,0">
                 <StackPanel>
                     <TextBlock Text="JTDX control mapping" FontSize="17" FontWeight="SemiBold" />
@@ -23,15 +48,10 @@
             </Expander>
 
             <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                        <TextBlock Text="Band Analysis" FontSize="19" FontWeight="SemiBold" />
+                    <StackPanel>
+                        <TextBlock Text="Manual analysis settings" FontSize="17" FontWeight="SemiBold" />
                         <TextBlock Margin="0,4,0,10" Foreground="#526577" TextWrapping="Wrap"
-                                   Text="The main analysis compares both sides of each enabled band: stations and targets received by JTDX, then exactly two controlled CQ probes matched against PSK Reporter. The combined result selects where assistance should continue." />
+                                   Text="These choices apply when Start Band Analysis is pressed above. They do not decide when an automatic analysis is due." />
                         <WrapPanel>
                             <StackPanel Margin="0,0,22,0">
                                 <TextBlock Text="Measurement time per band" FontWeight="SemiBold" />
@@ -43,17 +63,8 @@
                         <TextBlock Text="{Binding BandAnalysis.PskProbeTimingSummary}" Margin="0,9,0,0" TextWrapping="Wrap" />
                         <CheckBox Content="Return to the starting band when Band Analysis was started with assistance off"
                                   IsChecked="{Binding BandAnalysis.ReturnToStartingBand, Mode=TwoWay}" Margin="0,7,0,0" />
-                        <TextBlock Text="{Binding BandAnalysis.PskProbeStatus}" Margin="0,5,0,0" Foreground="#526577" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding BandAnalysis.CalibrationStatus}" Margin="0,7,0,0" Foreground="#526577" TextWrapping="Wrap" />
                     </StackPanel>
-                    <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                        <Button Content="Start Band Analysis" Command="{Binding StartPskPropagationSurveyCommand}"
-                                Background="#2563EB" Foreground="White" BorderBrush="#1D4ED8" FontWeight="SemiBold" />
-                        <Button Content="Stop analysis" Command="{Binding StopBandSurveyCommand}" />
-                        <TextBlock Text="Uses the enabled bands below" Foreground="#526577" HorizontalAlignment="Right" Margin="0,7,8,0" />
-                        <TextBlock Text="{Binding BandAnalysis.PskProgress}" HorizontalAlignment="Right" Margin="0,8,8,0"
-                                   FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="420" />
-                    </StackPanel>
-                </Grid>
             </Border>
 
             <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
@@ -88,9 +99,9 @@
                             <TextBlock Text="How far back DX Pilot counts unique stations on the current band." Foreground="#526577" TextWrapping="Wrap" />
                         </StackPanel>
                         <StackPanel Margin="0,0,14,8">
-                            <TextBlock Text="Time without a useful target" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Text="Time since a useful target was selected" FontWeight="SemiBold" TextWrapping="Wrap" />
                             <TextBox Text="{Binding BandAnalysis.ConditionsSearchNoUsefulTargetMinutes, UpdateSourceTrigger=LostFocus}" />
-                            <TextBlock Text="Trigger after this many minutes without a selectable CQ or wanted station." Foreground="#526577" TextWrapping="Wrap" />
+                            <TextBlock Text="Trigger after this many minutes without DX Pilot selecting and locking a worthwhile station." Foreground="#526577" TextWrapping="Wrap" />
                         </StackPanel>
                         <StackPanel Margin="0,0,0,8">
                             <TextBlock Text="Complete silence" FontWeight="SemiBold" TextWrapping="Wrap" />
@@ -108,14 +119,24 @@
                             <TextBlock Text="Minutes below the station threshold before it becomes a trigger." Foreground="#526577" TextWrapping="Wrap" />
                         </StackPanel>
                         <StackPanel Margin="0,0,14,8">
-                            <TextBlock Text="Calling attempts without progress" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Text="Initial calls without reply" FontWeight="SemiBold" TextWrapping="Wrap" />
                             <TextBox Text="{Binding BandAnalysis.ConditionsSearchPoorReplyAttempts, UpdateSourceTrigger=LostFocus}" />
-                            <TextBlock Text="Counted since the latest reply or QSO progress." Foreground="#526577" TextWrapping="Wrap" />
+                            <TextBlock Text="Initial transmissions counted since the latest reply or QSO progress." Foreground="#526577" TextWrapping="Wrap" />
                         </StackPanel>
                         <StackPanel Margin="0,0,14,8">
                             <TextBlock Text="Calls must cover this many stations" FontWeight="SemiBold" TextWrapping="Wrap" />
                             <TextBox Text="{Binding BandAnalysis.ConditionsSearchPoorReplyDistinctStations, UpdateSourceTrigger=LostFocus}" />
                             <TextBlock Text="Prevents one difficult station from causing a band analysis." Foreground="#526577" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,14,8">
+                            <TextBlock Text="Time without a completed QSO" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBox Text="{Binding BandAnalysis.ConditionsSearchNoCompletedQsoMinutes, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Text="Minutes without a new contact appearing in JTDX's ADIF log." Foreground="#526577" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,14,8">
+                            <TextBlock Text="Incomplete exchanges before analysis" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBox Text="{Binding BandAnalysis.ConditionsSearchIncompleteQsoThreshold, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Text="Stations that replied or progressed but did not produce a logged QSO." Foreground="#526577" TextWrapping="Wrap" />
                         </StackPanel>
                         <StackPanel Margin="0,0,14,8">
                             <TextBlock Text="Improvement required before moving" FontWeight="SemiBold" TextWrapping="Wrap" />
@@ -181,6 +202,8 @@
                 </Grid>
             </Border>
             </Expander>
+            </StackPanel>
+            </Expander>
 
             <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
                 <StackPanel>
@@ -227,6 +250,18 @@
                             <DataGridTextColumn Header="Assessment" Binding="{Binding Assessment}" IsReadOnly="True" Width="190" />
                         </DataGrid.Columns>
                     </DataGrid>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="Conditions history" FontSize="17" FontWeight="SemiBold" />
+                    <TextBlock Text="The 0–100 visual score combines received activity, DX reach, wanted opportunities and PSK propagation. It explains change over time; it does not replace New DXCC priority or the final selection rules."
+                               Margin="0,4,0,0" Foreground="#526577" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding BandAnalysis.HistoryChartStatus}" Margin="0,4,0,9"
+                               Foreground="#526577" TextWrapping="Wrap" />
+                    <views:BandAnalysisHistoryChart Series="{Binding BandAnalysis.HistoryChartSeries}"
+                                                        Height="270" />
                 </StackPanel>
             </Border>
 

@@ -4,7 +4,16 @@
 FT8/FT4 decodes and can select wanted DXCC entities, grids, US states and
 configured geographical areas.
 
-The current stable release is **v4.0.1**. Enable TX toggle direction is now governed
+The current stable release is **v4.1.0**. Wanted Sniper now supports callsign-specific
+achievement profiles built from the ADIF `STATION_CALLSIGN` field, so operators can
+review awards across every callsign or ask what is new to one current or former identity.
+The selected profile remains visibly identified by a **PROFILE LOCKED** panel whenever
+hunting or Band Analysis is active; profile changes remain safely blocked until the
+operation stops. Band Analysis gains current-run clearing, improved QSO-productivity
+triggers and a time-labelled conditions-history graph. A complete illustrated Word and
+PDF user manual is included with the release.
+
+The previous stable release was **v4.0.1**. Enable TX toggle direction is governed
 by fresh JTDX UDP status: an uncertain pixel sample can never be treated as permission
 to click an already-off toggle. This protects normal Wanted/DX Assist shutdown,
 target recovery and the standalone Band Analysis PSK sequence across PCs whose JTDX

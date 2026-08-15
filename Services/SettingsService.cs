@@ -378,6 +378,11 @@ public sealed class SettingsService
         {
             settings.MyCallsign = "G1CEC";
         }
+
+        if (string.IsNullOrWhiteSpace(settings.AchievementCallsignProfile))
+            settings.AchievementCallsignProfile = StationCallsignIdentity.AllCallsignsKey;
+        else
+            settings.AchievementCallsignProfile = settings.AchievementCallsignProfile.Trim().ToUpperInvariant();
     }
 
     private static void NormalizeTimingDefaults(AppSettings settings)
@@ -724,6 +729,14 @@ public sealed class SettingsService
         settings.ConditionsSearchPoorReplyDistinctStations = Math.Clamp(
             settings.ConditionsSearchPoorReplyDistinctStations <= 0 ? 3 : settings.ConditionsSearchPoorReplyDistinctStations,
             2,
+            10);
+        settings.ConditionsSearchNoCompletedQsoMinutes = Math.Clamp(
+            settings.ConditionsSearchNoCompletedQsoMinutes <= 0 ? 20 : settings.ConditionsSearchNoCompletedQsoMinutes,
+            5,
+            120);
+        settings.ConditionsSearchIncompleteQsoThreshold = Math.Clamp(
+            settings.ConditionsSearchIncompleteQsoThreshold <= 0 ? 2 : settings.ConditionsSearchIncompleteQsoThreshold,
+            1,
             10);
         settings.ConditionsSearchSilentMinutes = Math.Clamp(
             settings.ConditionsSearchSilentMinutes <= 0 ? 4 : settings.ConditionsSearchSilentMinutes,

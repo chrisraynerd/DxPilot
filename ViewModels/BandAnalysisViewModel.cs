@@ -32,6 +32,8 @@ public sealed class BandAnalysisViewModel : ObservableObject
     private int _conditionsSearchLowActivityPersistMinutes;
     private int _conditionsSearchPoorReplyAttempts;
     private int _conditionsSearchPoorReplyDistinctStations;
+    private int _conditionsSearchNoCompletedQsoMinutes;
+    private int _conditionsSearchIncompleteQsoThreshold;
     private int _conditionsSearchSilentMinutes;
     private int _conditionsSearchSwitchImprovementPercent;
     private bool _conditionsSearchUseQuickSurvey;
@@ -48,6 +50,8 @@ public sealed class BandAnalysisViewModel : ObservableObject
     private string _analysisBannerMessage = "";
     private string _analysisBannerPhase = "";
     private string _analysisBannerTone = "Pending";
+    private IReadOnlyList<BandAnalysisChartSeries> _historyChartSeries = Array.Empty<BandAnalysisChartSeries>();
+    private string _historyChartStatus = "Complete a Band Analysis to begin the conditions graph.";
 
     public BandAnalysisViewModel(AppSettings settings)
     {
@@ -73,6 +77,8 @@ public sealed class BandAnalysisViewModel : ObservableObject
         _conditionsSearchLowActivityPersistMinutes = settings.ConditionsSearchLowActivityPersistMinutes;
         _conditionsSearchPoorReplyAttempts = settings.ConditionsSearchPoorReplyAttempts;
         _conditionsSearchPoorReplyDistinctStations = settings.ConditionsSearchPoorReplyDistinctStations;
+        _conditionsSearchNoCompletedQsoMinutes = settings.ConditionsSearchNoCompletedQsoMinutes;
+        _conditionsSearchIncompleteQsoThreshold = settings.ConditionsSearchIncompleteQsoThreshold;
         _conditionsSearchSilentMinutes = settings.ConditionsSearchSilentMinutes;
         _conditionsSearchSwitchImprovementPercent = settings.ConditionsSearchSwitchImprovementPercent;
         _conditionsSearchUseQuickSurvey = settings.ConditionsSearchUseQuickSurvey;
@@ -87,11 +93,14 @@ public sealed class BandAnalysisViewModel : ObservableObject
             "residence", "Minimum stay on the selected band",
             "Gives the chosen band time to produce contacts before DX Pilot considers moving again."));
         ConditionsIndicators.Add(new ConditionsIndicatorViewModel(
-            "unanswered", "Calls without a reply",
-            "Counts calling attempts since the most recent reply or QSO progress, across several different stations."));
+            "unanswered", "Initial calls without reply",
+            "Counts initial calling attempts since the most recent reply or QSO progress, across several different stations."));
         ConditionsIndicators.Add(new ConditionsIndicatorViewModel(
-            "useful", "Time without a useful target",
-            "Measures how long DX Pilot has gone without hearing a selectable CQ or wanted opportunity."));
+            "productivity", "QSO productivity",
+            "Measures time and calling effort since the most recent QSO actually appeared in JTDX's ADIF log. Partial replies do not reset it."));
+        ConditionsIndicators.Add(new ConditionsIndicatorViewModel(
+            "useful", "Time since a useful target was selected",
+            "Measures how long DX Pilot has gone without selecting and locking a worthwhile target. A stalled target does not keep resetting this timer."));
         ConditionsIndicators.Add(new ConditionsIndicatorViewModel(
             "activity", "Band activity",
             "Combines complete silence with a persistently low number of unique stations in the recent listening window."));
@@ -197,6 +206,8 @@ public sealed class BandAnalysisViewModel : ObservableObject
     public int ConditionsSearchLowActivityPersistMinutes { get => _conditionsSearchLowActivityPersistMinutes; set => SetProperty(ref _conditionsSearchLowActivityPersistMinutes, Math.Clamp(value, 1, 15)); }
     public int ConditionsSearchPoorReplyAttempts { get => _conditionsSearchPoorReplyAttempts; set => SetProperty(ref _conditionsSearchPoorReplyAttempts, Math.Clamp(value, 3, 30)); }
     public int ConditionsSearchPoorReplyDistinctStations { get => _conditionsSearchPoorReplyDistinctStations; set => SetProperty(ref _conditionsSearchPoorReplyDistinctStations, Math.Clamp(value, 2, 10)); }
+    public int ConditionsSearchNoCompletedQsoMinutes { get => _conditionsSearchNoCompletedQsoMinutes; set => SetProperty(ref _conditionsSearchNoCompletedQsoMinutes, Math.Clamp(value, 5, 120)); }
+    public int ConditionsSearchIncompleteQsoThreshold { get => _conditionsSearchIncompleteQsoThreshold; set => SetProperty(ref _conditionsSearchIncompleteQsoThreshold, Math.Clamp(value, 1, 10)); }
     public int ConditionsSearchSilentMinutes { get => _conditionsSearchSilentMinutes; set => SetProperty(ref _conditionsSearchSilentMinutes, Math.Clamp(value, 2, 20)); }
     public int ConditionsSearchSwitchImprovementPercent { get => _conditionsSearchSwitchImprovementPercent; set => SetProperty(ref _conditionsSearchSwitchImprovementPercent, Math.Clamp(value, 5, 100)); }
     public bool ConditionsSearchUseQuickSurvey { get => _conditionsSearchUseQuickSurvey; set => SetProperty(ref _conditionsSearchUseQuickSurvey, value); }
@@ -211,6 +222,18 @@ public sealed class BandAnalysisViewModel : ObservableObject
     public string AnalysisBannerMessage { get => _analysisBannerMessage; set => SetProperty(ref _analysisBannerMessage, value); }
     public string AnalysisBannerPhase { get => _analysisBannerPhase; set => SetProperty(ref _analysisBannerPhase, value); }
     public string AnalysisBannerTone { get => _analysisBannerTone; set => SetProperty(ref _analysisBannerTone, value); }
+    public IReadOnlyList<BandAnalysisChartSeries> HistoryChartSeries
+    {
+        get => _historyChartSeries;
+        private set => SetProperty(ref _historyChartSeries, value);
+    }
+    public string HistoryChartStatus { get => _historyChartStatus; private set => SetProperty(ref _historyChartStatus, value); }
+
+    public void SetHistoryChart(IReadOnlyList<BandAnalysisChartSeries> series, string status)
+    {
+        HistoryChartSeries = series;
+        HistoryChartStatus = status;
+    }
 
     public void ShowAnalysisBanner(string title, string message, string phase, string tone)
     {
@@ -249,6 +272,8 @@ public sealed class BandAnalysisViewModel : ObservableObject
         settings.ConditionsSearchLowActivityPersistMinutes = ConditionsSearchLowActivityPersistMinutes;
         settings.ConditionsSearchPoorReplyAttempts = ConditionsSearchPoorReplyAttempts;
         settings.ConditionsSearchPoorReplyDistinctStations = ConditionsSearchPoorReplyDistinctStations;
+        settings.ConditionsSearchNoCompletedQsoMinutes = ConditionsSearchNoCompletedQsoMinutes;
+        settings.ConditionsSearchIncompleteQsoThreshold = ConditionsSearchIncompleteQsoThreshold;
         settings.ConditionsSearchSilentMinutes = ConditionsSearchSilentMinutes;
         settings.ConditionsSearchSwitchImprovementPercent = ConditionsSearchSwitchImprovementPercent;
         settings.ConditionsSearchUseQuickSurvey = ConditionsSearchUseQuickSurvey;

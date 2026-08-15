@@ -27,6 +27,8 @@ public sealed class CandidateRanking
     public DxccCandidateStatus DxccStatus { get; set; } = DxccCandidateStatus.Unknown;
     public bool DxccWorked { get; set; }
     public bool DxccConfirmed { get; set; }
+    public bool IsNewToCallsign { get; set; }
+    public string AchievementProfileLabel { get; set; } = "All callsigns";
     public string DxccConfirmationMode { get; set; } = "";
     public string DxccConfirmationSource { get; set; } = "";
     public int? RarityRank { get; set; }

@@ -219,8 +219,13 @@
                     <TextBlock Text="Failed / mismatch" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="14,0,0,0"
-                            ToolTip="This exact callsign appears in the combined full and live logbook. It remains eligible for ranking and targeting.">
-                    <TextBlock Text="Worked call" TextDecorations="Strikethrough" VerticalAlignment="Center" />
+                            ToolTip="This exact callsign was worked using the currently selected achievement callsign.">
+                    <TextBlock Text="Worked on selected callsign" TextDecorations="Strikethrough" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="14,0,0,0"
+                            ToolTip="This exact callsign was worked, but only under another one of your station callsigns.">
+                    <TextBlock Text="Worked under another callsign" Foreground="#718096" TextDecorations="Strikethrough" VerticalAlignment="Center" />
+                    <TextBlock Text="↺" Foreground="#718096" FontWeight="SemiBold" Margin="4,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
             </WrapPanel>
         </Expander>

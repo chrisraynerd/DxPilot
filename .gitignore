@@ -1,6 +1,7 @@
 bin/
 obj/
 build/
+manual-work/
 .appdata/
 .dotnet/
 .localappdata/

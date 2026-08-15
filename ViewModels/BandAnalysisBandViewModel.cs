@@ -113,6 +113,7 @@ public sealed class BandAnalysisBandViewModel : ObservableObject
         SecondsObserved = 0;
         SurveyStatus = Enabled ? "Waiting" : "Skipped";
         NotifyQualityChanged();
+        NotifyPskChanged();
     }
 
     public void Apply(BandQualitySnapshot snapshot)
@@ -124,6 +125,11 @@ public sealed class BandAnalysisBandViewModel : ObservableObject
     public void ApplyPsk(PskReporterMetrics metrics)
     {
         _pskMetrics = metrics;
+        NotifyPskChanged();
+    }
+
+    private void NotifyPskChanged()
+    {
         OnPropertyChanged(nameof(PskMeasured));
         OnPropertyChanged(nameof(PskReportCount));
         OnPropertyChanged(nameof(PskUniqueReceivers));

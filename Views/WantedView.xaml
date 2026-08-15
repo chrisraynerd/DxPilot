@@ -39,12 +39,81 @@
                         </StackPanel>
                     </Grid>
                 </Border>
-                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-                    <TextBlock Text="WANTED SNIPER" Style="{StaticResource SectionEyebrow}" />
-                    <TextBlock Text="Work only the stations your logbook still needs" Style="{StaticResource WorkspaceTitle}" Margin="0,2,0,0" />
-                    <TextBlock Text="DXCC, grid and USA state opportunities are kept separate so the wanted reason is always clear."
-                               Foreground="{StaticResource AppTextMuted}" Margin="0,3,0,0" />
-                </StackPanel>
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="WANTED SNIPER" Style="{StaticResource SectionEyebrow}" />
+                        <TextBlock Text="Work only the stations your logbook still needs" Style="{StaticResource WorkspaceTitle}" Margin="0,2,0,0" />
+                        <TextBlock Text="DXCC, grid and USA state opportunities are kept separate so the wanted reason is always clear."
+                                   Foreground="{StaticResource AppTextMuted}" Margin="0,3,0,0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Width="360" Margin="18,0,0,0">
+                        <TextBlock Text="ACHIEVEMENT PROFILE" Style="{StaticResource SectionEyebrow}" />
+                        <Grid Margin="0,4,0,0">
+                            <ComboBox ItemsSource="{Binding Wanted.AchievementProfiles}"
+                                      DisplayMemberPath="DisplayLabel"
+                                      SelectedValuePath="Key"
+                                      SelectedValue="{Binding SelectedAchievementProfileKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      Padding="8,5"
+                                      ToolTip="Choose which station callsign's ADIF credit DX Pilot uses. Stop assistance before changing profile.">
+                                <ComboBox.Style>
+                                    <Style TargetType="ComboBox">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CanChangeAchievementProfile}" Value="False">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ComboBox.Style>
+                            </ComboBox>
+                            <Border Padding="8,5"
+                                    Background="{StaticResource AppSurfaceMuted}"
+                                    BorderBrush="{StaticResource AppBorder}"
+                                    BorderThickness="1"
+                                    CornerRadius="3"
+                                    ToolTip="This achievement profile remains fixed until the current hunting or analysis operation is stopped.">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CanChangeAchievementProfile}" Value="False">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding SelectedAchievementProfileDisplayLabel}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               FontWeight="SemiBold" />
+                                    <Border Grid.Column="1"
+                                            Margin="8,0,0,0"
+                                            Padding="7,2"
+                                            Background="#E5EBF1"
+                                            CornerRadius="8">
+                                        <TextBlock Text="PROFILE LOCKED"
+                                                   Foreground="{StaticResource AppTextMuted}"
+                                                   FontSize="10"
+                                                   FontWeight="SemiBold" />
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                        <TextBlock Text="{Binding AchievementProfileSummary}"
+                                   Foreground="{StaticResource AppTextMuted}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,4,0,0" />
+                    </StackPanel>
+                </Grid>
                 <WrapPanel>
                     <TextBlock Text="Wanted scopes: Overall always" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
                     <CheckBox Content="Include current band"

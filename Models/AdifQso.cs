@@ -15,6 +15,8 @@ public sealed class AdifQso
     public string Grid { get; set; } = "";
     public string State { get; set; } = "";
     public string Iota { get; set; } = "";
+    public string StationCallsign { get; set; } = "";
+    public string OperatorCallsign { get; set; } = "";
     public bool LotwConfirmed { get; set; }
     public bool PaperConfirmed { get; set; }
     public bool EqslConfirmed { get; set; }
