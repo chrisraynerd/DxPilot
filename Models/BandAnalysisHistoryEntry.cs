@@ -26,6 +26,15 @@ public sealed class BandAnalysisHistoryEntry
     public int PskPropagationScore { get; set; }
     public string PskMainArea { get; set; } = "";
     public string PskAssessment { get; set; } = "";
+    public bool CompletedComparableAnalysis { get; set; }
+    public double WorkabilityScore { get; set; }
+    public int PskViabilityPercent { get; set; }
+    public int PathMatchPercent { get; set; }
+    public int DistinctWantedOpportunities { get; set; }
+    public int WorkableWantedOpportunities { get; set; }
+    public double ProductivityAdjustment { get; set; }
+    public string WorkabilityAssessment { get; set; } = "";
+    public string WorkabilityDetail { get; set; } = "";
     public string StartingBand { get; set; } = "";
     public string SelectedBand { get; set; } = "";
     public string Decision { get; set; } = "";

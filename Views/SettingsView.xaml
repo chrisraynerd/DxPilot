@@ -144,6 +144,12 @@
                         <TextBox Text="{Binding Settings.Settings.CompletionGraceCycles, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Suppress failed min" />
                         <TextBox Text="{Binding Settings.Settings.SuppressFailedTargetMinutes, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Recover replies from recently called stations"
+                                   ToolTip="Allows a fresh directed reply to reclaim control only when DX Pilot called that station recently and the current target has not replied." />
+                        <CheckBox IsChecked="{Binding Settings.Settings.RecoverLateReplies, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Late-reply window min"
+                                   ToolTip="How long a genuinely called station remains eligible for late-reply recovery. Values are limited to 1–15 minutes." />
+                        <TextBox Text="{Binding Settings.Settings.LateReplyRecoveryMinutes, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Reply retry sec" />
                         <TextBox Text="{Binding Settings.Settings.ReplyRetrySeconds, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Reply confirm sec" />

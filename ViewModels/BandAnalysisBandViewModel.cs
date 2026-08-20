@@ -13,6 +13,7 @@ public sealed class BandAnalysisBandViewModel : ObservableObject
     private double _conditionsScore;
     private BandQualitySnapshot _quality;
     private PskReporterMetrics _pskMetrics = new();
+    private BandWorkabilityMetrics _workability = new();
 
     public BandAnalysisBandViewModel(string band, string buttonLabel, int buttonIndex, bool enabled)
     {
@@ -89,6 +90,15 @@ public sealed class BandAnalysisBandViewModel : ObservableObject
     public string PskAssessment => _pskMetrics.Measured ? _pskMetrics.Assessment : "Not measured";
     public string PskDetail => _pskMetrics.Detail;
     public PskReporterMetrics PskMetrics => _pskMetrics;
+    public BandWorkabilityMetrics Workability => _workability;
+    public string WorkabilityScoreDisplay => _workability.Calculated ? $"{_workability.Score:0}" : "—";
+    public string TwoWayMatchDisplay => _workability.Calculated ? $"{_workability.PathMatchPercent}%" : "—";
+    public string WorkableOpportunitiesDisplay => _workability.Calculated
+        ? $"{_workability.WorkableOpportunities}/{_workability.DistinctOpportunities}"
+        : "—";
+    public string PskViabilityDisplay => _workability.Calculated ? $"{_workability.PskViabilityPercent}%" : "—";
+    public string WorkabilityAssessment => _workability.Assessment;
+    public string WorkabilityDetail => _workability.Detail;
     public string Trend
     {
         get => _trend;
@@ -110,10 +120,14 @@ public sealed class BandAnalysisBandViewModel : ObservableObject
     {
         _quality = new BandQualitySnapshot { Band = Band };
         _pskMetrics = new PskReporterMetrics();
+        _workability = new BandWorkabilityMetrics();
         SecondsObserved = 0;
         SurveyStatus = Enabled ? "Waiting" : "Skipped";
+        Trend = "Waiting for current comparison";
+        TrendScore = 0;
         NotifyQualityChanged();
         NotifyPskChanged();
+        NotifyWorkabilityChanged();
     }
 
     public void Apply(BandQualitySnapshot snapshot)
@@ -126,6 +140,23 @@ public sealed class BandAnalysisBandViewModel : ObservableObject
     {
         _pskMetrics = metrics;
         NotifyPskChanged();
+    }
+
+    public void ApplyWorkability(BandWorkabilityMetrics metrics)
+    {
+        _workability = metrics;
+        NotifyWorkabilityChanged();
+    }
+
+    private void NotifyWorkabilityChanged()
+    {
+        OnPropertyChanged(nameof(Workability));
+        OnPropertyChanged(nameof(WorkabilityScoreDisplay));
+        OnPropertyChanged(nameof(TwoWayMatchDisplay));
+        OnPropertyChanged(nameof(WorkableOpportunitiesDisplay));
+        OnPropertyChanged(nameof(PskViabilityDisplay));
+        OnPropertyChanged(nameof(WorkabilityAssessment));
+        OnPropertyChanged(nameof(WorkabilityDetail));
     }
 
     private void NotifyPskChanged()

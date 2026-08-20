@@ -49,7 +49,13 @@ public sealed class DxccResolver
         return _rules
             .Where(r => !string.IsNullOrWhiteSpace(r.Dxcc) && !string.IsNullOrWhiteSpace(r.Entity))
             .GroupBy(r => r.Dxcc, StringComparer.OrdinalIgnoreCase)
-            .Select(g => new DxccEntityDefinition(g.Key, g.First().Entity))
+            .Select(g =>
+            {
+                // A starred CTY prefix is a special case operating under another entity's DXCC.
+                // Prefer the ordinary country rule as the display name for that DXCC number.
+                var canonical = g.FirstOrDefault(rule => !rule.Prefix.StartsWith('*')) ?? g.First();
+                return new DxccEntityDefinition(g.Key, canonical.Entity);
+            })
             .ToList();
     }
 

@@ -265,16 +265,19 @@
                     <views:SessionHistoryView />
                 </DockPanel>
             </TabItem>
-            <TabItem Header="Band Analysis">
-                <DockPanel>
-                    <views:CompactConditionsStrip DockPanel.Dock="Top" />
-                    <views:SchedulerView />
-                </DockPanel>
-            </TabItem>
             <TabItem Header="Settings">
                 <DockPanel>
                     <views:CompactConditionsStrip DockPanel.Dock="Top" />
                     <views:SettingsView />
+                </DockPanel>
+            </TabItem>
+            <TabItem Header="Achievements">
+                <views:AchievementsView />
+            </TabItem>
+            <TabItem Header="Band Analysis">
+                <DockPanel>
+                    <views:CompactConditionsStrip DockPanel.Dock="Top" />
+                    <views:SchedulerView />
                 </DockPanel>
             </TabItem>
         </TabControl>

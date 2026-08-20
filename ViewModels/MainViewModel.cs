@@ -77,6 +77,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly DxTargetScorer _targetScorer;
     private readonly TargetSelector _targetSelector;
     private readonly BandQualityAnalyzer _bandQualityAnalyzer = new();
+    private readonly BandWorkabilityAnalyzer _bandWorkabilityAnalyzer = new();
     private readonly PskReporterClient _pskReporterClient = new();
     private readonly PskReporterAnalyzer _pskReporterAnalyzer;
     private readonly ICallsignLocationService _callsignLocationService;
@@ -90,9 +91,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly Dictionary<string, DateTime> _suppressedTargets = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _permanentlySuppressedCallsigns = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _failedReplySources = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _unsafeGuiSelectionSources = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _forceGuiSelectionSources = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _guiSelectionClickCounts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _guiSelectionLastClickAt = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, RecentCallAttempt> _recentCallAttempts = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _sessionWorked = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _sessionUnresolvedCalls = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _huntTimer;
@@ -113,6 +116,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _sessionArchiveDirty;
     private bool _disposed;
     private bool _huntTickRunning;
+    private bool _achievementsLoaded;
+    private bool _guiSelectionSafetyBarrierActive;
+    private bool _guiSelectionSafetyRecoveryInProgress;
+    private DateTime _guiSelectionSafetyOffClickAt = DateTime.MinValue;
+    private int _guiSelectionSafetyOffClickCount;
+    private string _guiSelectionSafetyReason = "";
     private bool _refreshingAchievementProfiles;
     private BandScheduleItem? _selectedScheduleItem;
     private DxTarget? _selectedIntendedTarget;
@@ -132,6 +141,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private DateTime _lastForcedTxOffAt = DateTime.MinValue;
     private DateTime _lastUnconfirmedTxStateLogAt = DateTime.MinValue;
     private DateTime _manualTxOffDetectedAt = DateTime.MinValue;
+    private DateTime _finalCallReplyGuardUntil = DateTime.MinValue;
+    private bool _finalCallReplyGuardLogged;
+    private bool _lateReplyRecoveryInProgress;
     private string _lastReportRepeatCycleKey = "";
     private string _lastObservedTransmitState = "Unknown";
     private string _actualJtdxDxCall = "";
@@ -233,6 +245,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly List<DecodeMessage> _conditionsMonitorDecodes = [];
     private readonly List<(DateTime AtUtc, string Callsign)> _conditionsCallAttempts = [];
     private readonly List<(DateTime AtUtc, string Callsign)> _conditionsIncompleteExchanges = [];
+    private readonly List<(DateTime AtUtc, string Band, string Kind)> _bandPerformanceEvidence = [];
     private readonly HashSet<string> _conditionsKnownLiveQsoKeys = new(StringComparer.OrdinalIgnoreCase);
     private bool _conditionsLiveQsoBaselineEstablished;
     private DateTime _conditionsBandEnteredAtUtc = DateTime.UtcNow;
@@ -246,6 +259,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _conditionsSafeHandoverRequested;
     private DateTime _conditionsLowActivitySinceUtc = DateTime.MinValue;
     private DateTime _conditionsLastSurveyCompletedAtUtc = DateTime.MinValue;
+    private static readonly TimeSpan ConditionsAutomaticTechnicalRetryDelay = TimeSpan.FromMinutes(2);
     private DateTime _conditionsLastStatusUpdateAtUtc = DateTime.MinValue;
     private readonly Dictionary<string, DateTime> _conditionsScheduleLastRunUtc = new(StringComparer.OrdinalIgnoreCase);
     private string _conditionsPendingReason = "";
@@ -268,6 +282,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private TaskCompletionSource<string>? _pskProbeFailureSignal;
     private DateTime _pskProbeFirstNonCqStatusAt = DateTime.MinValue;
     private DateTime _pskLastEnableTxClickAt = DateTime.MinValue;
+
+    private sealed class PskArmNotAcceptedException(string message) : InvalidOperationException(message);
 
     public MainViewModel()
     {
@@ -315,6 +331,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Dashboard = new DashboardViewModel();
         DxAssist = new DxAssistViewModel();
         Wanted = new WantedViewModel();
+        Achievements = new AchievementsViewModel();
         Location = new LocationViewModel();
         Map = new MapViewModel(
             Settings.Settings.HomeGrid,
@@ -402,6 +419,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         TestGuiSelectionCommand = new RelayCommand(TestGuiSelectionAsync);
         TestQrzConnectionCommand = new RelayCommand(TestQrzConnectionAsync);
         ClearQrzCacheCommand = new RelayCommand(ClearQrzCache);
+        LookupQrzCommand = new RelayCommand(OpenQrzLookup, CanOpenQrzLookup);
         CallNowCommand = new RelayCommand(CallNowAsync, CanCallNow);
         PermanentlySuppressCallsignCommand = new RelayCommand(PermanentlySuppressCallsign, CanPermanentlySuppressCallsign);
         ReleaseSuppressionCommand = new RelayCommand(ReleaseSuppression, CanReleaseSuppression);
@@ -422,6 +440,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SessionHistory.ExportCommand = new RelayCommand(ExportSessionHistory);
         SessionHistory.ClearCommand = new RelayCommand(ClearSessionHistory);
         ExportRecentActionsCommand = new RelayCommand(ExportRecentActions);
+        RefreshAchievementsCommand = new RelayCommand(RefreshAchievements);
 
         _huntTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _huntTimer.Tick += async (_, _) => await HuntTickAsync();
@@ -489,6 +508,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public DashboardViewModel Dashboard { get; }
     public DxAssistViewModel DxAssist { get; }
     public WantedViewModel Wanted { get; }
+    public AchievementsViewModel Achievements { get; }
     public LocationViewModel Location { get; }
     public MapViewModel Map { get; }
     public SessionHistoryViewModel SessionHistory { get; }
@@ -714,6 +734,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ICommand OpenSetupWizardCommand { get; }
     public ICommand BrowseAllTxtCommand { get; }
     public ICommand ExportRecentActionsCommand { get; }
+    public ICommand RefreshAchievementsCommand { get; }
     public ICommand RunDiagnosticLookupCommand { get; }
     public ICommand AddScheduleCommand { get; }
     public ICommand RemoveScheduleCommand { get; }
@@ -739,6 +760,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ICommand TestGuiSelectionCommand { get; }
     public ICommand TestQrzConnectionCommand { get; }
     public ICommand ClearQrzCacheCommand { get; }
+    public RelayCommand LookupQrzCommand { get; }
     public RelayCommand CallNowCommand { get; }
     public RelayCommand PermanentlySuppressCallsignCommand { get; }
     public RelayCommand ReleaseSuppressionCommand { get; }
@@ -1656,6 +1678,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private async void StopAll()
     {
         _bandSurveyCancellation?.Cancel();
+        // An explicit Stop All ends DX Pilot's ownership of every station from
+        // the preceding hunting session. A later restart must not reclaim a
+        // reply merely because that station was called before the stop.
+        _recentCallAttempts.Clear();
         _callNowSession.Reset();
         _autoResume.Stop();
         _huntTimer.Stop();
@@ -2126,6 +2152,29 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (!_autoResume.IsRunning)
             return;
 
+        if (_guiSelectionSafetyBarrierActive)
+        {
+            var receiveOnlyConfirmed = await TryCompleteGuiSelectionSafetyBarrierAsync(
+                TimeSpan.FromSeconds(2),
+                CancellationToken.None);
+            if (!receiveOnlyConfirmed)
+            {
+                _recoveryMode = "GuiSelectionSafetyBarrier";
+                _lastCorrectiveAction = "Waiting for fresh JTDX confirmation that TX is off";
+                UpdateHuntStateDisplay();
+                return;
+            }
+
+            if (_lockedTarget != null
+                && _unsafeGuiSelectionSources.Contains(ReplySourceKey(_lockedTarget.Decode)))
+            {
+                await FailCurrentReplySourceAndRetargetAsync(
+                    $"Unsafe GUI row for {_lockedTarget.Callsign} was quarantined after receive-only recovery",
+                    allowExactSourceRearm: false);
+                return;
+            }
+        }
+
         ReloadAdifIfChanged();
         ExpireSuppressedTargets();
         UpdateNextBestTargets();
@@ -2361,6 +2410,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             && !keepCallingNewDxcc
             && _callAttemptCount >= maxCallAttempts)
         {
+            if (_finalCallReplyGuardUntil == DateTime.MinValue)
+            {
+                _finalCallReplyGuardUntil = LateReplyRecoveryPolicy.FinalReplyGuardUntil(
+                    _lastCallAttemptAt == DateTime.MinValue ? DateTime.Now : _lastCallAttemptAt,
+                    ActiveAttemptCycle());
+            }
+
+            var status = _udpListener.LastStatus;
+            if (IsFreshTxStatus(status) && !status!.Transmitting)
+                EnsureEnableTxOff("Final call reply guard", status.TxEnabled);
+
+            if (DateTime.Now < _finalCallReplyGuardUntil)
+            {
+                if (!_finalCallReplyGuardLogged)
+                {
+                    _finalCallReplyGuardLogged = true;
+                    AddAction($"Final call sent to {_lockedTarget.Callsign}; holding the target through one complete receive/decode period until {_finalCallReplyGuardUntil:HH:mm:ss} before moving on.");
+                }
+                _recoveryMode = "FinalReplyGuard";
+                _lastCorrectiveAction = $"Listening for final reply from {_lockedTarget.Callsign}";
+                UpdateHuntStateDisplay();
+                return;
+            }
+
             await ReleaseLockedTargetAndMaybeResumeAsync(
                 $"Target released: {_lockedTarget.Callsign} - call attempts exceeded {_callAttemptCount}/{maxCallAttempts}",
                 "Missed - no reply",
@@ -2713,6 +2786,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         bool confirmedTransmitMismatch = false,
         bool preserveLockOnFailure = false)
     {
+        if (_guiSelectionSafetyBarrierActive)
+        {
+            AddAction($"Selection of {target.Callsign} blocked while DX Pilot waits for fresh UDP confirmation that Enable TX is off after a failed GUI row selection.");
+            return;
+        }
+
+        var targetSourceKey = ReplySourceKey(target.Decode);
+        if (_unsafeGuiSelectionSources.Contains(targetSourceKey))
+        {
+            AddAction($"Selection of {target.Callsign} blocked because this exact JTDX row was quarantined after selecting the wrong call. A newer decode remains eligible.");
+            return;
+        }
+
         if (!IsFreshTarget(target))
         {
             AddAction($"Selection blocked for {target.Callsign}: source decode is stale ({FormatAge(DateTime.Now - target.Decode.ReceivedAt)} old).");
@@ -2795,8 +2881,35 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        SelectionResult selection;
         var selectionCancellation = _targetSelectionCancellation;
+        var receiveOnlyReady = true;
+        if (usesGuiSelection
+            && !allowDuringTransmit
+            && !confirmedTransmitMismatch)
+        {
+            _targetSelectionInProgress = true;
+            try
+            {
+                receiveOnlyReady = await ConfirmReceiveOnlyBeforeGuiSelectionAsync(
+                    $"Before selecting GUI row for {target.Callsign}",
+                    selectionCancellation?.Token ?? CancellationToken.None);
+            }
+            finally
+            {
+                _targetSelectionInProgress = false;
+            }
+        }
+
+        if (!receiveOnlyReady)
+        {
+            _recoveryMode = "WaitingForConfirmedReceiveOnly";
+            _lastCorrectiveAction = $"GUI selection of {target.Callsign} deferred until JTDX freshly confirms TX off";
+            AddAction($"GUI row selection for {target.Callsign} deferred: DX Pilot could not yet confirm a fresh receive-only JTDX state. No row click was made and TX was not armed.");
+            UpdateHuntStateDisplay();
+            return;
+        }
+
+        SelectionResult selection;
         _targetSelectionInProgress = true;
         try
         {
@@ -2874,30 +2987,56 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             _lastCorrectiveAction = selection.FailureText;
             AddAction($"{selection.SelectionMethod} selection failed for {target.Callsign}: {selection.FailureText}. TX remains blocked until JTDX confirms the expected DX Call.");
-            if (preserveLockOnFailure)
-            {
-                if (_targetConfirmedInJtdx
-                    && string.IsNullOrWhiteSpace(_allTxtAwaitingCorrectionCall))
-                {
-                    _recoveryMode = "ImmediateInSlotRetarget";
-                    _lastCorrectiveAction = $"ALL.TXT confirmed immediate correction to {target.Callsign}";
-                    AddAction($"UDP confirmation timed out after the immediate reload of {target.Callsign}, but JTDX ALL.TXT independently confirmed the corrected transmission. TX remains enabled.");
-                    UpdateHuntStateDisplay();
-                    return;
-                }
 
-                _targetConfirmedInJtdx = false;
-                StartBoundedTargetRecovery();
-                _jtdxShowsWrongTx = true;
-                _recoveryMode = "ImmediateTransmitCorrectionFailed";
-                AddAction($"Immediate in-slot correction for {target.Callsign} was not confirmed. Target lock retained without suppression; TX is being stopped because the intended target could not be safely reloaded.");
-                EnsureEnableTxOff($"Immediate correction not confirmed for {target.Callsign}");
-                QueueReplyWhenIdle($"immediate correction for {target.Callsign} was not confirmed; bounded RX recovery required");
+            if (preserveLockOnFailure
+                && _targetConfirmedInJtdx
+                && string.IsNullOrWhiteSpace(_allTxtAwaitingCorrectionCall))
+            {
+                _recoveryMode = "ImmediateInSlotRetarget";
+                _lastCorrectiveAction = $"ALL.TXT confirmed immediate correction to {target.Callsign}";
+                AddAction($"UDP confirmation timed out after the immediate reload of {target.Callsign}, but JTDX ALL.TXT independently confirmed the corrected transmission. TX remains enabled.");
                 UpdateHuntStateDisplay();
                 return;
             }
 
-            if (usesGuiSelection
+            var requiresReceiveOnlyBarrier = GuiSelectionSafetyPolicy.RequiresReceiveOnlyBarrier(selection);
+            if (requiresReceiveOnlyBarrier)
+            {
+                _failedReplySources[guiSourceKey] = DateTime.Now;
+                _unsafeGuiSelectionSources.Add(guiSourceKey);
+                _pendingLockedReplyWhenIdle = false;
+                _pendingLockedReplyReason = "";
+                var safeToContinue = await EstablishGuiSelectionSafetyBarrierAsync(
+                    target,
+                    selection,
+                    selectionCancellation?.Token ?? CancellationToken.None);
+                if (!safeToContinue)
+                {
+                    UpdateHuntStateDisplay();
+                    return;
+                }
+            }
+
+            if (preserveLockOnFailure)
+            {
+                _targetConfirmedInJtdx = false;
+                StartBoundedTargetRecovery();
+                _jtdxShowsWrongTx = true;
+                _recoveryMode = "ImmediateTransmitCorrectionFailed";
+                AddAction(requiresReceiveOnlyBarrier
+                    ? $"Immediate in-slot correction for {target.Callsign} selected an unconfirmed GUI row. The target lock is retained, the exact row is quarantined, and TX is confirmed off while DX Pilot waits for a newer decode."
+                    : $"Immediate in-slot correction for {target.Callsign} was not confirmed. Target lock retained without suppression; TX is being stopped because the intended target could not be safely reloaded.");
+                if (!requiresReceiveOnlyBarrier)
+                {
+                    EnsureEnableTxOff($"Immediate correction not confirmed for {target.Callsign}");
+                    QueueReplyWhenIdle($"immediate correction for {target.Callsign} was not confirmed; bounded RX recovery required");
+                }
+                UpdateHuntStateDisplay();
+                return;
+            }
+
+            if (!requiresReceiveOnlyBarrier
+                && usesGuiSelection
                 && selection.SelectionActionAt.HasValue
                 && IsRetriableGuiSelectionFailure(selection.FailureReason)
                 && guiClickCount < maxGuiClicks)
@@ -3079,6 +3218,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _lastCompletionGraceCycleKey = "";
         _myFinal73SeenDuringCompletion = false;
         _completionPendingStartedAt = DateTime.MinValue;
+        _finalCallReplyGuardUntil = DateTime.MinValue;
+        _finalCallReplyGuardLogged = false;
         _targetSource = source;
         _wantedReason = wantedReason;
         _wantedSourceBlock = sourceBlock;
@@ -3109,6 +3250,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         if (_lockedTarget == null)
             return;
+
+        if (_guiSelectionSafetyBarrierActive
+            || _unsafeGuiSelectionSources.Contains(ReplySourceKey(_lockedTarget.Decode)))
+        {
+            _lastCorrectiveAction = $"Enable TX blocked after unsafe GUI selection for {_lockedTarget.Callsign}";
+            AddAction($"{source}: Enable TX blocked because the current GUI row is quarantined or receive-only recovery is still active.");
+            return;
+        }
 
         var settings = Settings.Settings;
         var (greyPct, redPct) = _pixels.GetEnableTxStats(
@@ -3171,6 +3320,125 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
 
         EnsureEnableTxOff(source, _udpListener.LastStatus?.TxEnabled == true);
+    }
+
+    private async Task<bool> ConfirmReceiveOnlyBeforeGuiSelectionAsync(
+        string source,
+        CancellationToken cancellationToken)
+    {
+        DateTime? offClickAt = null;
+        var deadline = DateTime.Now.AddSeconds(8);
+        while (DateTime.Now < deadline && !cancellationToken.IsCancellationRequested)
+        {
+            var status = _udpListener.LastStatus;
+            if (GuiSelectionSafetyPolicy.IsConfirmedReceiveOnly(status, DateTime.Now, offClickAt))
+                return true;
+
+            if (IsFreshTxStatus(status)
+                && status is { Transmitting: false, TxEnabled: true }
+                && !offClickAt.HasValue)
+            {
+                offClickAt = DateTime.Now;
+                _lastForcedTxOffAt = offClickAt.Value;
+                _clicker.MoveClickRestore(Settings.Settings.EnableTxX, Settings.Settings.EnableTxY);
+                AddAction($"{source}: fresh JTDX UDP Status confirmed Enable TX on while receiving; clicked the toggle once and will require a fresh TX-off Status before selecting the row.");
+            }
+
+            try
+            {
+                await Task.Delay(100, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    private async Task<bool> EstablishGuiSelectionSafetyBarrierAsync(
+        DxTarget target,
+        SelectionResult selection,
+        CancellationToken cancellationToken)
+    {
+        _guiSelectionSafetyBarrierActive = true;
+        _guiSelectionSafetyOffClickAt = DateTime.MinValue;
+        _guiSelectionSafetyOffClickCount = 0;
+        _guiSelectionSafetyReason =
+            $"GUI row for {target.Callsign} was not confirmed ({selection.FailureReason}; JTDX reported '{selection.JtdxDxCallAfter}')";
+        _recoveryMode = "GuiSelectionSafetyBarrier";
+        _lastCorrectiveAction = "Stopping and confirming TX off after failed GUI selection";
+        AddAction($"GUI safety barrier: the exact row for {target.Callsign} is quarantined. DX Pilot will not release or select another target until fresh JTDX UDP Status confirms receive-only/TX off.");
+
+        return await TryCompleteGuiSelectionSafetyBarrierAsync(TimeSpan.FromSeconds(20), cancellationToken);
+    }
+
+    private async Task<bool> TryCompleteGuiSelectionSafetyBarrierAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        if (!_guiSelectionSafetyBarrierActive)
+            return true;
+        if (_guiSelectionSafetyRecoveryInProgress)
+            return false;
+
+        _guiSelectionSafetyRecoveryInProgress = true;
+        try
+        {
+            var deadline = DateTime.Now.Add(timeout);
+            while (DateTime.Now < deadline && !cancellationToken.IsCancellationRequested)
+            {
+                var status = _udpListener.LastStatus;
+                var requiredAfter = _guiSelectionSafetyOffClickAt == DateTime.MinValue
+                    ? (DateTime?)null
+                    : _guiSelectionSafetyOffClickAt;
+                if (GuiSelectionSafetyPolicy.IsConfirmedReceiveOnly(status, DateTime.Now, requiredAfter))
+                {
+                    var reason = _guiSelectionSafetyReason;
+                    _guiSelectionSafetyBarrierActive = false;
+                    _guiSelectionSafetyOffClickAt = DateTime.MinValue;
+                    _guiSelectionSafetyOffClickCount = 0;
+                    _guiSelectionSafetyReason = "";
+                    _recoveryMode = "Locked Target Recovery";
+                    _lastCorrectiveAction = "Fresh JTDX Status confirmed TX off after failed GUI selection";
+                    AddAction($"GUI safety barrier cleared: fresh JTDX UDP Status confirms receive-only/TX off. {reason}. Hunting may now continue without reusing that exact row.");
+                    return true;
+                }
+
+                if (IsFreshTxStatus(status)
+                    && status is { Transmitting: false, TxEnabled: true }
+                    && (_guiSelectionSafetyOffClickCount == 0
+                        || _guiSelectionSafetyOffClickCount < 2
+                            && DateTime.Now - _guiSelectionSafetyOffClickAt >= TimeSpan.FromSeconds(1)
+                            && status.ReceivedAt >= _guiSelectionSafetyOffClickAt.AddMilliseconds(500)))
+                {
+                    _guiSelectionSafetyOffClickAt = DateTime.Now;
+                    _guiSelectionSafetyOffClickCount++;
+                    _lastForcedTxOffAt = _guiSelectionSafetyOffClickAt;
+                    _clicker.MoveClickRestore(Settings.Settings.EnableTxX, Settings.Settings.EnableTxY);
+                    AddAction($"GUI safety barrier: fresh JTDX UDP Status confirmed Enable TX on while receiving; clicked the toggle to turn it off ({_guiSelectionSafetyOffClickCount}/2) and awaiting fresh off confirmation.");
+                }
+
+                try
+                {
+                    await Task.Delay(100, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    return false;
+                }
+            }
+
+            _recoveryMode = "GuiSelectionSafetyBarrier";
+            _lastCorrectiveAction = "TX state remains unconfirmed; hunting is paused for safety";
+            LogUnconfirmedTxState("GUI safety barrier remains active: fresh receive-only/TX-off UDP confirmation has not arrived. No further target will be selected or armed.");
+            return false;
+        }
+        finally
+        {
+            _guiSelectionSafetyRecoveryInProgress = false;
+        }
     }
 
     private void EnsureEnableTxOff(string source, bool statusConfirmsEnabled = false)
@@ -3264,7 +3532,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _callAttemptCount++;
         _lastCallAttemptAt = DateTime.Now;
         if (_lockedTarget != null)
+        {
+            RememberRecentCallAttempt(_lockedTarget);
             RecordConditionsCallAttempt(_lockedTarget.Callsign);
+        }
         TrackOpportunityAttempt(_lockedTarget);
         UpdateHuntStateDisplay();
         return true;
@@ -3413,15 +3684,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         await TryWantedSniperAsync();
     }
 
-    private async Task FailCurrentReplySourceAndRetargetAsync(string reason)
+    private async Task FailCurrentReplySourceAndRetargetAsync(string reason, bool allowExactSourceRearm = true)
     {
         if (_lockedTarget == null)
             return;
 
         var failed = _lockedTarget;
-        _failedReplySources[ReplySourceKey(failed.Decode)] = DateTime.Now;
+        var sourceKey = ReplySourceKey(failed.Decode);
+        _failedReplySources[sourceKey] = DateTime.Now;
+        if (!allowExactSourceRearm)
+            _unsafeGuiSelectionSources.Add(sourceKey);
         AddAction($"{reason}.");
-        AddAction($"Reply source failed: {failed.Decode.RawText}. Candidate {failed.Callsign} remains eligible if heard again, or if this exact row remains visible after one receive period.");
+        AddAction(allowExactSourceRearm
+            ? $"Reply source failed: {failed.Decode.RawText}. Candidate {failed.Callsign} remains eligible if heard again, or if this exact row remains visible after one receive period."
+            : $"Unsafe GUI reply source quarantined: {failed.Decode.RawText}. This exact row cannot be reused; {failed.Callsign} remains eligible from a newer decode.");
         ClearLockedTarget($"No usable confirmed reply from current source for {failed.Callsign}; retargeting.");
 
         if (CurrentWantedSniperMode() == WantedSniperMode.Active)
@@ -3477,6 +3753,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (!_failedReplySources.TryGetValue(sourceKey, out var failedAt))
             return false;
 
+        if (_unsafeGuiSelectionSources.Contains(sourceKey))
+            return true;
+
         if (!CanRearmVisibleFailedReplySource(decode, failedAt))
             return true;
 
@@ -3507,7 +3786,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         var cutoff = DateTime.Now.AddSeconds(-NewDxccStaleSeconds());
         foreach (var item in _failedReplySources.Where(kvp => kvp.Value < cutoff).Select(kvp => kvp.Key).ToList())
+        {
             _failedReplySources.Remove(item);
+            _unsafeGuiSelectionSources.Remove(item);
+        }
     }
 
     private static string ReplySourceKey(DecodeMessage decode)
@@ -4279,6 +4561,158 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         return candidate.Any(char.IsDigit) && candidate.Any(char.IsLetter);
     }
 
+    private void RememberRecentCallAttempt(DxTarget target)
+    {
+        var call = CallsignNormalizer.Normalize(target.Callsign);
+        if (string.IsNullOrWhiteSpace(call))
+            return;
+
+        PruneRecentCallAttempts(DateTime.UtcNow);
+        _recentCallAttempts[call] = new RecentCallAttempt
+        {
+            Callsign = call,
+            Band = target.Decode.Band,
+            Mode = target.Decode.Mode,
+            LastAttemptUtc = DateTime.UtcNow,
+            WasNewDxcc = IsUnconfirmedDxccStatus(target.Ranking.DxccStatus),
+            WantedReason = string.IsNullOrWhiteSpace(_wantedReason) ? target.PrimaryReason : _wantedReason,
+            SourceBlock = _wantedSourceBlock,
+            Consumed = false
+        };
+    }
+
+    private void ConsumeRecentCallAttempt(string callsign)
+    {
+        var call = CallsignNormalizer.Normalize(callsign);
+        if (_recentCallAttempts.TryGetValue(call, out var attempt))
+            attempt.Consumed = true;
+    }
+
+    private void PruneRecentCallAttempts(DateTime nowUtc)
+    {
+        var cutoff = nowUtc.AddMinutes(-Math.Clamp(Settings.Settings.LateReplyRecoveryMinutes, 1, 15));
+        foreach (var call in _recentCallAttempts
+                     .Where(pair => pair.Value.LastAttemptUtc < cutoff)
+                     .Select(pair => pair.Key)
+                     .ToList())
+        {
+            _recentCallAttempts.Remove(call);
+        }
+    }
+
+    private bool TryQueueLateReplyRecovery(DecodeMessage decode)
+    {
+        if (!Settings.Settings.RecoverLateReplies
+            || !_autoResume.IsRunning
+            || BandAnalysis.IsRunning
+            || _pskProbeAuthorised
+            || _callNowSession.IsOneShot
+            || _lateReplyRecoveryInProgress
+            || _targetSelectionInProgress
+            || _immediateTxRetargetInProgress
+            || IsPermanentlySuppressed(DecodeTargetCall(decode)))
+        {
+            return false;
+        }
+
+        if (_lockedTarget != null
+            && (_huntState != HuntState.Calling
+                || _qsoStage != QsoStage.CallingInitial
+                || _targetConfirmedInFeed))
+        {
+            return false;
+        }
+
+        PruneRecentCallAttempts(DateTime.UtcNow);
+        if (!LateReplyRecoveryPolicy.TryMatch(
+                decode,
+                Settings.Settings.MyCallsign,
+                _recentCallAttempts.Values,
+                DateTime.UtcNow,
+                Settings.Settings.LateReplyRecoveryMinutes,
+                out var match)
+            || match == null
+            || _lockedTarget?.Callsign.Equals(match.Callsign, StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return false;
+        }
+
+        if (IsPermanentlySuppressed(match.Callsign))
+            return false;
+
+        var currentHasProgress = _lockedTarget != null
+            && (_huntState != HuntState.Calling
+                || _qsoStage != QsoStage.CallingInitial
+                || _targetConfirmedInFeed);
+        var currentIsNewDxcc = _lockedTarget != null
+            && IsUnconfirmedDxccStatus(_lockedTarget.Ranking.DxccStatus);
+        if (!LateReplyRecoveryPolicy.CanInterruptCurrentTarget(
+                _lockedTarget != null,
+                currentHasProgress,
+                currentIsNewDxcc,
+                match.WasNewDxcc))
+        {
+            if (currentIsNewDxcc && !match.WasNewDxcc)
+                AddAction($"Late reply from {match.Callsign} recognised but not reclaimed because current New DXCC {_lockedTarget!.Callsign} retains absolute priority.");
+            return false;
+        }
+
+        match.Consumed = true;
+        _lateReplyRecoveryInProgress = true;
+        _ = RecoverLateReplyAsync(decode, match);
+        return true;
+    }
+
+    private async Task RecoverLateReplyAsync(DecodeMessage decode, RecentCallAttempt attempt)
+    {
+        try
+        {
+            if (!_autoResume.IsRunning)
+                return;
+
+            var interruptedCall = _lockedTarget?.Callsign ?? "";
+            if (_lockedTarget != null)
+            {
+                EnsureEnableTxOff($"Late reply from {attempt.Callsign}", _udpListener.LastStatus?.TxEnabled == true);
+                ClearLockedTarget($"Interrupted {interruptedCall} without suppression because recently called {attempt.Callsign} sent a directed reply before QSO progress began.");
+            }
+
+            _suppressedTargets.Remove(attempt.Callsign);
+            ClearReplySourceBlocks(attempt.Callsign);
+
+            var target = _targetScorer.Score(decode, _logbook, _adifMergeResult.Indexes, _decodeHistory, Settings.Settings);
+            if (!target.Callsign.Equals(attempt.Callsign, StringComparison.OrdinalIgnoreCase))
+            {
+                AddAction($"Late reply recovery rejected because the fresh decode resolved to {target.Callsign}, not {attempt.Callsign}.");
+                return;
+            }
+
+            var reason = string.IsNullOrWhiteSpace(attempt.WantedReason)
+                ? $"Late directed reply from recently called {attempt.Callsign}"
+                : attempt.WantedReason;
+            AddAction(string.IsNullOrWhiteSpace(interruptedCall)
+                ? $"Late reply recovery: adopting recently called {attempt.Callsign}."
+                : $"Late reply recovery: leaving unresponsive {interruptedCall} and returning to {attempt.Callsign}.");
+            if (!_autoResume.IsRunning)
+                return;
+            await LockAndReplyAsync(target, "Late reply recovery", reason, attempt.SourceBlock);
+            if (_autoResume.IsRunning
+                && _lockedTarget?.Callsign.Equals(attempt.Callsign, StringComparison.OrdinalIgnoreCase) == true)
+            {
+                ProcessDecodeForCurrentQso(decode);
+                AddAction($"Late reply recovery secured {attempt.Callsign}; the QSO is now protected from normal target changes.");
+            }
+        }
+        catch (Exception ex)
+        {
+            AddAction($"Late reply recovery stopped safely: {ex.GetBaseException().Message}");
+        }
+        finally
+        {
+            _lateReplyRecoveryInProgress = false;
+        }
+    }
+
     private static bool IsGrid(string value)
     {
         return value.Length is 4 or 6
@@ -4703,12 +5137,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         if (_lockedTarget == null)
         {
+            if (TryQueueLateReplyRecovery(decode))
+                return;
             TryAdoptInboundQso(decode);
             return;
         }
 
         if (!MessageInvolvesCurrentTarget(decode.RawText))
+        {
+            TryQueueLateReplyRecovery(decode);
             return;
+        }
+
+        ConsumeRecentCallAttempt(_lockedTarget.Callsign);
 
         if (_huntState == HuntState.Calling && IsInitialCallTransmitForLockedTarget(decode.RawText))
         {
@@ -4780,6 +5221,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _targetStartedAt = DateTime.Now;
         _targetStartedUtc = DateTime.UtcNow;
         _targetSource = "Inbound CQ reply / AdoptedFromJTDX";
+        _wantedReason = "Inbound call adopted";
+        _wantedSourceBlock = "Inbound";
         _recoveryMode = "InboundQsoAdoption";
         _actualJtdxDxCall = inboundCall;
         _qsoStage = DetectQsoStage(decode.RawText, Settings.Settings.MyCallsign);
@@ -4923,6 +5366,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             || reason.Contains("newly logged", StringComparison.OrdinalIgnoreCase);
         if (_lockedTarget != null)
         {
+            ConsumeRecentCallAttempt(_lockedTarget.Callsign);
             if (adifConfirmed)
             {
                 RecordConditionsCompletedQso(_lockedTarget.Callsign);
@@ -4968,6 +5412,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _lastCompletionGraceCycleKey = "";
         _myFinal73SeenDuringCompletion = false;
         _completionPendingStartedAt = DateTime.MinValue;
+        _finalCallReplyGuardUntil = DateTime.MinValue;
+        _finalCallReplyGuardLogged = false;
         _lastCallAttemptAt = DateTime.MinValue;
         _lastSelectionNudgeAt = DateTime.MinValue;
         _lastAcquisitionAttemptAt = DateTime.MinValue;
@@ -4997,6 +5443,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _targetSelectionCancellation?.Cancel();
         _targetSelectionCancellation?.Dispose();
         _targetSelectionCancellation = null;
+        _guiSelectionSafetyBarrierActive = false;
+        _guiSelectionSafetyRecoveryInProgress = false;
+        _guiSelectionSafetyOffClickAt = DateTime.MinValue;
+        _guiSelectionSafetyOffClickCount = 0;
+        _guiSelectionSafetyReason = "";
         if (!reason.Contains("stuck", StringComparison.OrdinalIgnoreCase)
             && !reason.Contains("mismatch", StringComparison.OrdinalIgnoreCase))
         {
@@ -5217,6 +5668,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _logbook.Clear();
         _logbook.AddRange(_adifMergeResult.ActiveQsos);
         RebuildWorkedCallDisplayIndex();
+        if (!_achievementsLoaded)
+            RefreshAchievements();
 
         foreach (var decode in _decodeHistory)
             _targetScorer.EnrichDecode(decode, _logbook, _adifMergeResult.Indexes, Settings.Settings);
@@ -5227,6 +5680,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         AddAction($"Confirmation modes applied: DXCC {Settings.Settings.DxccConfirmationMode}, grid {Settings.Settings.GridConfirmationMode}, state {Settings.Settings.StateConfirmationMode}, IOTA {Settings.Settings.IotaConfirmationMode}.");
         ExpireWantedItems();
         UpdateNextBestTargets();
+    }
+
+    private void RefreshAchievements()
+    {
+        Achievements.UpdateData(
+            _adifMergeResult.UniqueQsos,
+            SessionHistory.ArchiveOpportunities.ToList(),
+            _adifMergeResult.CallsignProfiles,
+            _dxccResolver.EntityDefinitions(),
+            _dxccResolver,
+            _rarityService,
+            SelectedAchievementProfileKey);
+        _achievementsLoaded = true;
     }
 
     private void RefreshMapLotwConfirmedGrids()
@@ -5688,6 +6154,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         return _huntState switch
         {
             HuntState.Calling when _jtdxShowsWrongTx => "Correcting wrong target",
+            HuntState.Calling when DateTime.Now < _finalCallReplyGuardUntil => "Final reply window",
             HuntState.Calling => "Calling target",
             HuntState.InQso when _qsoStage == QsoStage.CompletionPending => "Completion pending",
             HuntState.InQso => "QSO in progress",
@@ -5712,6 +6179,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return "TX blocked - stopped";
         if (target == null)
             return "TX disabled - no target selected";
+        if (_huntState == HuntState.Calling && DateTime.Now < _finalCallReplyGuardUntil)
+            return "TX held off - listening after final call";
         if (!_targetConfirmedInJtdx)
             return $"TX blocked - waiting for JTDX confirmation of {target.Callsign}";
         return "TX allowed";
@@ -5732,6 +6201,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         if (_huntState == HuntState.Calling && _jtdxShowsWrongTx)
             return $"Wrong target correction {_txMismatchCycleCount}/{Math.Max(1, Settings.Settings.MaxTransmitMismatchCycles)}";
+        if (_huntState == HuntState.Calling && DateTime.Now < _finalCallReplyGuardUntil)
+            return "Final call complete - awaiting decode";
         if (_huntState == HuntState.Calling)
             return $"Call attempt {CallAttemptProgressText()}";
         if (_huntState == HuntState.InQso && _reportAttemptCount > 0)
@@ -5749,6 +6220,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return "No target selected.";
         if (_huntState == HuntState.Calling && _jtdxShowsWrongTx)
             return $"Wrong target correction {_txMismatchCycleCount}/{Math.Max(1, Settings.Settings.MaxTransmitMismatchCycles)} - expected {target.Callsign}, JTDX currently shows {(string.IsNullOrWhiteSpace(_actualJtdxDxCall) ? "blank/unknown" : _actualJtdxDxCall)}.";
+        if (_huntState == HuntState.Calling && DateTime.Now < _finalCallReplyGuardUntil)
+            return $"Final call to {target.Callsign} completed; TX is held off while JTDX finishes the reply decode.";
         if (_huntState == HuntState.Calling)
             return KeepCallingActiveNewDxccUntilStale()
                 ? $"Calling New DXCC {target.Callsign} until it goes stale - call attempt {_callAttemptCount}."
@@ -6536,6 +7009,50 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
 
         var item = UpsertSessionOpportunity(target);
+        if (string.IsNullOrWhiteSpace(item.SelectionReason))
+        {
+            var selectionCategory = _wantedSourceBlock switch
+            {
+                var value when value.Contains("DXCC", StringComparison.OrdinalIgnoreCase) => "DXCC",
+                var value when value.Contains("Grid", StringComparison.OrdinalIgnoreCase) => "Grid",
+                var value when value.Contains("State", StringComparison.OrdinalIgnoreCase) => "USA State",
+                _ => item.Category
+            };
+            var selectionReason = string.IsNullOrWhiteSpace(_wantedReason)
+                ? TargetReasonFormatter.FormatGeneral(target.PrimaryReason)
+                : TargetReasonFormatter.FormatGeneral(_wantedReason);
+            var transmittedGrid = MaidenheadGrid.Normalize(target.Decode.TransmittedGrid);
+            var selectedGrid = transmittedGrid.IsValid
+                ? (string.IsNullOrWhiteSpace(transmittedGrid.Grid6) ? transmittedGrid.Grid4 : transmittedGrid.Grid6)
+                : item.Grid;
+            var reasonNeed = selectionReason.StartsWith("New ", StringComparison.OrdinalIgnoreCase)
+                ? "New"
+                : selectionReason.StartsWith("Unconfirmed ", StringComparison.OrdinalIgnoreCase)
+                    ? "Unconfirmed"
+                    : "";
+
+            item.SelectionCategory = selectionCategory;
+            item.SelectionNeed = !string.IsNullOrWhiteSpace(reasonNeed)
+                ? reasonNeed
+                : selectionCategory switch
+                {
+                    "Grid" => item.GridNeed,
+                    "USA State" => item.StateNeed,
+                    _ => item.Need
+                };
+            item.SelectionValue = selectionCategory switch
+            {
+                "DXCC" => item.Entity,
+                "Grid" => selectedGrid,
+                "USA State" => item.State,
+                _ => target.Callsign
+            };
+            item.SelectionScope = item.Scope;
+            item.SelectionReason = selectionReason;
+            item.SelectionSourceRawMessage = target.Decode.RawText;
+            item.SelectionSourceType = target.Decode.MessageTypeText;
+            item.PrimaryReason = item.SelectionReason;
+        }
         if (item.SeenCount <= 0)
             item.SeenCount = 1;
         item.WasCalled = true;
@@ -6713,7 +7230,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         item.RarityScore = ranking.RarityScore;
         item.PriorityTier = ranking.PriorityTier;
         item.PriorityTierName = ranking.PriorityTierName;
-        item.PrimaryReason = TargetReasonFormatter.FormatGeneral(ranking.PrimaryWantedReason);
+        if (string.IsNullOrWhiteSpace(item.SelectionReason))
+            item.PrimaryReason = TargetReasonFormatter.FormatGeneral(ranking.PrimaryWantedReason);
         item.LastSnr = decode.Snr;
         item.BestSnr = item.BestSnr == int.MinValue ? decode.Snr : Math.Max(item.BestSnr, decode.Snr);
         item.BestDistance = item.BestDistance.HasValue && decode.DistanceMiles.HasValue
@@ -6947,7 +7465,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
 
         var sb = new StringBuilder();
-        sb.AppendLine("SessionDate,SessionId,FirstSeen,LastSeen,SeenFor,Age,Call,Country,DXCC,DXCCStatus,Category,Need,GridNeed,StateNeed,Band,Mode,DialFrequencyHz,Scope,RarityRank,RarityScore,PriorityTier,PriorityTierName,Reason,BestSNR,LastSNR,Grid,State,GridSource,SeenCount,CallAttempts,Selection,Called,Worked,WorkedAt,WorkedSource,Outcome,OutcomeReason,SuppressedUntil,SourceType,SourceRawMessage,RecentRawMessages,Timeline");
+        sb.AppendLine("SessionDate,SessionId,FirstSeen,LastSeen,SeenFor,Age,Call,Country,DXCC,DXCCStatus,Category,Need,GridNeed,StateNeed,Band,Mode,DialFrequencyHz,Scope,RarityRank,RarityScore,PriorityTier,PriorityTierName,Reason,SelectionCategory,SelectionNeed,SelectionValue,SelectionScope,SelectionSourceType,SelectionSourceRawMessage,BestSNR,LastSNR,Grid,State,GridSource,SeenCount,CallAttempts,Selection,Called,Worked,WorkedAt,WorkedSource,Outcome,OutcomeReason,SuppressedUntil,SourceType,SourceRawMessage,RecentRawMessages,Timeline");
         foreach (var item in SessionHistory.RowsForExport().OrderBy(o => o.FirstSeenUtc))
         {
             sb.AppendLine(string.Join(",",
@@ -6961,8 +7479,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 Csv(item.Entity),
                 Csv(item.DxccNumber),
                 Csv(item.DxccStatus),
-                Csv(item.Category),
-                Csv(item.Need),
+                Csv(item.EffectiveCategory),
+                Csv(item.EffectiveNeed),
                 Csv(item.GridNeed),
                 Csv(item.StateNeed),
                 Csv(item.Band),
@@ -6973,7 +7491,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 Csv(item.RarityScore.ToString()),
                 Csv(item.PriorityTier.ToString()),
                 Csv(item.PriorityTierName),
-                Csv(item.PrimaryReason),
+                Csv(item.WantedReasonDisplay),
+                Csv(item.SelectionCategory),
+                Csv(item.SelectionNeed),
+                Csv(item.SelectionValue),
+                Csv(item.SelectionScope),
+                Csv(item.SelectionSourceType),
+                Csv(item.SelectionSourceRawMessage),
                 Csv(item.BestSnrText),
                 Csv(item.LastSnr.ToString()),
                 Csv(item.Grid),
@@ -7648,6 +8172,38 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             && !string.IsNullOrWhiteSpace(RowCallsign(row));
     }
 
+    private bool CanOpenQrzLookup(object? row)
+    {
+        return !string.IsNullOrWhiteSpace(QrzProfileUrl.Build(RowCallsign(row)));
+    }
+
+    private void OpenQrzLookup(object? row)
+    {
+        var call = RowCallsign(row);
+        var url = QrzProfileUrl.Build(call);
+        if (string.IsNullOrWhiteSpace(url))
+            return;
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+            AddAction($"Opened QRZ profile for {call} in the default browser.");
+        }
+        catch (Exception ex)
+        {
+            AddAction($"Could not open the QRZ profile for {call}: {ex.GetBaseException().Message}");
+            System.Windows.MessageBox.Show(
+                $"DX Pilot could not open the QRZ page for {call}.\n\n{ex.GetBaseException().Message}",
+                "QRZ lookup",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+    }
+
     private async Task CallNowAsync(object? row)
     {
         var call = RowCallsign(row);
@@ -7815,6 +8371,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         foreach (var key in keys)
         {
             removed |= _failedReplySources.Remove(key);
+            removed |= _unsafeGuiSelectionSources.Remove(key);
             removed |= _forceGuiSelectionSources.Remove(key);
             removed |= _guiSelectionClickCounts.Remove(key);
             removed |= _guiSelectionLastClickAt.Remove(key);
@@ -8111,12 +8668,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void RecordConditionsCallAttempt(string callsign)
     {
+        RecordBandPerformance("Attempt", _lockedTarget?.Band);
         _conditionsCallAttempts.Add((DateTime.UtcNow, callsign.Trim().ToUpperInvariant()));
         TrimConditionsEvidence(DateTime.UtcNow);
     }
 
     private void RecordConditionsReplyOrProgress()
     {
+        RecordBandPerformance("Progress", _lockedTarget?.Band, suppressDuplicateSeconds: 15);
         _conditionsLastReplyOrProgressAtUtc = DateTime.UtcNow;
         TrimConditionsEvidence(DateTime.UtcNow);
     }
@@ -8156,6 +8715,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void RecordConditionsCompletedQso(string callsign)
     {
+        RecordBandPerformance("Completed", _lockedTarget?.Band, suppressDuplicateSeconds: 15);
         if (!_autoResume.IsRunning
             || _callNowSession.IsOneShot
             || !BandAnalysis.ConditionsSearchEnabled)
@@ -8201,6 +8761,38 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _conditionsMonitorDecodes.RemoveAll(decode => decode.ReceivedAt.ToUniversalTime() < cutoff);
         _conditionsCallAttempts.RemoveAll(item => item.AtUtc < cutoff);
         _conditionsIncompleteExchanges.RemoveAll(item => item.AtUtc < cutoff);
+        _bandPerformanceEvidence.RemoveAll(item => item.AtUtc < nowUtc.AddHours(-3));
+    }
+
+    private void RecordBandPerformance(string kind, string? band, int suppressDuplicateSeconds = 0)
+    {
+        var effectiveBand = string.IsNullOrWhiteSpace(band) ? CurrentReportedBand() : band;
+        if (string.IsNullOrWhiteSpace(effectiveBand))
+            return;
+
+        var nowUtc = DateTime.UtcNow;
+        if (suppressDuplicateSeconds > 0
+            && _bandPerformanceEvidence.Any(item => item.Band.Equals(effectiveBand, StringComparison.OrdinalIgnoreCase)
+                && item.Kind.Equals(kind, StringComparison.OrdinalIgnoreCase)
+                && nowUtc - item.AtUtc < TimeSpan.FromSeconds(suppressDuplicateSeconds)))
+        {
+            return;
+        }
+
+        _bandPerformanceEvidence.Add((nowUtc, effectiveBand, kind));
+        _bandPerformanceEvidence.RemoveAll(item => item.AtUtc < nowUtc.AddHours(-3));
+    }
+
+    private BandPerformanceEvidence RecentBandPerformance(string band)
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-3);
+        var events = _bandPerformanceEvidence
+            .Where(item => item.AtUtc >= cutoff && item.Band.Equals(band, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        return new BandPerformanceEvidence(
+            events.Count(item => item.Kind.Equals("Attempt", StringComparison.OrdinalIgnoreCase)),
+            events.Count(item => item.Kind.Equals("Progress", StringComparison.OrdinalIgnoreCase)),
+            events.Count(item => item.Kind.Equals("Completed", StringComparison.OrdinalIgnoreCase)));
     }
 
     private async Task EvaluateConditionsSearchAsync()
@@ -8608,7 +9200,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         foreach (var row in BandAnalysis.Bands)
         {
-            var trend = ConditionsSearchPolicy.Trend(row.Band, _bandAnalysisHistory);
+            var trend = ConditionsSearchPolicy.RecentHistoricalTrend(
+                row.Band,
+                _bandAnalysisHistory,
+                DateTime.UtcNow,
+                BandAnalysis.BandAnalysisTrendWindowHours);
             row.Trend = trend.Label;
             row.TrendScore = trend.Score;
             row.ConditionsScore = CalculateConditionsScore(row, _operatingMode);
@@ -8624,7 +9220,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void RestoreConditionsSearchHistoryState()
     {
         var latestAutomatic = _bandAnalysisHistory
-            .Where(entry => entry.Automatic && entry.SecondsObserved > 0)
+            .Where(entry => entry.Automatic
+                && entry.SecondsObserved > 0
+                && !entry.Decision.Contains("stopped safely", StringComparison.OrdinalIgnoreCase)
+                && !entry.Decision.Contains("failed safely", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(entry => entry.ObservedAtUtc)
             .FirstOrDefault();
         if (latestAutomatic != null)
@@ -8647,7 +9246,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         bool automatic,
         string startingBand,
         string selectedBand,
-        string decision)
+        string decision,
+        bool completedComparableAnalysis = false)
     {
         var observedAt = DateTime.UtcNow;
         var surveyId = $"{observedAt:yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}";
@@ -8691,6 +9291,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 PskPropagationScore = row.PskMetrics.PropagationScore,
                 PskMainArea = row.PskMetrics.MainArea,
                 PskAssessment = row.PskMetrics.Assessment,
+                CompletedComparableAnalysis = completedComparableAnalysis
+                    && row.PskMeasured
+                    && row.Workability.Calculated,
+                WorkabilityScore = row.Workability.Score,
+                PskViabilityPercent = row.Workability.PskViabilityPercent,
+                PathMatchPercent = row.Workability.PathMatchPercent,
+                DistinctWantedOpportunities = row.Workability.DistinctOpportunities,
+                WorkableWantedOpportunities = row.Workability.WorkableOpportunities,
+                ProductivityAdjustment = row.Workability.ProductivityAdjustment,
+                WorkabilityAssessment = row.Workability.Assessment,
+                WorkabilityDetail = row.Workability.Detail,
                 StartingBand = startingBand,
                 SelectedBand = selectedBand,
                 Decision = decision
@@ -8727,30 +9338,26 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 .OrderBy(entry => entry.ObservedAtUtc)
                 .Select(entry => new BandAnalysisChartPoint(
                     entry.ObservedAtUtc,
-                    BandAnalysisChartScore(
-                        entry.NewDxccStations,
-                        entry.WantedStations,
-                        entry.ActivityScore,
-                        entry.DxReachScore,
-                        entry.PskMeasured,
-                        entry.PskPropagationScore),
+                    HistoryWorkabilityScore(entry),
                     entry.SelectedBand.Equals(entry.Band, StringComparison.OrdinalIgnoreCase),
                     false,
                     $"Band: {entry.Band}\n"
-                    + $"Score {BandAnalysisChartScore(entry.NewDxccStations, entry.WantedStations, entry.ActivityScore, entry.DxReachScore, entry.PskMeasured, entry.PskPropagationScore):0} | "
+                    + $"Workability {HistoryWorkabilityScore(entry):0} | path match {entry.PathMatchPercent}% | PSK viability {entry.PskViabilityPercent}%\n"
                     + $"{entry.UniqueStations} stations | DX reach {entry.DxReachScore} | wanted {entry.WantedStations} | PSK {entry.PskPropagationScore}\n"
                     + $"{(entry.Automatic ? "Automatic" : "Manual")} | {entry.TriggerReason}\n{entry.Decision}"))
                 .ToList();
 
             if (_bandAnalysisCurrentSurveyStartedUtc != DateTime.MinValue && row.SecondsObserved > 0)
             {
-                var currentScore = BandAnalysisChartScore(
-                    row.NewDxccStations,
-                    row.WantedStations,
-                    row.ActivityScore,
-                    row.DxReachScore,
-                    row.PskMeasured,
-                    row.PskMetrics.PropagationScore);
+                var currentScore = row.Workability.Calculated
+                    ? Math.Min(100, row.Workability.Score)
+                    : BandAnalysisChartScore(
+                        row.NewDxccStations,
+                        row.WantedStations,
+                        row.ActivityScore,
+                        row.DxReachScore,
+                        row.PskMeasured,
+                        row.PskMetrics.PropagationScore);
                 points.Add(new BandAnalysisChartPoint(
                     _bandAnalysisCurrentSurveyStartedUtc,
                     currentScore,
@@ -8797,6 +9404,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             0,
             100);
     }
+
+    private static double HistoryWorkabilityScore(BandAnalysisHistoryEntry entry) =>
+        entry.WorkabilityScore > 0
+            ? Math.Min(100, entry.WorkabilityScore)
+            : BandAnalysisChartScore(
+                entry.NewDxccStations,
+                entry.WantedStations,
+                entry.ActivityScore,
+                entry.DxReachScore,
+                entry.PskMeasured,
+                entry.PskPropagationScore);
 
     private void OpenBandAnalysisHistory()
     {
@@ -9152,6 +9770,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             BandAnalysis.AutomaticStatus = $"Automatic Band Analysis active: {triggerReason}.";
 
         var decision = "PSK propagation survey started.";
+        var technicalFailureOccurred = false;
         try
         {
             _pskReporterClient.SpotReceived += ObservePskReport;
@@ -9160,60 +9779,84 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             for (var bandIndex = 0; bandIndex < enabledBands.Count; bandIndex++)
             {
-                cancellationToken.ThrowIfCancellationRequested();
                 var row = enabledBands[bandIndex];
-                _bandSurveyActiveBand = "";
-                row.SurveyStatus = "Changing band";
-                BandAnalysis.PskProgress = $"PSK survey: moving to {row.Band} ({bandIndex + 1}/{enabledBands.Count})";
-                BandAnalysis.ShowAnalysisBanner(
-                    automatic ? "AUTOMATIC BAND ANALYSIS ACTIVE" : "MANUAL BAND ANALYSIS ACTIVE",
-                    $"Reason: {triggerReason}. JTDX band movement must be confirmed before listening or transmitting.",
-                    $"Moving to {row.Band} · band {bandIndex + 1} of {enabledBands.Count}",
-                    "Listening");
-                if (!await MoveToBandAndConfirmAsync(row, cancellationToken))
-                    throw new InvalidOperationException($"PSK survey stopped because movement to {row.Band} was not confirmed.");
-
-                var status = _udpListener.LastStatus;
-                var mode = AmateurBandMapper.NormalizeMode(status?.Mode ?? _radioContext?.Mode);
-                if (!mode.Equals("FT8", StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException($"PSK propagation probing currently requires FT8; JTDX reports {mode} on {row.Band}.");
-
-                var period = AmateurBandMapper.ReceivePeriod(mode, status?.TrPeriodSeconds ?? 0);
-                await SynchronizeBandSurveyToFullDecodeCycleAsync(row, 1, cancellationToken);
-                var passiveDuration = PskPropagationProbeTiming.PassiveListenDuration(
-                    BandAnalysis.PskPropagationProbeMinutes,
-                    period);
-                var firstFullPeriodSeconds = Math.Max(1, (int)Math.Round(period.TotalSeconds));
-                var alreadyObserved = row.SecondsObserved;
-                row.SecondsObserved = alreadyObserved + firstFullPeriodSeconds;
-                var remainingPassiveSeconds = Math.Max(0, (int)Math.Round(passiveDuration.TotalSeconds) - firstFullPeriodSeconds);
-                row.SurveyStatus = "Passive listening";
-                for (var elapsed = 0; elapsed < remainingPassiveSeconds; elapsed++)
+                var delayedRetryUsed = false;
+                while (true)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    row.SecondsObserved = alreadyObserved + firstFullPeriodSeconds + elapsed + 1;
-                    BandAnalysis.ShowAnalysisBanner(
-                        automatic ? "AUTOMATIC BAND ANALYSIS ACTIVE" : "MANUAL BAND ANALYSIS ACTIVE",
-                        $"Reason: {triggerReason}. Receive quality and available targets are being measured before the propagation probes.",
-                        $"Listening on {row.Band} · band {bandIndex + 1} of {enabledBands.Count} · {remainingPassiveSeconds - elapsed - 1}s",
-                        "Listening");
-                    BandAnalysis.PskProgress = $"PSK survey {row.Band}: listening in both FT8 periods · {remainingPassiveSeconds - elapsed - 1}s before two CQs";
-                    await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-                }
+                    _pskProbeObservedCqCount = 0;
+                    try
+                    {
+                        var probeWindow = await RunPskBandMeasurementAsync(
+                            row,
+                            bandIndex,
+                            enabledBands.Count,
+                            automatic,
+                            triggerReason,
+                            cancellationToken);
+                        probeWindows[row.Band] = probeWindow;
+                        row.SurveyStatus = delayedRetryUsed ? "Probe complete after retry" : "Probe complete";
+                        AddAction($"PSK propagation probe {row.Band}: two consecutive CQs completed after {row.SecondsObserved}s passive listening. {row.Detail}");
+                        break;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception bandException)
+                    {
+                        var verifiedCqs = _pskProbeObservedCqCount;
+                        var transmissionDefinitelyAbsent = verifiedCqs < 0
+                            || bandException is PskArmNotAcceptedException;
+                        verifiedCqs = Math.Max(0, verifiedCqs);
+                        await DisablePskEnableTxAndConfirmAsync(
+                            $"PSK propagation {row.Band} failed-band cleanup",
+                            CancellationToken.None);
+                        if (!await RestoreStableTargetAcquisitionAfterPskAsync(
+                                $"PSK propagation {row.Band} failed-band recovery",
+                                CancellationToken.None))
+                        {
+                            throw new InvalidOperationException(
+                                $"{row.Band} failed and JTDX could not be restored safely: {bandException.GetBaseException().Message}");
+                        }
 
-                _bandSurveyActiveBand = "";
-                RefreshBandAnalysisRow(row);
-                RefreshBandAnalysisOverview(inProgress: true);
-                BandAnalysis.ShowAnalysisBanner(
-                    automatic ? "AUTOMATIC BAND ANALYSIS — CQ PROBES ACTIVE" : "MANUAL BAND ANALYSIS — CQ PROBES ACTIVE",
-                    $"Two controlled CQ transmissions are testing where {Settings.Settings.MyCallsign} is being heard. Normal target acquisition is paused.",
-                    $"Transmitting PSK probes on {row.Band} · band {bandIndex + 1} of {enabledBands.Count}",
-                    "Transmitting");
-                var probeWindow = await RunTwoConsecutivePskCqsAsync(row, bandIndex + 1, enabledBands.Count, period, cancellationToken);
-                probeWindows[row.Band] = probeWindow;
-                row.SurveyStatus = "Probe complete";
-                AddAction($"PSK propagation probe {row.Band}: two consecutive CQs completed after {row.SecondsObserved}s passive listening. {row.Detail}");
+                        if (PskBandRetryPolicy.CanRetryIncompleteBand(
+                                automatic,
+                                delayedRetryUsed,
+                                verifiedCqs,
+                                transmissionDefinitelyAbsent))
+                        {
+                            delayedRetryUsed = true;
+                            row.SurveyStatus = "Retry pending";
+                            BandAnalysis.PskProgress = $"{row.Band} failed before transmitting; retrying only this band in two minutes";
+                            BandAnalysis.ShowAnalysisBanner(
+                                "AUTOMATIC BAND ANALYSIS — BAND RETRY PENDING",
+                                $"{row.Band} failed technically before any CQ was transmitted. Completed bands are retained; only {row.Band} will be measured again.",
+                                $"Retrying {row.Band} in 2 minutes",
+                                "Pending");
+                            AddAction($"Band Analysis retained all completed bands. {row.Band} failed before transmitting ({bandException.GetBaseException().Message}); only this band will retry once after two minutes.");
+                            await Task.Delay(ConditionsAutomaticTechnicalRetryDelay, cancellationToken);
+                            _bandSurveyDecodes[row.Band].Clear();
+                            row.ResetSurvey();
+                            continue;
+                        }
+
+                        row.SurveyStatus = verifiedCqs > 0
+                            ? $"Incomplete — {verifiedCqs}/2 CQs"
+                            : "Technical failure — excluded";
+                        var retryReason = verifiedCqs > 0
+                            ? $"{verifiedCqs} CQ transmission{(verifiedCqs == 1 ? " was" : "s were")} already verified, so DX Pilot will not risk additional transmissions"
+                            : automatic && delayedRetryUsed
+                                ? "the single failed-band retry also failed"
+                                : "this manual analysis does not schedule an automatic retry";
+                        AddAction($"Band Analysis excluded {row.Band}: {bandException.GetBaseException().Message}. {retryReason}. Previously completed bands remain valid and the survey will continue.");
+                        break;
+                    }
+                }
             }
+
+            if (probeWindows.Count == 0)
+                throw new InvalidOperationException("No enabled band completed two verified CQ probes, so no safe comparison can be made.");
 
             BandAnalysis.PskProgress = "PSK survey: allowing immediate live reports to arrive · 8s";
             BandAnalysis.ShowAnalysisBanner(
@@ -9249,9 +9892,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     matched,
                     measurementAvailable);
                 row.ApplyPsk(metrics);
-                row.ConditionsScore = CalculateConditionsScore(row, resumeMode);
+                var observations = _bandSurveyDecodes.GetValueOrDefault(row.Band) ?? [];
+                row.ApplyWorkability(_bandWorkabilityAnalyzer.Analyze(
+                    row.Band,
+                    Settings.Settings.HomeGrid,
+                    observations,
+                    matched,
+                    row.Quality,
+                    metrics,
+                    resumeMode,
+                    RecentBandPerformance(row.Band)));
                 AddAction($"PSK Reporter {row.Band}: {metrics.Detail}");
+                AddAction($"Band workability {row.Band}: {row.Workability.Detail}");
             }
+            ApplyCurrentBandAnalysisTrends(enabledBands, resumeMode);
             if (allMatchedReports.Any(report => MaidenheadGrid.TryGetCentre(report.ReceiverLocator, out _, out _)))
             {
                 BandAnalysis.PskMap.Apply(allMatchedReports, enabledBands, Settings.Settings.HomeGrid);
@@ -9264,7 +9918,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 AddAction("PSK propagation map retained its previous result because the completed survey contained no locator-bearing matched reports.");
             }
 
-            var bestCandidate = ConditionsSearchPolicy.ChoosePskSurveyBand(enabledBands.Select(row =>
+            var comparableRows = enabledBands
+                .Where(row => probeWindows.ContainsKey(row.Band) && row.Workability.Calculated)
+                .ToList();
+            var bestCandidate = ConditionsSearchPolicy.ChoosePskSurveyBand(comparableRows.Select(row =>
                 new PskSurveyBandCandidate(
                     row.Band,
                     row.ConditionsScore,
@@ -9276,7 +9933,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 startingBand);
             var bestRow = bestCandidate == null
                 ? null
-                : enabledBands.FirstOrDefault(row => row.Band.Equals(bestCandidate.Band, StringComparison.OrdinalIgnoreCase));
+                : comparableRows.FirstOrDefault(row => row.Band.Equals(bestCandidate.Band, StringComparison.OrdinalIgnoreCase));
             if (bestRow != null)
                 BandAnalysis.SelectedBand = bestRow;
 
@@ -9285,12 +9942,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             BandAnalysis.Status = measurementAvailable
                 ? $"PSK propagation survey completed safely; {matchedReportCount} reception reports matched the verified CQ probes."
                 : "CQ probes completed safely, but neither PSK Reporter source was reachable; no propagation result was inferred.";
+            var excludedBands = enabledBands.Where(row => !probeWindows.ContainsKey(row.Band)).Select(row => row.Band).ToList();
+            if (excludedBands.Count > 0)
+                BandAnalysis.Status += $" Incomplete bands excluded from comparison: {string.Join(", ", excludedBands)}.";
             BandAnalysis.PskProbeStatus = $"{BandAnalysis.Status} {queryResult.Status}";
             decision = BandAnalysis.Status;
 
             if (resumeAutomation && bestRow != null)
             {
-                var currentRow = enabledBands.FirstOrDefault(row => row.Band.Equals(startingBand, StringComparison.OrdinalIgnoreCase));
+                var currentRow = comparableRows.FirstOrDefault(row => row.Band.Equals(startingBand, StringComparison.OrdinalIgnoreCase));
                 var currentScore = currentRow?.ConditionsScore ?? 0;
                 var currentPoor = currentRow == null || currentRow.UniqueStations <= 2;
                 var requiredScore = currentScore <= 0
@@ -9307,7 +9967,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     ? $" {bestRow.Band} did not exceed the configured {Settings.Settings.ConditionsSearchSwitchImprovementPercent}% movement margin."
                     : "";
                 var selectionText = moved
-                    ? $"{OperatingModeLabel()} selected {destinationRow.Band} with combined score {destinationRow.ConditionsScore:0}; assistance will resume there.{marginText}"
+                    ? $"{OperatingModeLabel()} selected {destinationRow.Band} with workability score {destinationRow.ConditionsScore:0} "
+                      + $"(PSK viability {destinationRow.Workability.PskViabilityPercent}%, two-way path match {destinationRow.Workability.PathMatchPercent}%, "
+                      + $"workable wanted {destinationRow.Workability.WorkableOpportunities}/{destinationRow.Workability.DistinctOpportunities}); assistance will resume there.{marginText}"
                     : $"{OperatingModeLabel()} selected {destinationRow.Band}, but JTDX did not confirm movement; assistance will resume on {CurrentReportedBand()}.";
                 BandAnalysis.PskProbeStatus += $" {selectionText}";
                 decision += $" {selectionText}";
@@ -9338,6 +10000,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
+            technicalFailureOccurred = true;
             decision = $"PSK propagation survey stopped safely: {ex.GetBaseException().Message}";
             BandAnalysis.PskProgress = "PSK survey stopped after an error";
             BandAnalysis.PskProbeStatus = decision;
@@ -9381,14 +10044,27 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 resumeAutomation = false;
                 BandAnalysis.PskProbeStatus += " Normal hunting remains stopped because JTDX could not be restored to Tx1.";
             }
+            if (automatic && technicalFailureOccurred && stableHandoverReady)
+            {
+                const string retryText = " No complete survey restart will be attempted; only safely incomplete bands are retried inside the original analysis.";
+                decision += retryText;
+                BandAnalysis.PskProbeStatus += retryText;
+                BandAnalysis.Status = decision;
+                BandAnalysis.AutomaticStatus = retryText.Trim();
+                AddAction(retryText.Trim());
+            }
             SaveBandAnalysisHistory(
                 triggerReason,
                 automatic,
                 startingBand,
                 CurrentReportedBand(),
-                decision);
-            if (automatic)
-                _conditionsLastSurveyCompletedAtUtc = DateTime.UtcNow;
+                decision,
+                completedComparableAnalysis: !technicalFailureOccurred);
+            if (!technicalFailureOccurred)
+            {
+                if (automatic)
+                    _conditionsLastSurveyCompletedAtUtc = DateTime.UtcNow;
+            }
             _bandSurveyAutomatic = false;
             _bandSurveyResumesAssistance = false;
             BandAnalysis.HideAnalysisBanner();
@@ -9424,6 +10100,95 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _bandSurveyPriorityNewDxcc = null;
     }
 
+    private async Task<PskProbeWindow> RunPskBandMeasurementAsync(
+        BandAnalysisBandViewModel row,
+        int bandIndex,
+        int bandCount,
+        bool automatic,
+        string triggerReason,
+        CancellationToken cancellationToken)
+    {
+        // Negative means this visit has not yet entered the transmit sequence.
+        // RunTwoConsecutivePskCqsAsync changes it to zero only after it assumes
+        // control of CQ/TX6, allowing the outer retry policy to distinguish a
+        // harmless band-movement/listening failure from an ambiguous CQ state.
+        _pskProbeObservedCqCount = -1;
+        _bandSurveyActiveBand = "";
+        row.SurveyStatus = "Changing band";
+        BandAnalysis.PskProgress = $"PSK survey: moving to {row.Band} ({bandIndex + 1}/{bandCount})";
+        BandAnalysis.ShowAnalysisBanner(
+            automatic ? "AUTOMATIC BAND ANALYSIS ACTIVE" : "MANUAL BAND ANALYSIS ACTIVE",
+            $"Reason: {triggerReason}. JTDX band movement must be confirmed before listening or transmitting.",
+            $"Moving to {row.Band} · band {bandIndex + 1} of {bandCount}",
+            "Listening");
+        if (!await MoveToBandAndConfirmAsync(row, cancellationToken))
+            throw new InvalidOperationException($"Movement to {row.Band} was not confirmed.");
+
+        var status = _udpListener.LastStatus;
+        var mode = AmateurBandMapper.NormalizeMode(status?.Mode ?? _radioContext?.Mode);
+        if (!mode.Equals("FT8", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"PSK propagation probing currently requires FT8; JTDX reports {mode} on {row.Band}.");
+
+        var period = AmateurBandMapper.ReceivePeriod(mode, status?.TrPeriodSeconds ?? 0);
+        await SynchronizeBandSurveyToFullDecodeCycleAsync(row, 1, cancellationToken);
+        var passiveDuration = PskPropagationProbeTiming.PassiveListenDuration(
+            BandAnalysis.PskPropagationProbeMinutes,
+            period);
+        var firstFullPeriodSeconds = Math.Max(1, (int)Math.Round(period.TotalSeconds));
+        var alreadyObserved = row.SecondsObserved;
+        row.SecondsObserved = alreadyObserved + firstFullPeriodSeconds;
+        var remainingPassiveSeconds = Math.Max(0, (int)Math.Round(passiveDuration.TotalSeconds) - firstFullPeriodSeconds);
+        row.SurveyStatus = "Passive listening";
+        for (var elapsed = 0; elapsed < remainingPassiveSeconds; elapsed++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            row.SecondsObserved = alreadyObserved + firstFullPeriodSeconds + elapsed + 1;
+            BandAnalysis.ShowAnalysisBanner(
+                automatic ? "AUTOMATIC BAND ANALYSIS ACTIVE" : "MANUAL BAND ANALYSIS ACTIVE",
+                $"Reason: {triggerReason}. Receive quality and available targets are being measured before the propagation probes.",
+                $"Listening on {row.Band} · band {bandIndex + 1} of {bandCount} · {remainingPassiveSeconds - elapsed - 1}s",
+                "Listening");
+            BandAnalysis.PskProgress = $"PSK survey {row.Band}: listening in both FT8 periods · {remainingPassiveSeconds - elapsed - 1}s before two CQs";
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+
+        _bandSurveyActiveBand = "";
+        RefreshBandAnalysisRow(row);
+        RefreshBandAnalysisOverview(inProgress: true);
+        BandAnalysis.ShowAnalysisBanner(
+            automatic ? "AUTOMATIC BAND ANALYSIS — CQ PROBES ACTIVE" : "MANUAL BAND ANALYSIS — CQ PROBES ACTIVE",
+            $"Two controlled CQ transmissions are testing where {Settings.Settings.MyCallsign} is being heard. Normal target acquisition is paused.",
+            $"Transmitting PSK probes on {row.Band} · band {bandIndex + 1} of {bandCount}",
+            "Transmitting");
+        try
+        {
+            return await RunTwoConsecutivePskCqsAsync(
+                row,
+                bandIndex + 1,
+                bandCount,
+                period,
+                cancellationToken);
+        }
+        catch (PskArmNotAcceptedException ex) when (_pskProbeObservedCqCount == 0)
+        {
+            // Both UDP and calibrated pixels say that no transmission began.
+            // This immediate setup correction is distinct from the delayed
+            // failed-band retry and cannot duplicate an on-air CQ.
+            row.SurveyStatus = "Retrying CQ setup";
+            BandAnalysis.PskProgress = $"PSK survey {row.Band}: Enable TX did not arm; retrying its CQ setup once";
+            AddAction($"PSK propagation {row.Band}: {ex.Message} No transmission began; retrying this band's CQ setup once after a short receive-only pause.");
+            if (!await WaitForJtdxReceiveAsync(TimeSpan.FromSeconds(20), cancellationToken))
+                throw new InvalidOperationException($"JTDX did not freshly confirm receive-only operation before the single CQ-setup retry on {row.Band}.");
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+            return await RunTwoConsecutivePskCqsAsync(
+                row,
+                bandIndex + 1,
+                bandCount,
+                period,
+                cancellationToken);
+        }
+    }
+
     private async Task<PskProbeWindow> RunTwoConsecutivePskCqsAsync(
         BandAnalysisBandViewModel row,
         int bandNumber,
@@ -9451,7 +10216,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             row.SurveyStatus = "Preparing two CQs";
             BandAnalysis.PskProgress = $"PSK survey {row.Band} ({bandNumber}/{bandCount}): selecting CQ/TX6";
             EnsureEnableTxOff("Preparing PSK propagation CQ", _udpListener.LastStatus?.TxEnabled == true);
-            await WaitForJtdxReceiveAsync(TimeSpan.FromSeconds(20), cancellationToken);
+            if (!await WaitForJtdxReceiveAsync(TimeSpan.FromSeconds(20), cancellationToken))
+                throw new InvalidOperationException($"PSK propagation {row.Band}: JTDX did not freshly confirm receive-only operation before selecting CQ/TX6.");
             _clicker.MoveClickRestore(Settings.Settings.CqTx6X, Settings.Settings.CqTx6Y);
 
             // JTDX commonly leaves UDP Status.TxMessage on the previous message while
@@ -9462,8 +10228,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             await Task.Delay(TimeSpan.FromMilliseconds(350), cancellationToken);
             await WaitForPskSlotArmWindowAsync(period, cancellationToken);
 
-            if (_udpListener.LastStatus?.TxEnabled != true)
-                ArmPskEnableTx();
+            await ArmPskEnableTxAndConfirmAsync(
+                $"PSK propagation {row.Band}: first CQ",
+                period,
+                cancellationToken);
             BandAnalysis.PskProgress = $"PSK survey {row.Band}: armed at an FT8 boundary; waiting for CQ 1";
             var firstTimeout = TimeSpan.FromTicks(period.Ticks * 3);
             var firstCqAt = await WaitForPskProbeCqAsync(
@@ -9493,7 +10261,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             await Task.Delay(TimeSpan.FromMilliseconds(75), cancellationToken);
             _clicker.MoveClickRestore(Settings.Settings.CqTx6X, Settings.Settings.CqTx6Y);
             await Task.Delay(TimeSpan.FromMilliseconds(75), cancellationToken);
-            ArmPskEnableTx();
+            await ArmPskEnableTxAndConfirmAsync(
+                $"PSK propagation {row.Band}: second CQ",
+                period,
+                cancellationToken);
             AddAction($"PSK propagation {row.Band}: CQ 1 finished; switched JTDX timing, reselected Tx6 and re-enabled TX for the immediately adjacent slot.");
             BandAnalysis.PskProgress = $"PSK survey {row.Band}: CQ 1 finished; opposite timing armed for CQ 2";
 
@@ -9555,10 +10326,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var trustExistingOffAfter = armClickAt == DateTime.MinValue
             ? DateTime.Now
             : armClickAt.AddMilliseconds(1200);
-        var requestedTimeout = confirmationTimeout ?? TimeSpan.FromSeconds(4);
-        var timeout = requestedTimeout < TimeSpan.FromSeconds(4)
-            ? TimeSpan.FromSeconds(4)
-            : requestedTimeout;
+        var timeout = PskTxTransitionPolicy.OffConfirmationTimeout(confirmationTimeout);
         var deadline = DateTime.Now + timeout;
         var clickedOffAt = DateTime.MinValue;
         while (DateTime.Now < deadline)
@@ -9593,17 +10361,93 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         throw new InvalidOperationException($"{source}; JTDX did not provide a fresh, settled confirmation that Enable TX was off.");
     }
 
-    private void ArmPskEnableTx()
+    private async Task ArmPskEnableTxAndConfirmAsync(
+        string source,
+        TimeSpan period,
+        CancellationToken cancellationToken)
     {
-        var status = _udpListener.LastStatus;
-        if (!IsFreshTxStatus(status) || status!.TxEnabled || status.Transmitting)
+        for (var attempt = 1; attempt <= 2; attempt++)
         {
-            var state = DescribeTxUdpState(status, IsFreshTxStatus(status));
-            throw new InvalidOperationException($"PSK propagation CQ was not armed because Enable TX was not freshly confirmed off. {state}");
+            cancellationToken.ThrowIfCancellationRequested();
+            var beforeClick = _udpListener.LastStatus;
+            if (!IsFreshTxStatus(beforeClick) || beforeClick!.TxEnabled || beforeClick.Transmitting)
+            {
+                var state = DescribeTxUdpState(beforeClick, IsFreshTxStatus(beforeClick));
+                throw new InvalidOperationException($"{source} was not armed because Enable TX was not freshly confirmed off. {state}");
+            }
+
+            var clickedAt = DateTime.Now;
+            _pskLastEnableTxClickAt = clickedAt;
+            _clicker.MoveClickRestore(Settings.Settings.EnableTxX, Settings.Settings.EnableTxY);
+            AddAction($"{source}: clicked Enable TX at {clickedAt:HH:mm:ss.fff}; awaiting a fresh JTDX UDP acknowledgement (attempt {attempt}/2).");
+
+            var confirmationDeadline = DateTime.Now.AddSeconds(3);
+            var explicitlyStillOff = false;
+            while (DateTime.Now < confirmationDeadline)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var status = _udpListener.LastStatus;
+                if (status != null && status.ReceivedAt >= clickedAt.AddMilliseconds(-100))
+                {
+                    if (status.TxEnabled || status.Transmitting)
+                    {
+                        AddAction($"{source}: JTDX confirmed Enable TX armed at {status.ReceivedAt:HH:mm:ss.fff} on attempt {attempt}/2.");
+                        return;
+                    }
+
+                    // Do not interpret the packet that was already being handled
+                    // when the click occurred as a rejection of that click.
+                    if (status.ReceivedAt >= clickedAt.AddMilliseconds(100))
+                        explicitlyStillOff = true;
+                }
+
+                await Task.Delay(50, cancellationToken);
+            }
+
+            var (greyPct, redPct) = _pixels.GetEnableTxStats(
+                Settings.Settings.EnableTxX,
+                Settings.Settings.EnableTxY,
+                Settings.Settings.BoxRadius,
+                Settings.Settings.EnableTxOffRgb,
+                Settings.Settings.EnableTxOnRgb,
+                Settings.Settings.Tolerance);
+            var pixelsConfirmOff = greyPct >= Settings.Settings.MinGreyPercent
+                && redPct <= Settings.Settings.MaxRedPercent;
+            var latestStatus = _udpListener.LastStatus;
+            var latestReportsActive = latestStatus?.TxEnabled == true
+                || latestStatus?.Transmitting == true;
+            var canSafelyRetry = PskTxTransitionPolicy.CanSafelyRetryArm(
+                startedFreshlyOff: true,
+                latestReportsActive,
+                freshOffReportedAfterClick: explicitlyStillOff,
+                greyPct,
+                redPct,
+                Settings.Settings.MinGreyPercent,
+                Settings.Settings.MaxRedPercent);
+
+            if (!pixelsConfirmOff || !canSafelyRetry)
+            {
+                var state = DescribeTxUdpState(latestStatus, IsFreshTxStatus(latestStatus));
+                throw new InvalidOperationException(
+                    $"{source}: the Enable TX click was not positively acknowledged, and its state is ambiguous, so DX Pilot will not click the toggle again. "
+                    + $"Pixels: grey {greyPct}% / active {redPct}%. {state}");
+            }
+
+            if (attempt == 2)
+            {
+                throw new PskArmNotAcceptedException(
+                    $"JTDX remained explicitly receive-only after both verified Enable TX clicks for {source}. "
+                    + $"Pixels still show off (grey {greyPct}% / active {redPct}%).");
+            }
+
+            var retryEvidence = explicitlyStillOff
+                ? "fresh UDP and the calibrated pixels still show Enable TX off"
+                : "the fresh pre-click UDP state was off and the calibrated pixels still show a strongly grey off button";
+            AddAction($"{source}: {retryEvidence}; scheduling the one safe re-click at the next FT8 boundary.");
+            await WaitForPskSlotArmWindowAsync(period, cancellationToken);
         }
 
-        _pskLastEnableTxClickAt = DateTime.Now;
-        _clicker.MoveClickRestore(Settings.Settings.EnableTxX, Settings.Settings.EnableTxY);
+        throw new InvalidOperationException($"{source}: Enable TX arming ended without a confirmed state.");
     }
 
     private async Task WaitForPskSlotArmWindowAsync(
@@ -10218,7 +11062,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
             var status = _udpListener.LastStatus;
-            if (status != null && !status.Transmitting && !status.TxEnabled)
+            if (IsFreshTxStatus(status) && !status!.Transmitting && !status.TxEnabled)
                 return true;
             await Task.Delay(100, cancellationToken);
         }
@@ -10303,13 +11147,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         BandAnalysisBandViewModel row,
         HuntingOperatingMode mode)
     {
-        var receivedScore = ConditionsSearchPolicy.Score(row.Quality, mode, row.TrendScore);
-        if (!row.PskMeasured || row.Quality.NewDxccStations > 0)
-            return receivedScore;
+        if (row.Workability.Calculated)
+            return Math.Clamp(row.Workability.Score + Math.Clamp(row.TrendScore, -5, 5), 0, 20_000);
 
-        // Outward propagation complements, but never overrides, received targets.
-        // New DXCC retains the 10,000+ absolute-priority score above.
-        return receivedScore + row.PskMetrics.PropagationScore * 0.55;
+        var receivedScore = ConditionsSearchPolicy.Score(row.Quality, mode, row.TrendScore);
+        return receivedScore;
+    }
+
+    private void ApplyCurrentBandAnalysisTrends(
+        IEnumerable<BandAnalysisBandViewModel> rows,
+        HuntingOperatingMode mode)
+    {
+        var nowUtc = DateTime.UtcNow;
+        foreach (var row in rows.Where(item => item.Workability.Calculated))
+        {
+            var trend = ConditionsSearchPolicy.RecentTrendAgainstCurrent(
+                row.Band,
+                row.Workability.Score,
+                _bandAnalysisHistory,
+                nowUtc,
+                BandAnalysis.BandAnalysisTrendWindowHours);
+            row.Trend = trend.Label;
+            row.TrendScore = trend.Score;
+            row.ConditionsScore = CalculateConditionsScore(row, mode);
+        }
     }
 
     private void RefreshBandAnalysisOverview(bool inProgress)
@@ -10330,6 +11191,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             .OrderByDescending(row => row.PskMetrics.PropagationScore)
             .ThenByDescending(row => row.PskMetrics.FarthestDistanceMiles)
             .FirstOrDefault();
+        var bestWorkability = observed
+            .Where(row => row.Workability.Calculated)
+            .OrderByDescending(row => row.ConditionsScore)
+            .FirstOrDefault();
         var prefix = inProgress ? "Provisional results" : "Survey overview";
         BandAnalysis.OverallSummary = $"{prefix}: Best DX propagation — {bestDx.Band} ({bestDx.Assessment}, DX reach {bestDx.DxReachScore}). "
             + $"Most active — {mostActive.Band} ({mostActive.UniqueStations} unique stations, mainly {mostActive.MainArea}). "
@@ -10338,7 +11203,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 : "No wanted stations were identified during the observed periods.")
             + (bestOutward == null
                 ? ""
-                : $" Best outward PSK propagation: {bestOutward.Band} ({bestOutward.PskAssessment}, heard by {bestOutward.PskUniqueReceivers}, reach {bestOutward.PskReachDisplay}, score {bestOutward.PskScoreDisplay}).");
+                : $" Best outward PSK propagation: {bestOutward.Band} ({bestOutward.PskAssessment}, heard by {bestOutward.PskUniqueReceivers}, reach {bestOutward.PskReachDisplay}, score {bestOutward.PskScoreDisplay}).")
+            + (bestWorkability == null
+                ? ""
+                : $" Best practical two-way choice: {bestWorkability.Band} ({bestWorkability.Workability.Assessment}, score {bestWorkability.ConditionsScore:0}, path match {bestWorkability.Workability.PathMatchPercent}%).");
         RefreshBandAnalysisHistoryChart();
     }
 

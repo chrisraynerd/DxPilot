@@ -252,11 +252,13 @@ public sealed class SessionHistoryViewModel : ObservableObject
 
     private bool PassesFilter(SessionDxOpportunity item)
     {
-        var isDxcc = item.DxccStatus is "New DXCC" or "Worked unconfirmed";
-        var isGrid = item.Category.Equals("Grid", StringComparison.OrdinalIgnoreCase);
-        var isState = item.Category.Equals("USA State", StringComparison.OrdinalIgnoreCase);
-        var isRareConfirmed = item.Category.Equals("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase);
-        var isHeard = item.Category is "Heard" or "General" or "Band/mode";
+        var category = item.EffectiveCategory;
+        var isDxcc = category.Equals("DXCC", StringComparison.OrdinalIgnoreCase)
+            || item.DxccStatus is "New DXCC" or "Worked unconfirmed";
+        var isGrid = category.Equals("Grid", StringComparison.OrdinalIgnoreCase);
+        var isState = category.Equals("USA State", StringComparison.OrdinalIgnoreCase);
+        var isRareConfirmed = category.Equals("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase);
+        var isHeard = category is "Heard" or "General" or "Band/mode";
         var passesType = (ShowDxcc && isDxcc)
             || (ShowGrids && isGrid)
             || (ShowUsaStates && isState)
@@ -296,6 +298,8 @@ public sealed class SessionHistoryViewModel : ObservableObject
             || item.Grid.Contains(search, StringComparison.OrdinalIgnoreCase)
             || item.State.Contains(search, StringComparison.OrdinalIgnoreCase)
             || item.PrimaryReason.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || item.SelectionReason.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || item.SelectionValue.Contains(search, StringComparison.OrdinalIgnoreCase)
             || item.Category.Contains(search, StringComparison.OrdinalIgnoreCase)
             || item.Outcome.Contains(search, StringComparison.OrdinalIgnoreCase);
     }

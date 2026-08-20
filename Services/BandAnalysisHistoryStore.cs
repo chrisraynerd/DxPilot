@@ -49,7 +49,7 @@ public sealed class BandAnalysisHistoryStore
             File.WriteAllText(_path, JsonSerializer.Serialize(bounded, _options));
             var lines = new List<string>
             {
-                "SurveyId,ObservedAtUtc,Automatic,TriggerReason,StartingBand,SelectedBand,Decision,Band,SecondsObserved,UniqueStations,CqCallers,NewDxccStations,WantedStations,ActivityScore,DxReachScore,Reach80Miles,MainArea,Assessment,PskMeasured,PskReports,PskUniqueReceivers,PskUniqueCountries,PskFarthestMiles,PskMedianSnr,PskPropagationScore,PskMainArea,PskAssessment"
+                "SurveyId,ObservedAtUtc,Automatic,TriggerReason,StartingBand,SelectedBand,Decision,Band,SecondsObserved,UniqueStations,CqCallers,NewDxccStations,WantedStations,ActivityScore,DxReachScore,Reach80Miles,MainArea,Assessment,PskMeasured,PskReports,PskUniqueReceivers,PskUniqueCountries,PskFarthestMiles,PskMedianSnr,PskPropagationScore,PskMainArea,PskAssessment,CompletedComparable,WorkabilityScore,PskViabilityPercent,PathMatchPercent,DistinctWantedOpportunities,WorkableWantedOpportunities,ProductivityAdjustment,WorkabilityAssessment,WorkabilityDetail"
             };
             lines.AddRange(bounded.Select(entry => string.Join(",",
                 Csv(entry.SurveyId),
@@ -78,7 +78,16 @@ public sealed class BandAnalysisHistoryStore
                 entry.PskMedianSnr?.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) ?? "",
                 entry.PskPropagationScore,
                 Csv(entry.PskMainArea),
-                Csv(entry.PskAssessment))));
+                Csv(entry.PskAssessment),
+                entry.CompletedComparableAnalysis,
+                entry.WorkabilityScore.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture),
+                entry.PskViabilityPercent,
+                entry.PathMatchPercent,
+                entry.DistinctWantedOpportunities,
+                entry.WorkableWantedOpportunities,
+                entry.ProductivityAdjustment.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture),
+                Csv(entry.WorkabilityAssessment),
+                Csv(entry.WorkabilityDetail))));
             File.WriteAllLines(_csvPath, lines);
         }
         catch

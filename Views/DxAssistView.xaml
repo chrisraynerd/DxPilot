@@ -186,6 +186,8 @@
                                 </DataGrid.RowStyle>
                                 <DataGrid.ContextMenu>
                                     <ContextMenu>
+                                        <MenuItem Header="QRZ" Command="{Binding PlacementTarget.DataContext.LookupQrzCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <Separator />
                                         <MenuItem Header="CALL NOW" Command="{Binding PlacementTarget.DataContext.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                         <MenuItem Header="Suppress indefinitely" Command="{Binding PlacementTarget.DataContext.PermanentlySuppressCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                         <MenuItem Header="Release suppression" Command="{Binding PlacementTarget.DataContext.ReleaseSuppressionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
@@ -220,6 +222,8 @@
                                       PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
                                 <DataGrid.ContextMenu>
                                     <ContextMenu>
+                                        <MenuItem Header="QRZ" Command="{Binding PlacementTarget.DataContext.LookupQrzCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <Separator />
                                         <MenuItem Header="CALL NOW" Command="{Binding PlacementTarget.DataContext.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                         <MenuItem Header="Suppress indefinitely" Command="{Binding PlacementTarget.DataContext.PermanentlySuppressCallsignCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                         <MenuItem Header="Release suppression" Command="{Binding PlacementTarget.DataContext.ReleaseSuppressionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />

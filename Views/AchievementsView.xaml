@@ -1,0 +1,180 @@
+<UserControl x:Class="JtdxAutoResume.V3.Views.AchievementsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,10" Padding="14,11">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="370" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="ACHIEVEMENTS" Style="{StaticResource SectionEyebrow}" />
+                    <TextBlock Text="Your complete DXCC picture" Style="{StaticResource WorkspaceTitle}" Margin="0,2,0,0" />
+                    <TextBlock Text="Every current DXCC entity, whether it is needed, worked without LoTW confirmation, or LoTW confirmed."
+                               Foreground="{StaticResource AppTextMuted}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Margin="18,0,0,0">
+                    <TextBlock Text="DISPLAY CALLSIGN LOG" Style="{StaticResource SectionEyebrow}" />
+                    <DockPanel Margin="0,4,0,0">
+                        <Button DockPanel.Dock="Right" Content="Refresh" Command="{Binding RefreshAchievementsCommand}"
+                                Margin="8,0,0,0" Padding="14,6" />
+                        <ComboBox ItemsSource="{Binding Achievements.Profiles}"
+                                  DisplayMemberPath="DisplayLabel"
+                                  SelectedValuePath="Key"
+                                  SelectedValue="{Binding Achievements.SelectedProfileKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  Padding="8,5" />
+                    </DockPanel>
+                    <TextBlock Text="{Binding Achievements.ProfileSummary}" Foreground="{StaticResource AppTextMuted}"
+                               TextWrapping="Wrap" Margin="0,4,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <UniformGrid Grid.Row="1" Columns="4" Margin="0,0,0,10">
+            <Border Style="{StaticResource PanelBorder}" Margin="0,0,6,0" Background="#E8F7EE">
+                <StackPanel>
+                    <TextBlock Text="LoTW CONFIRMED" Style="{StaticResource SectionEyebrow}" />
+                    <TextBlock Text="{Binding Achievements.LotwConfirmedEntities}" FontSize="27" FontWeight="SemiBold" Foreground="#166534" />
+                    <TextBlock Text="{Binding Achievements.ProgressDisplay, StringFormat={}{0} of the current DXCC list}" Foreground="#39714C" />
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource PanelBorder}" Margin="2,0,4,0" Background="#FFF7D6">
+                <StackPanel>
+                    <TextBlock Text="WORKED — AWAITING LoTW" Style="{StaticResource SectionEyebrow}" />
+                    <TextBlock Text="{Binding Achievements.WorkedUnconfirmedEntities}" FontSize="27" FontWeight="SemiBold" Foreground="#92400E" />
+                    <TextBlock Text="Entities worked but not LoTW confirmed" Foreground="#8A5A22" />
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource PanelBorder}" Margin="4,0,2,0" Background="#F7F9FB">
+                <StackPanel>
+                    <TextBlock Text="STILL NEEDED" Style="{StaticResource SectionEyebrow}" />
+                    <TextBlock Text="{Binding Achievements.NeededEntities}" FontSize="27" FontWeight="SemiBold" Foreground="#334155" />
+                    <TextBlock Text="Current entities with no matching QSO" Foreground="{StaticResource AppTextMuted}" />
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource PanelBorder}" Margin="6,0,0,0" Background="#EEF5FB">
+                <StackPanel>
+                    <TextBlock Text="PROFILE QSOs" Style="{StaticResource SectionEyebrow}" />
+                    <TextBlock Text="{Binding Achievements.ProfileQsoCount, StringFormat={}{0:N0}}" FontSize="27" FontWeight="SemiBold" Foreground="#1D4F73" />
+                    <TextBlock Text="{Binding Achievements.LastRefreshedDisplay}" Foreground="{StaticResource AppTextMuted}" />
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <Border Grid.Row="2" Style="{StaticResource PanelBorder}" Margin="0,0,0,10" Padding="12,9">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="280" />
+                    <ColumnDefinition Width="230" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Search" FontWeight="SemiBold" />
+                    <TextBox Text="{Binding Achievements.SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="0,3,12,0" ToolTip="Search by country, DXCC number or difficulty band." />
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="Show" FontWeight="SemiBold" />
+                    <ComboBox ItemsSource="{Binding Achievements.StatusFilters}"
+                              SelectedItem="{Binding Achievements.SelectedStatusFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              Margin="0,3,12,0" Padding="6,4" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Achievements.VisibleSummary}" FontWeight="SemiBold" />
+                    <TextBlock Text="Decodes seen counts every reception; unique calls counts different stations. Click a QSO count, or double-click any row, for its complete QSO history."
+                               Foreground="{StaticResource AppTextMuted}" TextWrapping="Wrap" Margin="0,3,12,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                    <TextBlock Text="Club Log rank: 1 = most difficult" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                    <TextBlock Text="Bundled Club Log / UK desirability list" Foreground="{StaticResource AppTextMuted}" HorizontalAlignment="Right" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="3" Style="{StaticResource PanelBorder}" Padding="0">
+            <DataGrid x:Name="AchievementsGrid"
+                      ItemsSource="{Binding Achievements.DxccRows}"
+                      MouseDoubleClick="AchievementsGrid_MouseDoubleClick"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      EnableRowVirtualization="True"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling">
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow">
+                        <Setter Property="Background" Value="White" />
+                        <Setter Property="Foreground" Value="{StaticResource AppText}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding StatusKey}" Value="LotwConfirmed">
+                                <Setter Property="Background" Value="#DCFCE7" />
+                                <Setter Property="Foreground" Value="#14532D" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding StatusKey}" Value="WorkedUnconfirmed">
+                                <Setter Property="Background" Value="#FFF7D6" />
+                                <Setter Property="Foreground" Value="#78350F" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding SeenButNeeded}" Value="True">
+                                <Setter Property="Background" Value="#EAF4FF" />
+                                <Setter Property="Foreground" Value="#1E4F78" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.RowStyle>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Club Log rank" Binding="{Binding ClubLogRankDisplay}" SortMemberPath="ClubLogRank" Width="90" />
+                    <DataGridTextColumn Header="DXCC" Binding="{Binding DxccNumber}" Width="58" />
+                    <DataGridTextColumn Header="Country / entity" Binding="{Binding EntityName}" Width="170" />
+                    <DataGridTextColumn Header="Difficulty" Binding="{Binding DifficultyBand}" Width="95" />
+                    <DataGridTextColumn Header="UK score" Binding="{Binding UKDesirabilityDisplay}" SortMemberPath="UKDesirability" Width="65" />
+                    <DataGridTextColumn Header="Decodes seen" Binding="{Binding SeenCount}" Width="82" />
+                    <DataGridTextColumn Header="Unique calls" Binding="{Binding SeenCallCount}" Width="78" />
+                    <DataGridTemplateColumn Header="QSOs" SortMemberPath="QsoCount" Width="52">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Click="QsoCount_Click" Background="Transparent" BorderThickness="0" Padding="3,0"
+                                        Foreground="#1D4F73" Cursor="Hand" ToolTip="Open all QSOs for this DXCC">
+                                    <TextBlock Text="{Binding QsoCount}" TextDecorations="Underline" />
+                                </Button>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Unconfirmed QSOs" SortMemberPath="UnconfirmedQsoCount" Width="105">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Click="QsoCount_Click" Background="Transparent" BorderThickness="0" Padding="3,0"
+                                        Foreground="#1D4F73" Cursor="Hand" ToolTip="Open all QSOs for this DXCC">
+                                    <TextBlock Text="{Binding UnconfirmedQsoCount}" TextDecorations="Underline" />
+                                </Button>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="LoTW QSOs" SortMemberPath="LotwConfirmedQsoCount" Width="75">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Click="QsoCount_Click" Background="Transparent" BorderThickness="0" Padding="3,0"
+                                        Foreground="#1D4F73" Cursor="Hand" ToolTip="Open all QSOs for this DXCC">
+                                    <TextBlock Text="{Binding LotwConfirmedQsoCount}" TextDecorations="Underline" />
+                                </Button>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Last worked" Binding="{Binding LastWorkedDisplay}" SortMemberPath="LastWorked" Width="92" />
+                    <DataGridTextColumn Header="Bands" Binding="{Binding Bands}" Width="125" />
+                    <DataGridTextColumn Header="Modes" Binding="{Binding Modes}" Width="90" />
+                    <DataGridTextColumn Header="Achievement status" Binding="{Binding StatusDisplay}" Width="*" MinWidth="145" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+    </Grid>
+</UserControl>

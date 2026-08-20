@@ -36,6 +36,7 @@ public sealed class BandAnalysisViewModel : ObservableObject
     private int _conditionsSearchIncompleteQsoThreshold;
     private int _conditionsSearchSilentMinutes;
     private int _conditionsSearchSwitchImprovementPercent;
+    private int _bandAnalysisTrendWindowHours;
     private bool _conditionsSearchUseQuickSurvey;
     private bool _conditionsSearchFullSurveyWhenAmbiguous;
     private bool _conditionsSearchMoveToBestBand;
@@ -81,6 +82,7 @@ public sealed class BandAnalysisViewModel : ObservableObject
         _conditionsSearchIncompleteQsoThreshold = settings.ConditionsSearchIncompleteQsoThreshold;
         _conditionsSearchSilentMinutes = settings.ConditionsSearchSilentMinutes;
         _conditionsSearchSwitchImprovementPercent = settings.ConditionsSearchSwitchImprovementPercent;
+        _bandAnalysisTrendWindowHours = Math.Clamp(settings.BandAnalysisTrendWindowHours, 1, 6);
         _conditionsSearchUseQuickSurvey = settings.ConditionsSearchUseQuickSurvey;
         _conditionsSearchFullSurveyWhenAmbiguous = settings.ConditionsSearchFullSurveyWhenAmbiguous;
         _conditionsSearchMoveToBestBand = settings.ConditionsSearchMoveToBestBand;
@@ -210,6 +212,7 @@ public sealed class BandAnalysisViewModel : ObservableObject
     public int ConditionsSearchIncompleteQsoThreshold { get => _conditionsSearchIncompleteQsoThreshold; set => SetProperty(ref _conditionsSearchIncompleteQsoThreshold, Math.Clamp(value, 1, 10)); }
     public int ConditionsSearchSilentMinutes { get => _conditionsSearchSilentMinutes; set => SetProperty(ref _conditionsSearchSilentMinutes, Math.Clamp(value, 2, 20)); }
     public int ConditionsSearchSwitchImprovementPercent { get => _conditionsSearchSwitchImprovementPercent; set => SetProperty(ref _conditionsSearchSwitchImprovementPercent, Math.Clamp(value, 5, 100)); }
+    public int BandAnalysisTrendWindowHours { get => _bandAnalysisTrendWindowHours; set => SetProperty(ref _bandAnalysisTrendWindowHours, Math.Clamp(value, 1, 6)); }
     public bool ConditionsSearchUseQuickSurvey { get => _conditionsSearchUseQuickSurvey; set => SetProperty(ref _conditionsSearchUseQuickSurvey, value); }
     public bool ConditionsSearchFullSurveyWhenAmbiguous { get => _conditionsSearchFullSurveyWhenAmbiguous; set => SetProperty(ref _conditionsSearchFullSurveyWhenAmbiguous, value); }
     public bool ConditionsSearchMoveToBestBand { get => _conditionsSearchMoveToBestBand; set => SetProperty(ref _conditionsSearchMoveToBestBand, value); }
@@ -276,6 +279,7 @@ public sealed class BandAnalysisViewModel : ObservableObject
         settings.ConditionsSearchIncompleteQsoThreshold = ConditionsSearchIncompleteQsoThreshold;
         settings.ConditionsSearchSilentMinutes = ConditionsSearchSilentMinutes;
         settings.ConditionsSearchSwitchImprovementPercent = ConditionsSearchSwitchImprovementPercent;
+        settings.BandAnalysisTrendWindowHours = BandAnalysisTrendWindowHours;
         settings.ConditionsSearchUseQuickSurvey = ConditionsSearchUseQuickSurvey;
         settings.ConditionsSearchFullSurveyWhenAmbiguous = ConditionsSearchFullSurveyWhenAmbiguous;
         settings.ConditionsSearchMoveToBestBand = ConditionsSearchMoveToBestBand;

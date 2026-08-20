@@ -172,6 +172,10 @@
                                           PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
                                     <DataGrid.ContextMenu>
                                         <ContextMenu>
+                                            <MenuItem Header="QRZ"
+                                                      Command="{Binding PlacementTarget.Tag.LookupQrzCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                            <Separator />
                                             <MenuItem Header="CALL NOW"
                                                       Command="{Binding PlacementTarget.Tag.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                       CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />

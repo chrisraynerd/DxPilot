@@ -33,6 +33,13 @@ public sealed class SessionDxOpportunity
     public int PriorityTier { get; set; } = 99;
     public string PriorityTierName { get; set; } = "";
     public string PrimaryReason { get; set; } = "";
+    public string SelectionCategory { get; set; } = "";
+    public string SelectionNeed { get; set; } = "";
+    public string SelectionReason { get; set; } = "";
+    public string SelectionValue { get; set; } = "";
+    public string SelectionScope { get; set; } = "";
+    public string SelectionSourceRawMessage { get; set; } = "";
+    public string SelectionSourceType { get; set; } = "";
     public int BestSnr { get; set; } = int.MinValue;
     public int LastSnr { get; set; }
     public double? BestDistance { get; set; }
@@ -88,12 +95,20 @@ public sealed class SessionDxOpportunity
         Outcome.Contains("progress", StringComparison.OrdinalIgnoreCase) ? "InProgress" :
         DxccStatus is "New DXCC" or "Worked unconfirmed" ? "WantedDxcc" :
         RarityRank.HasValue ? "Rare" : "";
+    public string EffectiveCategory => string.IsNullOrWhiteSpace(SelectionCategory) ? Category : SelectionCategory;
+    public string EffectiveNeed => !string.IsNullOrWhiteSpace(SelectionNeed)
+        ? SelectionNeed
+        : EffectiveCategory.Equals("Grid", StringComparison.OrdinalIgnoreCase)
+            ? GridNeed
+            : EffectiveCategory.Equals("USA State", StringComparison.OrdinalIgnoreCase)
+                ? StateNeed
+                : Need;
     public string OpportunityClass =>
         DxccStatus == "New DXCC" ? "NewDxcc" :
         DxccStatus == "Worked unconfirmed" ? "UnconfirmedDxcc" :
-        GridNeed is "New" or "Unconfirmed" ? "NewGrid" :
-        StateNeed is "New" or "Unconfirmed" ? "NewState" :
-        Category.Equals("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase) ? "RareDxcc" :
+        EffectiveCategory.Equals("Grid", StringComparison.OrdinalIgnoreCase) && EffectiveNeed is "New" or "Unconfirmed" ? "NewGrid" :
+        EffectiveCategory.Equals("USA State", StringComparison.OrdinalIgnoreCase) && EffectiveNeed is "New" or "Unconfirmed" ? "NewState" :
+        EffectiveCategory.Equals("Rare confirmed DXCC", StringComparison.OrdinalIgnoreCase) ? "RareDxcc" :
         PriorityTier == 60 ? "BandMode" : "Heard";
     public string ActionStateClass =>
         IsPermanentlySuppressed ? "PermanentlySuppressed" :
@@ -104,7 +119,7 @@ public sealed class SessionDxOpportunity
         Outcome.Equals("In progress", StringComparison.OrdinalIgnoreCase) ? "InProgress" :
         Outcome.Equals("Called", StringComparison.OrdinalIgnoreCase) ? "Calling" :
         WasWorked ? "Worked" : "";
-    public string WantedReasonDisplay =>
+    public string WantedReasonDisplay => !string.IsNullOrWhiteSpace(SelectionReason) ? SelectionReason :
         DxccStatus == "New DXCC" ? "New DXCC" :
         DxccStatus == "Worked unconfirmed" ? "Unconfirmed DXCC" :
         GridNeed is "New" or "Unconfirmed" ? $"{GridNeed} grid {Grid}".Trim() :
@@ -116,8 +131,13 @@ public sealed class SessionDxOpportunity
 
     public string Details =>
         $"{Call} - {Entity}\n"
-        + "\nWanted reason:\n"
-        + $"{PrimaryReason}\n\n"
+        + "\nSelected for:\n"
+        + $"{WantedReasonDisplay}\n"
+        + (string.IsNullOrWhiteSpace(SelectionReason)
+            ? ""
+            : $"Category: {SelectionCategory}  Need: {SelectionNeed}  Scope: {SelectionScope}\n"
+              + $"Original source: {SelectionSourceRawMessage}\n")
+        + "\n"
         + "Seen:\n"
         + $"First seen: {FirstSeenText}\n"
         + $"Last seen: {LastSeenText}\n"

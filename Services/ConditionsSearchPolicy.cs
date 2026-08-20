@@ -23,6 +23,8 @@ public sealed record PskSurveyBandCandidate(
     int DxReachScore,
     int ActivityScore);
 
+public sealed record BandTrendResult(string Label, int Score, double? ChangePercent, DateTime? ComparedAtUtc);
+
 public static class ConditionsSearchPolicy
 {
     public static string SurveyDestinationBand(
@@ -208,5 +210,80 @@ public static class ConditionsSearchPolicy
             <= -7 => ("Easing", -5),
             _ => ("Stable", 0)
         };
+    }
+
+    public static BandTrendResult RecentTrendAgainstCurrent(
+        string band,
+        double currentWorkabilityScore,
+        IReadOnlyList<BandAnalysisHistoryEntry> history,
+        DateTime nowUtc,
+        int comparisonWindowHours)
+    {
+        var cutoff = nowUtc.AddHours(-Math.Clamp(comparisonWindowHours, 1, 6));
+        var previous = ComparableHistory(band, history, cutoff, nowUtc)
+            .OrderByDescending(entry => entry.ObservedAtUtc)
+            .FirstOrDefault();
+        if (previous == null)
+            return new BandTrendResult("No recent comparison", 0, null, null);
+
+        return DescribeRecentTrend(currentWorkabilityScore, previous.WorkabilityScore, previous.ObservedAtUtc, nowUtc);
+    }
+
+    public static BandTrendResult RecentHistoricalTrend(
+        string band,
+        IReadOnlyList<BandAnalysisHistoryEntry> history,
+        DateTime nowUtc,
+        int comparisonWindowHours)
+    {
+        var cutoff = nowUtc.AddHours(-Math.Clamp(comparisonWindowHours, 1, 6));
+        var recent = ComparableHistory(band, history, cutoff, nowUtc)
+            .OrderByDescending(entry => entry.ObservedAtUtc)
+            .Take(2)
+            .ToList();
+        if (recent.Count < 2)
+            return new BandTrendResult("No recent comparison", 0, null, null);
+
+        return DescribeRecentTrend(recent[0].WorkabilityScore, recent[1].WorkabilityScore, recent[1].ObservedAtUtc, recent[0].ObservedAtUtc);
+    }
+
+    private static IEnumerable<BandAnalysisHistoryEntry> ComparableHistory(
+        string band,
+        IReadOnlyList<BandAnalysisHistoryEntry> history,
+        DateTime cutoffUtc,
+        DateTime upperBoundUtc) =>
+        history.Where(entry => entry.Band.Equals(band, StringComparison.OrdinalIgnoreCase)
+            && entry.CompletedComparableAnalysis
+            && entry.PskMeasured
+            && entry.WorkabilityScore > 0
+            && entry.ObservedAtUtc >= cutoffUtc
+            && entry.ObservedAtUtc < upperBoundUtc.AddMilliseconds(-1));
+
+    private static BandTrendResult DescribeRecentTrend(
+        double current,
+        double previous,
+        DateTime comparedAtUtc,
+        DateTime observedAtUtc)
+    {
+        if (previous <= 0)
+            return new BandTrendResult("No recent comparison", 0, null, null);
+
+        var change = (current - previous) / previous * 100d;
+        var (word, adjustment) = change switch
+        {
+            >= 15 => ("Improving strongly", 5),
+            >= 7 => ("Improving", 2),
+            <= -15 => ("Declining", -5),
+            <= -7 => ("Easing", -2),
+            _ => ("Stable", 0)
+        };
+        var age = observedAtUtc - comparedAtUtc;
+        var ageText = age.TotalMinutes < 90
+            ? $"{Math.Max(1, Math.Round(age.TotalMinutes)):0}m ago"
+            : $"{age.TotalHours:0.0}h ago";
+        return new BandTrendResult(
+            $"{word} {change:+0;-0;0}% vs {comparedAtUtc.ToLocalTime():HH:mm} ({ageText})",
+            adjustment,
+            change,
+            comparedAtUtc);
     }
 }

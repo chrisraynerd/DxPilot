@@ -44,6 +44,8 @@ public sealed class AppSettings
     public int MaxWrongTargetNoProgressCycles { get; set; } = 2;
     public string WrongTargetActiveQsoPolicy { get; set; } = "AdoptAndMonitor";
     public int SuppressFailedTargetMinutes { get; set; } = 30;
+    public bool RecoverLateReplies { get; set; } = true;
+    public int LateReplyRecoveryMinutes { get; set; } = 10;
     public List<string> PermanentlySuppressedCallsigns { get; set; } = new();
     public int ReplyRetrySeconds { get; set; } = 45;
     public int ReplyConfirmSeconds { get; set; } = 30;
@@ -191,6 +193,7 @@ public sealed class AppSettings
     public int ConditionsSearchIncompleteQsoThreshold { get; set; } = 2;
     public int ConditionsSearchSilentMinutes { get; set; } = 4;
     public int ConditionsSearchSwitchImprovementPercent { get; set; } = 20;
+    public int BandAnalysisTrendWindowHours { get; set; } = 3;
     public bool ConditionsSearchUseQuickSurvey { get; set; } = true;
     public bool ConditionsSearchFullSurveyWhenAmbiguous { get; set; } = true;
     public bool ConditionsSearchMoveToBestBand { get; set; } = true;

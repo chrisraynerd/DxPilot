@@ -8,7 +8,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,10" Padding="12,9">
+        <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,10" Padding="12,9" Height="72">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -16,8 +16,17 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock Text="Live Grid Map" FontSize="18" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding Map.Status}" Foreground="#526577" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding Map.BasemapStatus}" Foreground="#526577" FontSize="11" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Map.Status}"
+                               Foreground="#526577"
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding Map.Status}" />
+                    <TextBlock Text="{Binding Map.BasemapStatus}"
+                               Foreground="#526577"
+                               FontSize="11"
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding Map.BasemapStatus}" />
                 </StackPanel>
                 <WrapPanel Grid.Column="1" VerticalAlignment="Center" Margin="18,0,0,0">
                     <TextBlock Text="Map style" VerticalAlignment="Center" Margin="0,0,5,7" />
@@ -116,7 +125,11 @@
                         </WrapPanel>
                         <TextBlock Margin="0,5,0,0" Foreground="#526577" FontSize="11" TextWrapping="Wrap"
                                    Text="Display only — these controls do not change DX Assist or Wanted targeting." />
-                        <TextBlock Margin="0,5,0,0" Foreground="#526577" TextWrapping="Wrap">
+                        <TextBlock Margin="0,5,0,0"
+                                   Foreground="#526577"
+                                   TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="Live map and logbook-overlay totals.">
                             <Run Text="Visible stations: " /><Run Text="{Binding Map.VisibleStationCount, Mode=OneWay}" />
                             <Run Text=" · Blue grid squares: " /><Run Text="{Binding Map.VisibleNeededGridCount, Mode=OneWay}" />
                             <Run Text=" · Session stations: " /><Run Text="{Binding Map.StationCount, Mode=OneWay}" />
@@ -182,7 +195,15 @@
                               SelectedItem="{Binding Map.SelectedStation}"
                               RowStyle="{StaticResource SemanticStationRowStyle}"
                               AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
-                              HeadersVisibility="Column" BorderThickness="0" RowHeaderWidth="0">
+                              HeadersVisibility="Column" BorderThickness="0" RowHeaderWidth="0"
+                              PreviewMouseRightButtonDown="StationGrid_PreviewMouseRightButtonDown">
+                        <DataGrid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="QRZ" Command="{Binding PlacementTarget.DataContext.LookupQrzCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <Separator />
+                                <MenuItem Header="CALL NOW" Command="{Binding PlacementTarget.DataContext.CallNowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Call" Binding="{Binding Callsign}" Width="*" />
                             <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="58" />

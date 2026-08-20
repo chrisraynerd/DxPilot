@@ -23,6 +23,87 @@ foreach (var callsign in invalidOnAirCallsigns)
         failures.Add($"Malformed callsign '{callsign}' passed the PSK survey priority guard.");
 }
 
+if (QrzProfileUrl.Build("k7pk") != "https://www.qrz.com/db/K7PK"
+    || QrzProfileUrl.Build("EA8/G4ABC") != "https://www.qrz.com/db/EA8%2FG4ABC"
+    || !string.IsNullOrWhiteSpace(QrzProfileUrl.Build("<...>")))
+{
+    failures.Add("QRZ table lookup did not create a safe normalized profile URL for ordinary and portable callsigns.");
+}
+
+var achievementResolver = new DxccResolver();
+var achievementRarity = new DxccRarityService();
+achievementRarity.Load(null, achievementResolver);
+if (achievementRarity.Diagnostics.Unmatched != 0)
+{
+    failures.Add($"Club Log rank coverage left {achievementRarity.Diagnostics.Unmatched} current DXCC names unmatched: "
+        + string.Join("; ", achievementRarity.Diagnostics.UnmatchedRows));
+}
+var englandDxcc = achievementResolver.Resolve("G1CEC")?.Code ?? "";
+var achievementCollator = new DxccAchievementCollator();
+var achievementRows = achievementCollator.Build(
+    [
+        new AdifQso
+        {
+            Call = "G4AAA", StationCallsign = "G1CEC", Dxcc = englandDxcc, Country = "England",
+            Band = "20m", Mode = "FT8", QsoDate = new DateTime(2026, 8, 1), LotwConfirmed = false
+        },
+        new AdifQso
+        {
+            Call = "G4AAB", StationCallsign = "G1CEC", Dxcc = englandDxcc, Country = "England",
+            Band = "40m", Mode = "FT8", QsoDate = new DateTime(2026, 8, 2), LotwConfirmed = true
+        }
+    ],
+    [
+        new SessionDxOpportunity
+        {
+            Call = "G4AAA", DxccNumber = englandDxcc, Entity = "England", SeenCount = 3, DirectlyHeardCount = 2
+        },
+        new SessionDxOpportunity
+        {
+            Call = "G4AAB", DxccNumber = englandDxcc, Entity = "England", SeenCount = 2, DirectlyHeardCount = 2
+        }
+    ],
+    achievementResolver.EntityDefinitions(),
+    achievementResolver,
+    achievementRarity);
+var englandAchievement = achievementRows.FirstOrDefault(row => row.DxccNumber == englandDxcc);
+if (achievementRows.Count != achievementResolver.EntityDefinitions().Select(entity => entity.DxccNumber).Distinct(StringComparer.OrdinalIgnoreCase).Count()
+    || englandAchievement == null
+    || englandAchievement.QsoCount != 2
+    || englandAchievement.UnconfirmedQsoCount != 1
+    || englandAchievement.LotwConfirmedQsoCount != 1
+    || englandAchievement.SeenCount != 5
+    || englandAchievement.SeenCallCount != 2
+    || englandAchievement.StatusKey != "LotwConfirmed")
+{
+    failures.Add("Achievements did not collate the complete DXCC list with independent history-seen, worked, unconfirmed and LoTW-confirmed counts.");
+}
+
+var bouvetAchievement = achievementRows.FirstOrDefault(row => row.DxccNumber == "24");
+if (bouvetAchievement?.ClubLogRank != 38)
+    failures.Add("Achievements did not reconcile the Club Log Bouvet Island name with DXCC 24 Bouvet and rank 38.");
+
+var achievementDetails = achievementCollator.BuildQsoDetails(
+    englandDxcc,
+    [
+        new AdifQso
+        {
+            Call = "G4AAA", StationCallsign = "G1CEC", Dxcc = englandDxcc,
+            QsoDate = new DateTime(2026, 8, 1), TimeOn = "123045", Band = "20m", Mode = "FT8",
+            Grid = "IO91", LotwConfirmed = true, Source = "Test ADIF"
+        }
+    ],
+    achievementResolver.EntityDefinitions(),
+    achievementResolver);
+if (achievementDetails.Count != 1
+    || achievementDetails[0].Call != "G4AAA"
+    || achievementDetails[0].StationCallsign != "G1CEC"
+    || achievementDetails[0].TimeDisplay != "12:30:45 UTC"
+    || !achievementDetails[0].LotwConfirmed)
+{
+    failures.Add("Achievements did not provide one unified, callsign-aware QSO history for a selected DXCC row.");
+}
+
 if (args.Contains("--psk-live", StringComparer.OrdinalIgnoreCase))
 {
     await using var pskClient = new PskReporterClient();
@@ -371,6 +452,52 @@ if (!(bool)retriableGuiFailure.Invoke(null, [SelectionFailureReason.Confirmation
     || (bool)retriableGuiFailure.Invoke(null, [SelectionFailureReason.JtdxWindowMinimized])!)
 {
     failures.Add("GUI retry classification did not limit retries to confirmation/wrong-call failures.");
+}
+
+var failedGuiSelection = new SelectionResult
+{
+    Success = false,
+    SelectionMethod = JtdxSelectionMethod.GuiGridDoubleClick,
+    SelectionActionAt = DateTime.Now,
+    FailureReason = SelectionFailureReason.JtdxSelectedWrongCall
+};
+if (!GuiSelectionSafetyPolicy.RequiresReceiveOnlyBarrier(failedGuiSelection)
+    || GuiSelectionSafetyPolicy.RequiresReceiveOnlyBarrier(new SelectionResult
+    {
+        Success = false,
+        SelectionMethod = JtdxSelectionMethod.GuiGridDoubleClick,
+        FailureReason = SelectionFailureReason.JtdxSelectedWrongCall
+    })
+    || GuiSelectionSafetyPolicy.RequiresReceiveOnlyBarrier(new SelectionResult
+    {
+        Success = false,
+        SelectionMethod = JtdxSelectionMethod.UdpReply,
+        SelectionActionAt = DateTime.Now,
+        FailureReason = SelectionFailureReason.ConfirmationTimedOut
+    }))
+{
+    failures.Add("Failed physical GUI selections were not isolated behind the receive-only safety barrier.");
+}
+
+var safetyNow = DateTime.Now;
+if (!GuiSelectionSafetyPolicy.IsConfirmedReceiveOnly(
+        new JtdxStatusMessage { ReceivedAt = safetyNow, TxEnabled = false, Transmitting = false },
+        safetyNow)
+    || GuiSelectionSafetyPolicy.IsConfirmedReceiveOnly(
+        new JtdxStatusMessage { ReceivedAt = safetyNow, TxEnabled = true, Transmitting = false },
+        safetyNow)
+    || GuiSelectionSafetyPolicy.IsConfirmedReceiveOnly(
+        new JtdxStatusMessage { ReceivedAt = safetyNow, TxEnabled = false, Transmitting = true },
+        safetyNow)
+    || GuiSelectionSafetyPolicy.IsConfirmedReceiveOnly(
+        new JtdxStatusMessage { ReceivedAt = safetyNow.AddSeconds(-4), TxEnabled = false, Transmitting = false },
+        safetyNow)
+    || GuiSelectionSafetyPolicy.IsConfirmedReceiveOnly(
+        new JtdxStatusMessage { ReceivedAt = safetyNow.AddMilliseconds(-1), TxEnabled = false, Transmitting = false },
+        safetyNow,
+        safetyNow))
+{
+    failures.Add("GUI receive-only barrier accepted enabled, transmitting, stale, or pre-click UDP state.");
 }
 
 var settingsTransferFolder = Path.Combine(
@@ -1034,10 +1161,132 @@ using (var viewModel = new MainViewModel())
         failures.Add("A repeated InQso CQ contradiction released the target instead of immediately reloading it.");
 }
 
+var finalCallAt = new DateTime(2026, 8, 16, 21, 34, 15, DateTimeKind.Utc);
+var finalGuardUntil = LateReplyRecoveryPolicy.FinalReplyGuardUntil(finalCallAt, TimeSpan.FromSeconds(30));
+if (finalGuardUntil != finalCallAt.AddSeconds(32))
+    failures.Add("The final-call guard did not retain the target through the complete TX/RX cycle plus decode allowance.");
+
+var recentK5hq = new RecentCallAttempt
+{
+    Callsign = "K5HQ",
+    Band = "15m",
+    Mode = "FT8",
+    LastAttemptUtc = finalCallAt,
+    WantedReason = "New grid EM22",
+    SourceBlock = "Wanted Grids"
+};
+var k5Reply = new DecodeMessage
+{
+    ReceivedAt = finalCallAt.AddMinutes(2),
+    Band = "15m",
+    Mode = "FT8",
+    RawText = "G1CEC K5HQ -23"
+};
+if (!LateReplyRecoveryPolicy.TryMatch(
+        k5Reply,
+        "G1CEC",
+        [recentK5hq],
+        finalCallAt.AddMinutes(2),
+        10,
+        out var matchedLateReply)
+    || !ReferenceEquals(matchedLateReply, recentK5hq))
+{
+    failures.Add("A fresh directed reply from a station genuinely called within the recovery window was not recognised.");
+}
+
+recentK5hq.Consumed = true;
+if (LateReplyRecoveryPolicy.TryMatch(k5Reply, "G1CEC", [recentK5hq], finalCallAt.AddMinutes(2), 10, out _))
+    failures.Add("Late-reply recovery reused an already-consumed call attempt.");
+recentK5hq.Consumed = false;
+
+var randomInbound = new DecodeMessage
+{
+    ReceivedAt = finalCallAt.AddMinutes(2),
+    Band = "15m",
+    Mode = "FT8",
+    RawText = "G1CEC W1RANDOM -10"
+};
+if (LateReplyRecoveryPolicy.TryMatch(randomInbound, "G1CEC", [recentK5hq], finalCallAt.AddMinutes(2), 10, out _))
+    failures.Add("Late-reply recovery accepted a random station that DX Pilot had not called.");
+
+var staleK5Reply = new DecodeMessage
+{
+    ReceivedAt = finalCallAt.AddMinutes(11),
+    Band = "15m",
+    Mode = "FT8",
+    RawText = "G1CEC K5HQ -23"
+};
+if (LateReplyRecoveryPolicy.TryMatch(staleK5Reply, "G1CEC", [recentK5hq], finalCallAt.AddMinutes(11), 10, out _))
+    failures.Add("Late-reply recovery accepted a station after its ten-minute safety window expired.");
+
+var wrongBandReply = new DecodeMessage
+{
+    ReceivedAt = finalCallAt.AddMinutes(2),
+    Band = "20m",
+    Mode = "FT8",
+    RawText = "G1CEC K5HQ -23"
+};
+if (LateReplyRecoveryPolicy.TryMatch(wrongBandReply, "G1CEC", [recentK5hq], finalCallAt.AddMinutes(2), 10, out _))
+    failures.Add("Late-reply recovery crossed radio bands instead of requiring the original band and mode.");
+
+var nonProgressMessage = new DecodeMessage
+{
+    ReceivedAt = finalCallAt.AddMinutes(2),
+    Band = "15m",
+    Mode = "FT8",
+    RawText = "G1CEC K5HQ EM22"
+};
+if (LateReplyRecoveryPolicy.TryMatch(nonProgressMessage, "G1CEC", [recentK5hq], finalCallAt.AddMinutes(2), 10, out _))
+    failures.Add("Late-reply recovery treated a non-progress grid message as a qualifying delayed report.");
+if (LateReplyRecoveryPolicy.CanInterruptCurrentTarget(true, true, false, false)
+    || LateReplyRecoveryPolicy.CanInterruptCurrentTarget(true, false, true, false)
+    || !LateReplyRecoveryPolicy.CanInterruptCurrentTarget(true, false, false, false)
+    || !LateReplyRecoveryPolicy.CanInterruptCurrentTarget(true, false, true, true))
+{
+    failures.Add("Late-reply interruption did not protect active QSOs and current New DXCC priority correctly.");
+}
+
+var selectedHistory = new SessionDxOpportunity
+{
+    Call = "K5HQ",
+    Category = "Heard",
+    Need = "Heard",
+    PrimaryReason = "General DX / distance",
+    SelectionCategory = "Grid",
+    SelectionNeed = "New",
+    SelectionReason = "New grid EM22",
+    SelectionValue = "EM22"
+};
+if (selectedHistory.WantedReasonDisplay != "New grid EM22"
+    || selectedHistory.EffectiveCategory != "Grid"
+    || selectedHistory.OpportunityClass != "NewGrid")
+{
+    failures.Add("Session History did not retain the immutable Wanted selection reason after later general observations.");
+}
+
 var sourceRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 var mainWindowXaml = File.ReadAllText(Path.Combine(sourceRoot, "MainWindow.xaml"));
 var locationViewXaml = File.ReadAllText(Path.Combine(sourceRoot, "Views", "LocationView.xaml"));
 var locationViewCode = File.ReadAllText(Path.Combine(sourceRoot, "Views", "LocationView.xaml.cs"));
+var achievementsViewXaml = File.ReadAllText(Path.Combine(sourceRoot, "Views", "AchievementsView.xaml"));
+if (!mainWindowXaml.Contains("<TabItem Header=\"Achievements\">", StringComparison.Ordinal)
+    || mainWindowXaml.IndexOf("<TabItem Header=\"Settings\">", StringComparison.Ordinal)
+        >= mainWindowXaml.IndexOf("<TabItem Header=\"Achievements\">", StringComparison.Ordinal)
+    || mainWindowXaml.IndexOf("<TabItem Header=\"Achievements\">", StringComparison.Ordinal)
+        >= mainWindowXaml.IndexOf("<TabItem Header=\"Band Analysis\">", StringComparison.Ordinal)
+    || !achievementsViewXaml.Contains("Achievements.SelectedProfileKey", StringComparison.Ordinal)
+    || achievementsViewXaml.Contains("SelectedAchievementProfileKey", StringComparison.Ordinal)
+    || !achievementsViewXaml.Contains("RefreshAchievementsCommand", StringComparison.Ordinal)
+    || !achievementsViewXaml.Contains("Header=\"Decodes seen\"", StringComparison.Ordinal)
+    || !achievementsViewXaml.Contains("Header=\"Unique calls\"", StringComparison.Ordinal)
+    || !achievementsViewXaml.Contains("MouseDoubleClick=\"AchievementsGrid_MouseDoubleClick\"", StringComparison.Ordinal)
+    || !achievementsViewXaml.Contains("Header=\"Unconfirmed QSOs\"", StringComparison.Ordinal)
+    || !achievementsViewXaml.Contains("Header=\"LoTW QSOs\"", StringComparison.Ordinal)
+    || achievementsViewXaml.Contains("CALL NOW", StringComparison.Ordinal)
+    || achievementsViewXaml.Contains("StartWantedSniperCommand", StringComparison.Ordinal))
+{
+    failures.Add("Achievements was not kept as an independently filtered, manually refreshed, read-only ADIF/history display.");
+}
 if (!locationViewXaml.Contains("Columns=\"{Binding Location.PanelColumnCount}\"", StringComparison.Ordinal)
     || !locationViewXaml.Contains("<Setter Property=\"Height\" Value=\"260\" />", StringComparison.Ordinal)
     || !locationViewXaml.Contains("ColumnHeaderHeight=\"28\"", StringComparison.Ordinal)
@@ -1755,6 +2004,49 @@ if (oneMinutePassive != TimeSpan.FromSeconds(30)
 {
     failures.Add("PSK propagation timing did not preserve two fixed CQ periods or the configured passive-listening window.");
 }
+
+if (PskTxTransitionPolicy.OffConfirmationTimeout(TimeSpan.FromSeconds(4)) != TimeSpan.FromSeconds(18)
+    || PskTxTransitionPolicy.OffConfirmationTimeout(TimeSpan.FromSeconds(25)) != TimeSpan.FromSeconds(25))
+{
+    failures.Add("PSK transition cleanup did not retain a full FT8-cycle acknowledgement window.");
+}
+
+if (!PskTxTransitionPolicy.CanSafelyRetryArm(
+        startedFreshlyOff: true,
+        latestReportsActive: false,
+        freshOffReportedAfterClick: true,
+        greyPercent: 70,
+        activePercent: 0,
+        configuredMinimumGreyPercent: 60,
+        configuredMaximumActivePercent: 20)
+    || !PskTxTransitionPolicy.CanSafelyRetryArm(
+        startedFreshlyOff: true,
+        latestReportsActive: false,
+        freshOffReportedAfterClick: false,
+        greyPercent: 90,
+        activePercent: 2,
+        configuredMinimumGreyPercent: 60,
+        configuredMaximumActivePercent: 20)
+    || PskTxTransitionPolicy.CanSafelyRetryArm(
+        startedFreshlyOff: true,
+        latestReportsActive: true,
+        freshOffReportedAfterClick: true,
+        greyPercent: 95,
+        activePercent: 0,
+        configuredMinimumGreyPercent: 60,
+        configuredMaximumActivePercent: 20)
+    || PskTxTransitionPolicy.CanSafelyRetryArm(
+        startedFreshlyOff: true,
+        latestReportsActive: false,
+        freshOffReportedAfterClick: false,
+        greyPercent: 70,
+        activePercent: 15,
+        configuredMinimumGreyPercent: 60,
+        configuredMaximumActivePercent: 20))
+{
+    failures.Add("PSK Enable TX retry policy did not distinguish confirmed-off, strongly-grey and ambiguous/active toggle states.");
+}
+
 var firstProbeSlot = PskPropagationProbeTiming.SlotNumber(
     new DateTime(2026, 8, 9, 12, 0, 15, DateTimeKind.Utc),
     TimeSpan.FromSeconds(15));
@@ -1791,6 +2083,67 @@ if (!pskMetrics.Measured
     || pskMetrics.PropagationScore <= 0)
 {
     failures.Add("PSK Reporter metrics did not calculate receiver count, outward distance, SNR and propagation score.");
+}
+
+var workabilityAnalyzer = new BandWorkabilityAnalyzer();
+var weakOutwardMetrics = new PskReporterMetrics
+{
+    Measured = true, UniqueReceivers = 10, PropagationScore = 23, FarthestDistanceMiles = 618
+};
+var strongOutwardMetrics = new PskReporterMetrics
+{
+    Measured = true, UniqueReceivers = 8, PropagationScore = 78, FarthestDistanceMiles = 4_200
+};
+var weakWantedDecodes = new[] { "FN31", "EM10", "EN50", "FM18", "DM79", "EL29", "CN87" }
+    .Select((grid, index) => new DecodeMessage
+    {
+        Band = "30m", Callsign = $"K{index + 1}DX", ContactableCall = $"K{index + 1}DX",
+        TransmittedGrid = grid, IsNewGrid = true, Snr = -12, DistanceKm = 5_000 + index * 100
+    })
+    .ToList();
+var strongWantedDecodes = new[] { "FN31", "EM10", "EN50" }
+    .Select((grid, index) => new DecodeMessage
+    {
+        Band = "20m", Callsign = $"W{index + 1}DX", ContactableCall = $"W{index + 1}DX",
+        TransmittedGrid = grid, IsNewGrid = true, Snr = -12, DistanceKm = 5_000 + index * 100
+    })
+    .ToList();
+var europeanPskReports = new[] { "JO31", "JN58", "JN18", "JO65", "JN45", "JO21", "JN88", "JO40", "JN06", "JO90" }
+    .Select((grid, index) => new PskReporterSpot { Band = "30m", Mode = "FT8", ReceiverCallsign = $"DL{index}RX", ReceiverLocator = grid })
+    .ToList();
+var northAmericanPskReports = new[] { "FN31", "EM10", "EN50", "FM18", "DM79", "EL29", "CN87", "FN42" }
+    .Select((grid, index) => new PskReporterSpot { Band = "20m", Mode = "FT8", ReceiverCallsign = $"K{index}RX", ReceiverLocator = grid })
+    .ToList();
+var weakWorkability = workabilityAnalyzer.Analyze(
+    "30m", "IO83up", weakWantedDecodes, europeanPskReports,
+    new BandQualitySnapshot { Band = "30m", WantedStations = 7, ActivityScore = 86, DxReachScore = 37 },
+    weakOutwardMetrics, HuntingOperatingMode.WantedSniper, new BandPerformanceEvidence(8, 1, 0));
+var strongWorkability = workabilityAnalyzer.Analyze(
+    "20m", "IO83up", strongWantedDecodes, northAmericanPskReports,
+    new BandQualitySnapshot { Band = "20m", WantedStations = 3, ActivityScore = 70, DxReachScore = 60 },
+    strongOutwardMetrics, HuntingOperatingMode.WantedSniper, new BandPerformanceEvidence(6, 3, 1));
+var absoluteNewDxccWorkability = workabilityAnalyzer.Analyze(
+    "17m", "IO83up", [], [],
+    new BandQualitySnapshot { Band = "17m", NewDxccStations = 1 },
+    new PskReporterMetrics { Measured = true, UniqueReceivers = 0, PropagationScore = 0 },
+    HuntingOperatingMode.WantedSniper, new BandPerformanceEvidence());
+if (weakWorkability.PskViabilityPercent >= 50
+    || weakWorkability.PathMatchPercent >= strongWorkability.PathMatchPercent
+    || weakWorkability.Score >= strongWorkability.Score
+    || weakWorkability.DistinctOpportunities != 7
+    || strongWorkability.WorkableOpportunities != 3
+    || absoluteNewDxccWorkability.Score < 10_000)
+{
+    failures.Add("Band workability did not gate busy/wanted receive results by outward PSK strength and matching geography while preserving absolute New DXCC priority.");
+}
+
+if (!PskBandRetryPolicy.CanRetryIncompleteBand(automatic: true, retryAlreadyUsed: false, verifiedCqTransmissions: 0, transmissionDefinitelyAbsent: true)
+    || PskBandRetryPolicy.CanRetryIncompleteBand(automatic: false, retryAlreadyUsed: false, verifiedCqTransmissions: 0, transmissionDefinitelyAbsent: true)
+    || PskBandRetryPolicy.CanRetryIncompleteBand(automatic: true, retryAlreadyUsed: true, verifiedCqTransmissions: 0, transmissionDefinitelyAbsent: true)
+    || PskBandRetryPolicy.CanRetryIncompleteBand(automatic: true, retryAlreadyUsed: false, verifiedCqTransmissions: 1, transmissionDefinitelyAbsent: true)
+    || PskBandRetryPolicy.CanRetryIncompleteBand(automatic: true, retryAlreadyUsed: false, verifiedCqTransmissions: 0, transmissionDefinitelyAbsent: false))
+{
+    failures.Add("Failed-band retry safety did not limit a retry to one automatic, definitely zero-transmission failure.");
 }
 
 var pskBandChoice = ConditionsSearchPolicy.ChoosePskSurveyBand(
@@ -1977,12 +2330,46 @@ var trendHistory = new List<BandAnalysisHistoryEntry>
     {
         SurveyId = "survey-test", Band = "17m", ObservedAtUtc = DateTime.UtcNow,
         SecondsObserved = 60, ActivityScore = 55, DxReachScore = 70, StartingBand = "20m", SelectedBand = "17m",
-        Decision = "Moved to 17m because DX reach improved."
+        Decision = "Moved to 17m because DX reach improved.", CompletedComparableAnalysis = true,
+        PskMeasured = true, WorkabilityScore = 68, PskViabilityPercent = 76, PathMatchPercent = 81,
+        DistinctWantedOpportunities = 3, WorkableWantedOpportunities = 2, WorkabilityAssessment = "Good two-way prospects"
     }
 };
 var emergingTrend = ConditionsSearchPolicy.Trend("17m", trendHistory);
 if (emergingTrend.Score <= 0 || !emergingTrend.Label.Contains("Emerging", StringComparison.OrdinalIgnoreCase))
     failures.Add("Band Analysis history did not identify a strongly emerging band trend.");
+
+var trendNow = DateTime.UtcNow;
+var comparableTrendHistory = new List<BandAnalysisHistoryEntry>
+{
+    new()
+    {
+        Band = "20m", ObservedAtUtc = trendNow.AddMinutes(-70), CompletedComparableAnalysis = true,
+        PskMeasured = true, WorkabilityScore = 40
+    },
+    new()
+    {
+        Band = "20m", ObservedAtUtc = trendNow.AddHours(-24), CompletedComparableAnalysis = true,
+        PskMeasured = true, WorkabilityScore = 90
+    },
+    new()
+    {
+        Band = "20m", ObservedAtUtc = trendNow.AddMinutes(-20), CompletedComparableAnalysis = false,
+        PskMeasured = true, WorkabilityScore = 95
+    }
+};
+var recentImprovement = ConditionsSearchPolicy.RecentTrendAgainstCurrent(
+    "20m", 52, comparableTrendHistory, trendNow, comparisonWindowHours: 3);
+var staleComparison = ConditionsSearchPolicy.RecentTrendAgainstCurrent(
+    "20m", 52, comparableTrendHistory, trendNow, comparisonWindowHours: 1);
+if (recentImprovement.Score <= 0
+    || !recentImprovement.Label.Contains("30%", StringComparison.Ordinal)
+    || !recentImprovement.Label.Contains("ago", StringComparison.OrdinalIgnoreCase)
+    || staleComparison.Score != 0
+    || !staleComparison.Label.Contains("No recent", StringComparison.OrdinalIgnoreCase))
+{
+    failures.Add("Band Analysis trends did not compare against the latest completed result inside the configured recent window while ignoring stale and incomplete surveys.");
+}
 
 var bandHistoryTestFolder = Path.Combine(Path.GetTempPath(), $"DXPilot-band-history-test-{Guid.NewGuid():N}");
 try
@@ -1994,6 +2381,9 @@ try
         || restoredBandHistory[^1].Band != "17m"
         || restoredBandHistory[^1].SelectedBand != "17m"
         || restoredBandHistory[^1].SurveyId != "survey-test"
+        || restoredBandHistory[^1].WorkabilityScore != 68
+        || restoredBandHistory[^1].PathMatchPercent != 81
+        || !restoredBandHistory[^1].CompletedComparableAnalysis
         || !File.Exists(bandHistoryStore.HistoryFile)
         || !File.ReadAllText(bandHistoryStore.HistoryFile).Contains("Moved to 17m", StringComparison.Ordinal))
         failures.Add("Band Analysis history JSON round-trip lost trend observations.");
@@ -2010,7 +2400,7 @@ if (failures.Count > 0)
     return 1;
 }
 
-Console.WriteLine($"PASS: CALL NOW one-shot/resume policy, configurable 5-200 row geometry/model/settings, secure settings/scheduler export-import validation, WAS-only state indexing with Alaska/Hawaii and optional DC, personal 52-row default migration, {bandCases.Length} band mappings, FT8/FT4 timing and Reply markers, binary JTDX parsing, stale-target policy, InQso CQ contradiction and no-progress safety, blank-status verification, band/mode resets, context inheritance, row-settling gate, receive-only Band Analysis full-cycle synchronisation, verified PSK Reporter parsing/probe matching/outward metrics, Conditions Search trigger/movement/New-DXCC priority, persistent emerging-band trends and quiet-long-DX scoring, optional scoped DXCC and new-grid priorities with normal-DX fallback, DX Assist opportunity colours independent of ranking tier, Session History DXCC-first universal-rank ordering, Full Archive search, semantic new-grid classification, and archive persistence round-trip.");
+Console.WriteLine($"PASS: CALL NOW one-shot/resume policy, configurable 5-200 row geometry/model/settings, secure settings/scheduler export-import validation, WAS-only state indexing with Alaska/Hawaii and optional DC, personal 52-row default migration, {bandCases.Length} band mappings, FT8/FT4 timing and Reply markers, binary JTDX parsing, stale-target policy, InQso CQ contradiction and no-progress safety, blank-status verification, band/mode resets, context inheritance, row-settling gate, receive-only Band Analysis full-cycle synchronisation, verified PSK Reporter parsing/probe matching/outward metrics, two-way band workability with geographic path gating, recent comparable trends, safe failed-band-only retry, Conditions Search trigger/movement/New-DXCC priority, quiet-long-DX scoring, optional scoped DXCC and new-grid priorities with normal-DX fallback, DX Assist opportunity colours independent of ranking tier, Session History DXCC-first universal-rank ordering, Full Archive search, semantic new-grid classification, and archive persistence round-trip.");
 return 0;
 
 static byte[] BuildDecodePacket(string modeMarker, string message)

@@ -143,6 +143,11 @@
                             <TextBox Text="{Binding BandAnalysis.ConditionsSearchSwitchImprovementPercent, UpdateSourceTrigger=LostFocus}" />
                             <TextBlock Text="The winning band must beat the current band by this percentage." Foreground="#526577" TextWrapping="Wrap" />
                         </StackPanel>
+                        <StackPanel Margin="0,0,14,8">
+                            <TextBlock Text="Recent trend comparison window" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBox Text="{Binding BandAnalysis.BandAnalysisTrendWindowHours, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Text="Hours. Only completed comparable PSK analyses inside this window may be called improving or declining." Foreground="#526577" TextWrapping="Wrap" />
+                        </StackPanel>
                         <StackPanel Margin="0,0,0,8">
                             <TextBlock Text="Optional scheduled UTC analyses" FontWeight="SemiBold" TextWrapping="Wrap" />
                             <TextBox Text="{Binding BandAnalysis.ConditionsSearchScheduleUtc, UpdateSourceTrigger=LostFocus}" />
@@ -245,9 +250,12 @@
                             <DataGridTextColumn Header="PSK strongest" Binding="{Binding PskSnrDisplay}" IsReadOnly="True" Width="95" />
                             <DataGridTextColumn Header="PSK main area" Binding="{Binding PskMainArea}" IsReadOnly="True" Width="135" />
                             <DataGridTextColumn Header="PSK score" Binding="{Binding PskScoreDisplay}" IsReadOnly="True" Width="75" />
-                            <DataGridTextColumn Header="Trend" Binding="{Binding Trend}" IsReadOnly="True" Width="115" />
+                            <DataGridTextColumn Header="PSK viability" Binding="{Binding PskViabilityDisplay}" IsReadOnly="True" Width="85" />
+                            <DataGridTextColumn Header="Two-way match" Binding="{Binding TwoWayMatchDisplay}" IsReadOnly="True" Width="90" />
+                            <DataGridTextColumn Header="Workable wanted" Binding="{Binding WorkableOpportunitiesDisplay}" IsReadOnly="True" Width="105" />
+                            <DataGridTextColumn Header="Trend" Binding="{Binding Trend}" IsReadOnly="True" Width="215" />
                             <DataGridTextColumn Header="Choice score" Binding="{Binding ConditionsScore, StringFormat={}{0:0}}" IsReadOnly="True" Width="85" />
-                            <DataGridTextColumn Header="Assessment" Binding="{Binding Assessment}" IsReadOnly="True" Width="190" />
+                            <DataGridTextColumn Header="Workability" Binding="{Binding WorkabilityAssessment}" IsReadOnly="True" Width="190" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </StackPanel>
@@ -256,7 +264,7 @@
             <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
                 <StackPanel>
                     <TextBlock Text="Conditions history" FontSize="17" FontWeight="SemiBold" />
-                    <TextBlock Text="The 0–100 visual score combines received activity, DX reach, wanted opportunities and PSK propagation. It explains change over time; it does not replace New DXCC priority or the final selection rules."
+                    <TextBlock Text="The 0–100 workability score discounts received opportunities when your CQ probes do not support the same geographical paths. Trends compare only completed PSK analyses inside the configured recent window; New DXCC remains absolute priority."
                                Margin="0,4,0,0" Foreground="#526577" TextWrapping="Wrap" />
                     <TextBlock Text="{Binding BandAnalysis.HistoryChartStatus}" Margin="0,4,0,9"
                                Foreground="#526577" TextWrapping="Wrap" />
@@ -270,6 +278,7 @@
                     <TextBlock Text="Selected band detail" FontSize="17" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding BandAnalysis.SelectedBand.Detail}" Margin="0,7,0,0" TextWrapping="Wrap" />
                     <TextBlock Text="{Binding BandAnalysis.SelectedBand.PskDetail}" Margin="0,7,0,0" TextWrapping="Wrap" Foreground="#315B75" />
+                    <TextBlock Text="{Binding BandAnalysis.SelectedBand.WorkabilityDetail}" Margin="0,7,0,0" TextWrapping="Wrap" Foreground="#0F766E" FontWeight="SemiBold" />
                 </StackPanel>
             </Border>
 

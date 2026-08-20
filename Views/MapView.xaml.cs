@@ -9,6 +9,11 @@ public partial class MapView : System.Windows.Controls.UserControl
         InitializeComponent();
     }
 
+    private void StationGrid_PreviewMouseRightButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        DataGridContextMenuHelper.SelectRightClickedRow(sender, e);
+    }
+
     private void WorldView_Click(object sender, System.Windows.RoutedEventArgs e)
     {
         LiveMap.ShowWorld();
