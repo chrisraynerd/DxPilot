@@ -4,7 +4,20 @@
 FT8/FT4 decodes and can select wanted DXCC entities, grids, US states and
 configured geographical areas.
 
-The current stable release is **v4.1.0**. Wanted Sniper now supports callsign-specific
+The current release is **v4.3.0**. DX Pilot now downloads and caches the official LoTW
+station-activity directory, displays a gold star beside active LoTW users throughout the
+application, and prefers a LoTW user when Wanted Sniper chooses between otherwise equal
+wanted opportunities. Existing category and New DXCC priority remain authoritative.
+Band Analysis retains successful band measurements when retrying a failed band, separates
+direct on-air grid evidence from QRZ profile data, and handles manual New DXCC alerts without
+unnecessarily stopping a manual survey. Locked-target acquisition also refreshes a queued CQ
+during receive before relying on the existing in-slot correction.
+
+The previous stable release was **v4.2.0**. It added the Achievements workspace, complete
+DXCC progress and QSO drill-down, conditions-history intelligence, and stronger New DXCC
+protection throughout an active exchange.
+
+Version **v4.1.0** introduced callsign-specific
 achievement profiles built from the ADIF `STATION_CALLSIGN` field, so operators can
 review awards across every callsign or ask what is new to one current or former identity.
 The selected profile remains visibly identified by a **PROFILE LOCKED** panel whenever

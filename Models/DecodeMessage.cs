@@ -1,7 +1,16 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace JtdxAutoResume.V3.Models;
 
-public sealed class DecodeMessage
+public sealed class DecodeMessage : INotifyPropertyChanged, ILotwUserDisplay
 {
+    private bool _isLotwUser;
+    private DateTime? _lotwLastUploadUtc;
+    private string _lotwUserToolTip = "";
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
     public DateTime ReceivedAt { get; set; } = DateTime.Now;
     public TimeSpan? DecodeTime { get; set; }
     public int Snr { get; set; }
@@ -126,7 +135,31 @@ public sealed class DecodeMessage
     public bool WasCallWorkedInSelectedProfile { get; set; }
     public bool WasCallWorkedUnderAnotherProfileOnly { get; set; }
     public string WorkedCallToolTip { get; set; } = "";
+    public bool IsLotwUser
+    {
+        get => _isLotwUser;
+        set => SetLotwProperty(ref _isLotwUser, value);
+    }
+    public DateTime? LotwLastUploadUtc
+    {
+        get => _lotwLastUploadUtc;
+        set => SetLotwProperty(ref _lotwLastUploadUtc, value);
+    }
+    public string LotwUserToolTip
+    {
+        get => _lotwUserToolTip;
+        set => SetLotwProperty(ref _lotwUserToolTip, value);
+    }
     public string CountryDisplay => string.IsNullOrWhiteSpace(EntityName) ? PrimaryDisplayEntity : EntityName;
     public bool LowConfidence { get; set; }
     public string DisplayTime => DecodeTime?.ToString(@"hh\:mm\:ss") ?? ReceivedAt.ToString("HH:mm:ss");
+
+    private void SetLotwProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+            return;
+
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
 }

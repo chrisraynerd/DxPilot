@@ -6,7 +6,7 @@ using JtdxAutoResume.V3.Services;
 
 namespace JtdxAutoResume.V3.ViewModels;
 
-public sealed class MapStationViewModel : ObservableObject
+public sealed class MapStationViewModel : ObservableObject, ILotwUserDisplay
 {
     private string _grid = "";
     private string _country = "";
@@ -21,6 +21,9 @@ public sealed class MapStationViewModel : ObservableObject
     private bool _isNewState;
     private bool _isContactable;
     private string _locationSource = "Grid";
+    private bool _isLotwUser;
+    private DateTime? _lotwLastUploadUtc;
+    private string _lotwUserToolTip = "";
 
     public required string Callsign { get; init; }
     public double Latitude { get; set; }
@@ -60,6 +63,18 @@ public sealed class MapStationViewModel : ObservableObject
         : "";
     public string ActionStateClass => IsContactable ? "" : "NotContactable";
     public string LocationSource { get => _locationSource; set => SetProperty(ref _locationSource, value); }
+    public bool IsLotwUser
+    {
+        get => _isLotwUser;
+        set
+        {
+            if (SetProperty(ref _isLotwUser, value))
+                OnPropertyChanged(nameof(CallsignDisplay));
+        }
+    }
+    public DateTime? LotwLastUploadUtc { get => _lotwLastUploadUtc; set => SetProperty(ref _lotwLastUploadUtc, value); }
+    public string LotwUserToolTip { get => _lotwUserToolTip; set => SetProperty(ref _lotwUserToolTip, value); }
+    public string CallsignDisplay => IsLotwUser ? $"{Callsign} ★" : Callsign;
     public string Age => FormatAge(DateTime.Now - LastHeard);
 
     public void RefreshAge() => OnPropertyChanged(nameof(Age));
@@ -431,6 +446,9 @@ public sealed class MapViewModel : ObservableObject, IDisposable
             : currentProfile;
         station.ApplyOpportunityColours(ColourScope, ColourDxcc, ColourGrid, ColourState);
         station.LocationSource = source;
+        station.IsLotwUser = decode.IsLotwUser;
+        station.LotwLastUploadUtc = decode.LotwLastUploadUtc;
+        station.LotwUserToolTip = decode.LotwUserToolTip;
         while (Stations.Count > MaximumStations)
         {
             var removed = Stations[^1];
@@ -449,6 +467,8 @@ public sealed class MapViewModel : ObservableObject, IDisposable
     {
         ClearLiveStations("Map cleared. Waiting for new JTDX decodes.");
     }
+
+    public void RefreshStationVisuals() => RaiseMapChanged();
 
     public void ClearForBandChange(string previousBand, string newBand)
     {

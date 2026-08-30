@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace JtdxAutoResume.V3.Models;
 
-public sealed class WantedItem : INotifyPropertyChanged
+public sealed class WantedItem : INotifyPropertyChanged, ILotwUserDisplay
 {
     private DateTime _lastSeenUtc = DateTime.UtcNow;
     private WantedActionabilityStatus _actionabilityStatus = WantedActionabilityStatus.Other;
@@ -16,6 +16,9 @@ public sealed class WantedItem : INotifyPropertyChanged
     private bool _wasCallWorkedInSelectedProfile;
     private bool _wasCallWorkedUnderAnotherProfileOnly;
     private string _workedCallToolTip = "";
+    private bool _isLotwUser;
+    private DateTime? _lotwLastUploadUtc;
+    private string _lotwUserToolTip = "";
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -84,6 +87,39 @@ public sealed class WantedItem : INotifyPropertyChanged
                 return;
 
             _workedCallToolTip = value;
+            OnPropertyChanged();
+        }
+    }
+    public bool IsLotwUser
+    {
+        get => _isLotwUser;
+        set
+        {
+            if (_isLotwUser == value)
+                return;
+            _isLotwUser = value;
+            OnPropertyChanged();
+        }
+    }
+    public DateTime? LotwLastUploadUtc
+    {
+        get => _lotwLastUploadUtc;
+        set
+        {
+            if (_lotwLastUploadUtc == value)
+                return;
+            _lotwLastUploadUtc = value;
+            OnPropertyChanged();
+        }
+    }
+    public string LotwUserToolTip
+    {
+        get => _lotwUserToolTip;
+        set
+        {
+            if (_lotwUserToolTip == value)
+                return;
+            _lotwUserToolTip = value;
             OnPropertyChanged();
         }
     }

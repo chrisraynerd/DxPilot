@@ -51,7 +51,16 @@
                     </Style>
                 </DataGrid.RowStyle>
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Callsign" Binding="{Binding Call}" Width="92" />
+                    <DataGridTemplateColumn Header="Callsign" Width="105">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Call}" VerticalAlignment="Center" />
+                                    <TextBlock Style="{StaticResource LotwCallsignMarkerStyle}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Your callsign" Binding="{Binding StationCallsign}" Width="95" />
                     <DataGridTextColumn Header="Date" Binding="{Binding DateDisplay}" SortMemberPath="QsoDate" Width="100" />
                     <DataGridTextColumn Header="Time" Binding="{Binding TimeDisplay}" Width="95" />

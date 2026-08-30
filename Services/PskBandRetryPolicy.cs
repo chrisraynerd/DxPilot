@@ -2,16 +2,16 @@ namespace JtdxAutoResume.V3.Services;
 
 public static class PskBandRetryPolicy
 {
-    // A band may be measured again only when an automatic analysis has clear
-    // evidence that no CQ left the radio. Ambiguous or partial transmission
-    // evidence is deliberately treated as on-air activity.
+    // This is a new, deliberate measurement attempt after the previous attempt
+    // has ended and JTDX has been positively restored to receive-only/Tx1. It is
+    // not permission to repeat an uncertain toggle click. A completed two-CQ
+    // window is retained instead, and every genuinely incomplete band gets at
+    // most one fresh probe-pair attempt.
     public static bool CanRetryIncompleteBand(
-        bool automatic,
         bool retryAlreadyUsed,
-        int verifiedCqTransmissions,
-        bool transmissionDefinitelyAbsent) =>
-        automatic
-        && !retryAlreadyUsed
-        && verifiedCqTransmissions == 0
-        && transmissionDefinitelyAbsent;
+        bool safeStateRestored,
+        bool completedProbeAvailable) =>
+        !retryAlreadyUsed
+        && safeStateRestored
+        && !completedProbeAvailable;
 }

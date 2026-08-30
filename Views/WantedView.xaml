@@ -144,7 +144,7 @@
                               FontWeight="SemiBold"
                               Margin="10,0,0,0"
                               VerticalAlignment="Center"
-                              ToolTip="When enabled, an active never-worked or worked-but-unconfirmed DXCC ignores normal call-attempt and no-progress limits and remains locked until it replies, is logged, or goes stale. Wrong-target and QSO-stage safety limits still apply." />
+                              ToolTip="When enabled, an active never-worked or worked-but-unconfirmed DXCC remains protected throughout calling and the complete exchange. Normal call-attempt, report-repeat and no-progress limits do not release it while it is still being heard; logging, genuine staleness, Stop All and hard TX safety still apply." />
                 </WrapPanel>
             </DockPanel>
         </Border>

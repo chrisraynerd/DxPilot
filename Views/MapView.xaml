@@ -151,7 +151,22 @@
                     </Border.Style>
                     <StackPanel>
                         <DockPanel>
-                            <TextBlock Text="{Binding Map.SelectedStation.Callsign}" FontSize="18" FontWeight="Bold" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Map.SelectedStation.Callsign}" FontSize="18" FontWeight="Bold" />
+                                <TextBlock Text="★" Foreground="#D99000" FontSize="14" FontWeight="SemiBold" Margin="5,0,0,0"
+                                           VerticalAlignment="Center" ToolTip="{Binding Map.SelectedStation.LotwUserToolTip}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Map.SelectedStation.IsLotwUser}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
                             <TextBlock DockPanel.Dock="Right" Text="{Binding Map.SelectedStation.Snr, StringFormat={}{0:+0;-0;0} dB}" VerticalAlignment="Center" />
                         </DockPanel>
                         <TextBlock Foreground="#526577" Margin="0,2,0,6">
@@ -205,7 +220,16 @@
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Call" Binding="{Binding Callsign}" Width="*" />
+                            <DataGridTemplateColumn Header="Call" Width="*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Callsign}" VerticalAlignment="Center" />
+                                            <TextBlock Style="{StaticResource LotwCallsignMarkerStyle}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn Header="Grid" Binding="{Binding Grid}" Width="58" />
                             <DataGridTextColumn Header="SNR" Binding="{Binding Snr}" Width="44" />
                             <DataGridTextColumn Header="Reply" Binding="{Binding ContactabilityText}" Width="42" />

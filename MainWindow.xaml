@@ -155,6 +155,32 @@
             </Grid>
         </Border>
 
+        <Border DockPanel.Dock="Top" Padding="16,9" Background="#F3E8FF" BorderBrush="#7C3AED" BorderThickness="0,0,0,2">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding BandAnalysis.NewDxccAlertVisible}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Background="#6D28D9" CornerRadius="18" Padding="11,5" Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="NEW DXCC SEEN" Foreground="White" FontWeight="Bold" />
+                </Border>
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="{Binding BandAnalysis.NewDxccAlertTitle}" Foreground="#4C1D95" FontWeight="Bold" FontSize="15" />
+                    <TextBlock Text="{Binding BandAnalysis.NewDxccAlertMessage}" Foreground="#581C87" TextWrapping="Wrap" Margin="0,2,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <Expander DockPanel.Dock="Top"
                   Header="Station colour legend"
                   IsExpanded="False"

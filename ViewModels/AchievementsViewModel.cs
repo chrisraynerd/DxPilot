@@ -23,6 +23,8 @@ public sealed class AchievementsViewModel : ObservableObject
     private int _profileQsoCount;
     private DateTime _lastRefreshed;
 
+    public Func<string, LotwUserActivity?>? LotwActivityLookup { get; set; }
+
     public ObservableCollection<CallsignLogProfile> Profiles { get; } = new();
     public ObservableCollection<AchievementDxccRow> DxccRows { get; } = new();
     public IReadOnlyList<string> StatusFilters { get; } =
@@ -122,6 +124,18 @@ public sealed class AchievementsViewModel : ObservableObject
         var qsos = _resolver == null
             ? Array.Empty<AchievementQsoDetail>()
             : _collator.BuildQsoDetails(row.DxccNumber, _profileQsos, _entities, _resolver);
+        if (LotwActivityLookup != null)
+        {
+            foreach (var qso in qsos)
+            {
+                var activity = LotwActivityLookup(qso.Call);
+                if (activity == null)
+                    continue;
+                qso.IsLotwUser = true;
+                qso.LotwLastUploadUtc = activity.LastUploadUtc;
+                qso.LotwUserToolTip = activity.ToolTip;
+            }
+        }
         return new AchievementDxccDetailViewModel
         {
             Entity = row,

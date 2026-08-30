@@ -1,7 +1,16 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace JtdxAutoResume.V3.Models;
 
-public sealed class SessionDxOpportunity
+public sealed class SessionDxOpportunity : INotifyPropertyChanged, ILotwUserDisplay
 {
+    private bool _isLotwUser;
+    private DateTime? _lotwLastUploadUtc;
+    private string _lotwUserToolTip = "";
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
     public string SessionId { get; set; } = "";
     public DateTime SessionStartedUtc { get; set; }
     public string OpportunityId { get; set; } = "";
@@ -13,6 +22,21 @@ public sealed class SessionDxOpportunity
     public bool WasCallWorkedInSelectedProfile { get; set; }
     public bool WasCallWorkedUnderAnotherProfileOnly { get; set; }
     public string WorkedCallToolTip { get; set; } = "";
+    public bool IsLotwUser
+    {
+        get => _isLotwUser;
+        set => SetLotwProperty(ref _isLotwUser, value);
+    }
+    public DateTime? LotwLastUploadUtc
+    {
+        get => _lotwLastUploadUtc;
+        set => SetLotwProperty(ref _lotwLastUploadUtc, value);
+    }
+    public string LotwUserToolTip
+    {
+        get => _lotwUserToolTip;
+        set => SetLotwProperty(ref _lotwUserToolTip, value);
+    }
     public int? UniversalRank { get; set; }
     public string RankText { get; set; } = "";
     public string JtdxRow { get; set; } = "";
@@ -171,5 +195,14 @@ public sealed class SessionDxOpportunity
         copy.RawMessages = new List<string>(RawMessages);
         copy.Timeline = new List<string>(Timeline);
         return copy;
+    }
+
+    private void SetLotwProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+            return;
+
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

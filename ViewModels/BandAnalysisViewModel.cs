@@ -51,6 +51,9 @@ public sealed class BandAnalysisViewModel : ObservableObject
     private string _analysisBannerMessage = "";
     private string _analysisBannerPhase = "";
     private string _analysisBannerTone = "Pending";
+    private bool _newDxccAlertVisible;
+    private string _newDxccAlertTitle = "";
+    private string _newDxccAlertMessage = "";
     private IReadOnlyList<BandAnalysisChartSeries> _historyChartSeries = Array.Empty<BandAnalysisChartSeries>();
     private string _historyChartStatus = "Complete a Band Analysis to begin the conditions graph.";
 
@@ -225,6 +228,9 @@ public sealed class BandAnalysisViewModel : ObservableObject
     public string AnalysisBannerMessage { get => _analysisBannerMessage; set => SetProperty(ref _analysisBannerMessage, value); }
     public string AnalysisBannerPhase { get => _analysisBannerPhase; set => SetProperty(ref _analysisBannerPhase, value); }
     public string AnalysisBannerTone { get => _analysisBannerTone; set => SetProperty(ref _analysisBannerTone, value); }
+    public bool NewDxccAlertVisible { get => _newDxccAlertVisible; set => SetProperty(ref _newDxccAlertVisible, value); }
+    public string NewDxccAlertTitle { get => _newDxccAlertTitle; set => SetProperty(ref _newDxccAlertTitle, value); }
+    public string NewDxccAlertMessage { get => _newDxccAlertMessage; set => SetProperty(ref _newDxccAlertMessage, value); }
     public IReadOnlyList<BandAnalysisChartSeries> HistoryChartSeries
     {
         get => _historyChartSeries;
@@ -251,6 +257,20 @@ public sealed class BandAnalysisViewModel : ObservableObject
     {
         AnalysisBannerVisible = false;
         AnalysisBannerPhase = "";
+    }
+
+    public void ShowNewDxccAlert(string title, string message)
+    {
+        NewDxccAlertTitle = title;
+        NewDxccAlertMessage = message;
+        NewDxccAlertVisible = true;
+    }
+
+    public void ClearNewDxccAlert()
+    {
+        NewDxccAlertVisible = false;
+        NewDxccAlertTitle = "";
+        NewDxccAlertMessage = "";
     }
 
     public void UpdateConditionIndicator(string key, double remainingPercent, string detail, bool active = true)

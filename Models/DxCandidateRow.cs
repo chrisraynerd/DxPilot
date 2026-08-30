@@ -2,8 +2,12 @@ using System.ComponentModel;
 
 namespace JtdxAutoResume.V3.Models;
 
-public sealed class DxCandidateRow : INotifyPropertyChanged
+public sealed class DxCandidateRow : INotifyPropertyChanged, ILotwUserDisplay
 {
+    private bool _isLotwUser;
+    private DateTime? _lotwLastUploadUtc;
+    private string _lotwUserToolTip = "";
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public string JtdxRow { get; set; } = "";
@@ -14,6 +18,21 @@ public sealed class DxCandidateRow : INotifyPropertyChanged
     public bool WasCallWorkedInSelectedProfile { get; set; }
     public bool WasCallWorkedUnderAnotherProfileOnly { get; set; }
     public string WorkedCallToolTip { get; set; } = "";
+    public bool IsLotwUser
+    {
+        get => _isLotwUser;
+        set => UpdateValue(nameof(IsLotwUser), _isLotwUser, value, newValue => _isLotwUser = newValue);
+    }
+    public DateTime? LotwLastUploadUtc
+    {
+        get => _lotwLastUploadUtc;
+        set => UpdateValue(nameof(LotwLastUploadUtc), _lotwLastUploadUtc, value, newValue => _lotwLastUploadUtc = newValue);
+    }
+    public string LotwUserToolTip
+    {
+        get => _lotwUserToolTip;
+        set => UpdateValue(nameof(LotwUserToolTip), _lotwUserToolTip, value, newValue => _lotwUserToolTip = newValue);
+    }
     public string Country { get; set; } = "";
     public string Continent { get; set; } = "";
     public string Iota { get; set; } = "";
@@ -71,6 +90,9 @@ public sealed class DxCandidateRow : INotifyPropertyChanged
             WorkedCallToolTip,
             source.WorkedCallToolTip,
             value => WorkedCallToolTip = value);
+        IsLotwUser = source.IsLotwUser;
+        LotwLastUploadUtc = source.LotwLastUploadUtc;
+        LotwUserToolTip = source.LotwUserToolTip;
         UpdateValue(nameof(Country), Country, source.Country, value => Country = value);
         UpdateValue(nameof(Continent), Continent, source.Continent, value => Continent = value);
         UpdateValue(nameof(Iota), Iota, source.Iota, value => Iota = value);

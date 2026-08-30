@@ -16,4 +16,7 @@ public sealed class AchievementQsoDetail
     public string PaperDisplay { get; init; } = "No";
     public string EqslDisplay { get; init; } = "No";
     public string Source { get; init; } = "—";
+    public bool IsLotwUser { get; set; }
+    public DateTime? LotwLastUploadUtc { get; set; }
+    public string LotwUserToolTip { get; set; } = "";
 }

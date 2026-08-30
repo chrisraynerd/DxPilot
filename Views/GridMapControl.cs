@@ -385,7 +385,7 @@ public sealed class GridMapControl : MapControl
         {
             var label = new LabelStyle
             {
-                Text = station.Callsign,
+                Text = station.CallsignDisplay,
                 ForeColor = MapColor.FromString("#172331"),
                 BackColor = new MapBrush(MapColor.White),
                 BorderColor = MapColor.FromString("#475B6B"),
@@ -746,7 +746,9 @@ public sealed class GridMapControl : MapControl
         _hoveredCallsign = callsign;
         ToolTip = station == null
             ? null
-            : $"{station.Callsign}{(station.Callsign.Equals(Model?.ActiveCallsign, StringComparison.OrdinalIgnoreCase) ? " — CURRENTLY CALLING" : "")}\nDXCC: {(string.IsNullOrWhiteSpace(station.Country) ? "Unknown" : station.Country)}\n{station.Grid} · {station.Band} {station.Mode} · {station.Snr:+0;-0;0} dB\n{(station.IsContactable ? "Contactable now" : "Not currently contactable")}";
+            : $"{station.CallsignDisplay}{(station.Callsign.Equals(Model?.ActiveCallsign, StringComparison.OrdinalIgnoreCase) ? " — CURRENTLY CALLING" : "")}"
+              + $"{(station.IsLotwUser ? $"\n{station.LotwUserToolTip}" : "")}"
+              + $"\nDXCC: {(string.IsNullOrWhiteSpace(station.Country) ? "Unknown" : station.Country)}\n{station.Grid} · {station.Band} {station.Mode} · {station.Snr:+0;-0;0} dB\n{(station.IsContactable ? "Contactable now" : "Not currently contactable")}";
     }
 
     private int MarkerPriority(MapStationViewModel station)

@@ -311,16 +311,34 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="LotwCallsignMarkerStyle" TargetType="TextBlock">
+            <Setter Property="Text" Value="★" />
+            <Setter Property="Foreground" Value="#D99000" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="4,0,0,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Setter Property="ToolTipService.ShowDuration" Value="20000" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsLotwUser}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Setter Property="ToolTip" Value="{Binding LotwUserToolTip}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
         <DataTemplate x:Key="WorkedCallsignCallTemplate">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="{Binding Call}" Style="{StaticResource WorkedCallsignTextStyle}" />
                 <TextBlock Style="{StaticResource WorkedOtherCallsignMarkerStyle}" />
+                <TextBlock Style="{StaticResource LotwCallsignMarkerStyle}" />
             </StackPanel>
         </DataTemplate>
         <DataTemplate x:Key="WorkedCallsignContactableCallTemplate">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="{Binding ContactableCall}" Style="{StaticResource WorkedCallsignTextStyle}" />
                 <TextBlock Style="{StaticResource WorkedOtherCallsignMarkerStyle}" />
+                <TextBlock Style="{StaticResource LotwCallsignMarkerStyle}" />
             </StackPanel>
         </DataTemplate>
         <Style x:Key="SemanticStationRowStyle" TargetType="DataGridRow">

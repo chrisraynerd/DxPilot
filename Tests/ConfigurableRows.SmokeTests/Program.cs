@@ -30,6 +30,118 @@ if (QrzProfileUrl.Build("k7pk") != "https://www.qrz.com/db/K7PK"
     failures.Add("QRZ table lookup did not create a safe normalized profile URL for ordinary and portable callsigns.");
 }
 
+var lotwDirectory = LotwUserDirectoryService.ParseCsv(
+    "G1CEC,2026-08-27,21:15:04\n"
+    + "G1CEC/P,2026-08-28,08:30:00\n"
+    + "K7PK,2025-02-01,12:00:00\n"
+    + "BROKEN,not-a-date,12:00:00\n");
+var exactLotw = LotwUserDirectoryService.TryResolveActivity(lotwDirectory, "g1cec/p", out var exactLotwActivity);
+var baseLotw = LotwUserDirectoryService.TryResolveActivity(lotwDirectory, "EA8/G1CEC", out var baseLotwActivity);
+if (lotwDirectory.Count != 3
+    || !exactLotw
+    || exactLotwActivity.MatchedCallsign != "G1CEC/P"
+    || exactLotwActivity.UsedBaseCallsign
+    || !baseLotw
+    || baseLotwActivity.MatchedCallsign != "G1CEC"
+    || !baseLotwActivity.UsedBaseCallsign
+    || LotwUserDirectoryService.TryResolveActivity(lotwDirectory, "2E0CCD", out _))
+{
+    failures.Add("LoTW activity directory parsing or exact/base portable callsign matching was not safe and identity-specific.");
+}
+
+var nonLotwNewDxcc = new WantedItem
+{
+    ContactableCall = "VP8NEW", IsActionable = true, PriorityTier = 10,
+    AdjustedDxValueScore = 9000, IsLotwUser = false
+};
+var lotwNewDxcc = new WantedItem
+{
+    ContactableCall = "3Y0LOTW", IsActionable = true, PriorityTier = 10,
+    AdjustedDxValueScore = 100, IsLotwUser = true
+};
+var lotwGrid = new WantedItem
+{
+    ContactableCall = "K1GRID", IsActionable = true, PriorityTier = 30,
+    AdjustedDxValueScore = 100, IsLotwUser = true
+};
+var nonLotwGrid = new WantedItem
+{
+    ContactableCall = "K2GRID", IsActionable = true, PriorityTier = 30,
+    AdjustedDxValueScore = 9000, IsLotwUser = false
+};
+if (WantedTargetPriorityPolicy.SelectBest(
+        [(lotwGrid, 2), (nonLotwNewDxcc, 0)])?.ContactableCall != "VP8NEW"
+    || WantedTargetPriorityPolicy.SelectBest(
+        [(nonLotwGrid, 2), (lotwGrid, 2)])?.ContactableCall != "K1GRID"
+    || WantedTargetPriorityPolicy.SelectBestDxcc(
+        [nonLotwNewDxcc, lotwNewDxcc])?.ContactableCall != "3Y0LOTW")
+{
+    failures.Add("Wanted selection did not preserve New DXCC/category priority while preferring a LoTW user within the same wanted priority.");
+}
+
+var queuedCqStatus = new JtdxStatusMessage
+{
+    ReceivedAt = new DateTime(2026, 8, 29, 10, 23, 15, DateTimeKind.Local),
+    TrPeriodSeconds = 15,
+    DxCall = "RI1FJL",
+    TxMessage = "CQ G1CEC IO83",
+    TxEnabled = true,
+    Transmitting = false
+};
+var transmittingCqStatus = new JtdxStatusMessage
+{
+    ReceivedAt = queuedCqStatus.ReceivedAt,
+    TrPeriodSeconds = 15,
+    DxCall = "RI1FJL",
+    TxMessage = "CQ G1CEC IO83",
+    TxEnabled = true,
+    Transmitting = true
+};
+var directedStatus = new JtdxStatusMessage
+{
+    ReceivedAt = queuedCqStatus.ReceivedAt,
+    TrPeriodSeconds = 15,
+    DxCall = "RI1FJL",
+    TxMessage = "RI1FJL G1CEC IO83",
+    TxEnabled = true,
+    Transmitting = false
+};
+if (!LockedTargetPreflightPolicy.ShouldRefreshQueuedInitialCall(
+        queuedCqStatus, "RI1FJL", true, true, false)
+    || LockedTargetPreflightPolicy.ShouldRefreshQueuedInitialCall(
+        queuedCqStatus, "RI1FJL", false, true, false)
+    || LockedTargetPreflightPolicy.ShouldRefreshQueuedInitialCall(
+        transmittingCqStatus, "RI1FJL", true, true, false)
+    || LockedTargetPreflightPolicy.ShouldRefreshQueuedInitialCall(
+        directedStatus, "RI1FJL", true, true, false)
+    || LockedTargetPreflightPolicy.SlotKey(queuedCqStatus.ReceivedAt, 15)
+        != LockedTargetPreflightPolicy.SlotKey(queuedCqStatus.ReceivedAt.AddSeconds(10), 15))
+{
+    failures.Add("Locked-target preflight did not refresh queued CQ once during RX while preserving normal directed and transmitting states.");
+}
+
+var qrzGridRow = new WantedItem
+{
+    Call = "XU7O", ContactableCall = "XU7O", GridSource = "QRZ",
+    WantedValue = "OK22", NormalizedGrid4 = "OK22", Grid = "OK22SV"
+};
+var xu7Ok21 = new DecodeMessage
+{
+    Callsign = "XU7O", ContactableCall = "XU7O", GridOwnerCall = "XU7O",
+    TransmittedGrid = "OK21", Grid = "OK21", ReceivedAt = new DateTime(2026, 8, 20, 18, 21, 30)
+};
+var xu7Ok22Mobile = new DecodeMessage
+{
+    Callsign = "XU7O", ContactableCall = "XU7O", GridOwnerCall = "XU7O",
+    TransmittedGrid = "OK22AB", Grid = "OK22AB", ReceivedAt = new DateTime(2026, 8, 20, 18, 22, 30)
+};
+if (!GridEvidencePolicy.IsConflictingQrzWantedGrid(qrzGridRow, xu7Ok21)
+    || GridEvidencePolicy.IsConflictingQrzWantedGrid(qrzGridRow, xu7Ok22Mobile)
+    || GridEvidencePolicy.MostRecentDirectGrid([xu7Ok21, xu7Ok22Mobile], "XU7O") != "OK22AB")
+{
+    failures.Add("On-air grid evidence did not supersede a conflicting QRZ Wanted Grid while preserving a later genuinely transmitted mobile grid.");
+}
+
 var achievementResolver = new DxccResolver();
 var achievementRarity = new DxccRarityService();
 achievementRarity.Load(null, achievementResolver);
@@ -914,8 +1026,83 @@ using (var viewModel = new MainViewModel())
     if (!(bool)staleCheck.Invoke(viewModel, null)!)
         failures.Add("Optional New DXCC persistence did not end after its explicit longer stale limit.");
 
+    // FR4OM regression: the stronger New-DXCC lock must survive the transition
+    // from initial calling into an active exchange. Reaching the ordinary report
+    // ceiling or QSO no-progress timer cannot release it while the station is
+    // still being decoded elsewhere in the pile-up.
+    var protectedInQsoTarget = new DxTarget
+    {
+        Decode = new DecodeMessage
+        {
+            ReceivedAt = DateTime.Now.AddMinutes(-10),
+            Callsign = "FR4TEST",
+            ContactableCall = "FR4TEST",
+            Dxcc = "453",
+            RawText = "CQ FR4TEST LG89"
+        },
+        Ranking = new CandidateRanking { DxccStatus = DxccCandidateStatus.NotWorked }
+    };
+    InvokePrivate(viewModel, "RecordLastHeard", new DecodeMessage
+    {
+        ReceivedAt = DateTime.Now,
+        Callsign = "FR4TEST",
+        ContactableCall = "FR4TEST",
+        RawText = "N9MAX FR4TEST -12"
+    });
+    SetPrivate(viewModel, "_lockedTarget", protectedInQsoTarget);
+    SetPrivateEnum(viewModel, "_huntState", "InQso");
+    SetPrivateEnum(viewModel, "_qsoStage", "TargetReportSeen");
+    SetPrivate(viewModel, "_lastQsoProgressAt", DateTime.Now.AddMinutes(-10));
+    SetPrivate(viewModel, "_reportAttemptCount", 6);
+    if (!(bool)(InvokePrivate(viewModel, "PersistentNewDxccLockApplies") ?? false))
+        failures.Add("New-DXCC persistence disappeared after the target replied and entered an active QSO.");
+    if ((bool)(InvokePrivate(viewModel, "InQsoNoProgressTimedOut") ?? true))
+        failures.Add("A fresh protected New DXCC was released by the ordinary in-QSO no-progress timer.");
+    if ((bool)(InvokePrivate(viewModel, "ReportRepeatLimitShouldRelease", 6) ?? true))
+        failures.Add("A fresh protected New DXCC was released at the ordinary report-repeat limit.");
+
+    var staleProtectedInQsoTarget = new DxTarget
+    {
+        Decode = new DecodeMessage
+        {
+            ReceivedAt = DateTime.Now.AddSeconds(-241),
+            Callsign = "P5STALE",
+            ContactableCall = "P5STALE",
+            Dxcc = "344",
+            RawText = "CQ P5STALE PM36"
+        },
+        Ranking = new CandidateRanking { DxccStatus = DxccCandidateStatus.NotWorked }
+    };
+    SetPrivate(viewModel, "_lockedTarget", staleProtectedInQsoTarget);
+    if (!(bool)(InvokePrivate(viewModel, "PersistentNewDxccHasGoneStale") ?? false)
+        || !(bool)(InvokePrivate(viewModel, "InQsoNoProgressTimedOut") ?? false))
+    {
+        failures.Add("A protected New DXCC did not become releasable after its explicit stale window expired during the QSO.");
+    }
+
+    var ordinaryInQsoTarget = new DxTarget
+    {
+        Decode = new DecodeMessage
+        {
+            ReceivedAt = DateTime.Now,
+            Callsign = "G1NORMAL",
+            ContactableCall = "G1NORMAL",
+            RawText = "G1CEC G1NORMAL -10"
+        },
+        Ranking = new CandidateRanking { DxccStatus = DxccCandidateStatus.Confirmed }
+    };
+    SetPrivate(viewModel, "_lockedTarget", ordinaryInQsoTarget);
+    if (!(bool)(InvokePrivate(viewModel, "InQsoNoProgressTimedOut") ?? false)
+        || !(bool)(InvokePrivate(viewModel, "ReportRepeatLimitShouldRelease", 6) ?? false))
+    {
+        failures.Add("The New-DXCC QSO protection incorrectly disabled ordinary report/no-progress safety for confirmed targets.");
+    }
+
     viewModel.Settings.Settings.KeepCallingNewDxccUntilStale = false;
     staleNewDxcc.Decode.ReceivedAt = DateTime.Now;
+    SetPrivate(viewModel, "_lockedTarget", staleNewDxcc);
+    SetPrivateEnum(viewModel, "_huntState", "Calling");
+    SetPrivateEnum(viewModel, "_qsoStage", "CallingInitial");
     SetPrivate(viewModel, "_targetConfirmedInJtdx", false);
     SetPrivate(viewModel, "_targetStartedAt", DateTime.Now);
     SetPrivate(viewModel, "_acquisitionAttemptCount", 0);
@@ -2064,15 +2251,22 @@ var probeWindow = new PskProbeWindow(
     "40m",
     DateTimeOffset.FromUnixTimeSeconds(1786281855).UtcDateTime,
     DateTimeOffset.FromUnixTimeSeconds(1786281870).UtcDateTime);
+var unintendedThirdCqReport = liveSpot with
+{
+    SequenceNumber = 71550000002,
+    TransmissionTimeUtc = probeWindow.SecondCqUtc.AddSeconds(30),
+    ReceiverCallsign = "K2LATE"
+};
 if (!parsedLive
     || liveSpot.ReceiverCallsign != "K1ABC"
     || liveSpot.SignalReportDb != -10
     || queriedSpots.Count != 1
     || queriedSpots[0].SignalReportDb != 3
     || !probeWindow.Matches(liveSpot, TimeSpan.FromSeconds(6))
-    || !probeWindow.Matches(queriedSpots[0], TimeSpan.FromSeconds(6)))
+    || !probeWindow.Matches(queriedSpots[0], TimeSpan.FromSeconds(6))
+    || probeWindow.Matches(unintendedThirdCqReport, TimeSpan.FromSeconds(6)))
 {
-    failures.Add("PSK Reporter live JSON/query XML parsing or exact CQ-window matching failed.");
+    failures.Add("PSK Reporter matching did not retain the two intended CQ windows while excluding a later unintended CQ.");
 }
 var pskAnalyzer = new PskReporterAnalyzer(new GridDistanceCalculator(), resolver);
 var pskMetrics = pskAnalyzer.Analyze("40m", "IO83up", [liveSpot, queriedSpots[0]], measured: true);
@@ -2137,13 +2331,19 @@ if (weakWorkability.PskViabilityPercent >= 50
     failures.Add("Band workability did not gate busy/wanted receive results by outward PSK strength and matching geography while preserving absolute New DXCC priority.");
 }
 
-if (!PskBandRetryPolicy.CanRetryIncompleteBand(automatic: true, retryAlreadyUsed: false, verifiedCqTransmissions: 0, transmissionDefinitelyAbsent: true)
-    || PskBandRetryPolicy.CanRetryIncompleteBand(automatic: false, retryAlreadyUsed: false, verifiedCqTransmissions: 0, transmissionDefinitelyAbsent: true)
-    || PskBandRetryPolicy.CanRetryIncompleteBand(automatic: true, retryAlreadyUsed: true, verifiedCqTransmissions: 0, transmissionDefinitelyAbsent: true)
-    || PskBandRetryPolicy.CanRetryIncompleteBand(automatic: true, retryAlreadyUsed: false, verifiedCqTransmissions: 1, transmissionDefinitelyAbsent: true)
-    || PskBandRetryPolicy.CanRetryIncompleteBand(automatic: true, retryAlreadyUsed: false, verifiedCqTransmissions: 0, transmissionDefinitelyAbsent: false))
+if (!PskBandRetryPolicy.CanRetryIncompleteBand(retryAlreadyUsed: false, safeStateRestored: true, completedProbeAvailable: false)
+    || PskBandRetryPolicy.CanRetryIncompleteBand(retryAlreadyUsed: true, safeStateRestored: true, completedProbeAvailable: false)
+    || PskBandRetryPolicy.CanRetryIncompleteBand(retryAlreadyUsed: false, safeStateRestored: false, completedProbeAvailable: false)
+    || PskBandRetryPolicy.CanRetryIncompleteBand(retryAlreadyUsed: false, safeStateRestored: true, completedProbeAvailable: true))
 {
-    failures.Add("Failed-band retry safety did not limit a retry to one automatic, definitely zero-transmission failure.");
+    failures.Add("Failed-band retry safety did not allow exactly one fresh probe attempt after confirmed JTDX recovery while retaining completed probe windows.");
+}
+
+if (BandSurveyPriorityPolicy.ShouldInterruptForNewDxcc(automaticSurvey: false, resumesAssistance: false)
+    || !BandSurveyPriorityPolicy.ShouldInterruptForNewDxcc(automaticSurvey: true, resumesAssistance: false)
+    || !BandSurveyPriorityPolicy.ShouldInterruptForNewDxcc(automaticSurvey: false, resumesAssistance: true))
+{
+    failures.Add("Manual Band Analysis without active assistance did not remain observational when a New DXCC was seen.");
 }
 
 var pskBandChoice = ConditionsSearchPolicy.ChoosePskSurveyBand(
