@@ -26,7 +26,8 @@ public enum HuntingOperatingMode
 {
     DxAssist,
     WantedSniper,
-    LocationHunt
+    LocationHunt,
+    Scavenger
 }
 
 public enum WantedActionabilityStatus

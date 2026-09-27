@@ -7,7 +7,9 @@ public sealed class AchievementDxccDetailViewModel
     public required AchievementDxccRow Entity { get; init; }
     public required IReadOnlyList<AchievementQsoDetail> Qsos { get; init; }
     public string ProfileDisplay { get; init; } = "";
-    public string Title => $"{Entity.EntityName} — DXCC {Entity.DxccNumber}";
+    public string Title => string.IsNullOrEmpty(Entity.StateCode)
+        ? $"{Entity.EntityName} — DXCC {Entity.DxccNumber}"
+        : $"{Entity.EntityName} — {Entity.StateCode} · USA state";
     public string Summary => Qsos.Count == 0
         ? $"No matching ADIF QSOs in {ProfileDisplay}."
         : $"{Qsos.Count:N0} QSO{(Qsos.Count == 1 ? "" : "s")} in {ProfileDisplay} · "

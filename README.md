@@ -4,8 +4,25 @@
 FT8/FT4 decodes and can select wanted DXCC entities, grids, US states and
 configured geographical areas.
 
-The current release is **v4.3.0**. DX Pilot now downloads and caches the official LoTW
-station-activity directory, displays a gold star beside active LoTW users throughout the
+The current release is **v4.4.0** — the approved layout update, Scavenger hunting and
+expanded Achievements. All four hunting modes now share a single operating header,
+Start controls, Stop All and visible achievement profile. Hunting preferences are
+collapsible, Scavenger's permitted-band cards are compact, and Settings is grouped
+and searchable. Achievements includes band-by-band DXCC and USA-state progress,
+QSO drill-down, direct ADIF import and read-only logbook checks.
+
+Download the **Windows ZIP** from [the latest release](https://github.com/chrisraynerd/DxPilot/releases/latest),
+extract it completely, then open `DXPilot-for-JTDX-G1CEC.exe`. Close any earlier DX Pilot
+copy first. Existing settings are reused from `%APPDATA%\JtdxAutoResume.V3`; do not
+delete that folder when upgrading. The ZIP includes the illustrated v4.1 baseline
+manual and the layout, Scavenger and Achievements guides covering newer features.
+
+This release packages the tested layout preview without further changes to calling
+or transmission behaviour. Independent profiles for DXCC, grids and states are still
+planned, not included. See [v4.4.0 release notes](manuals/Release-v4.4.0.md).
+
+Version **v4.3.0** introduced the automatic download and cache of the official LoTW
+station-activity directory. It displays a gold star beside active LoTW users throughout the
 application, and prefers a LoTW user when Wanted Sniper chooses between otherwise equal
 wanted opportunities. Existing category and New DXCC priority remain authoritative.
 Band Analysis retains successful band measurements when retrying a failed band, separates

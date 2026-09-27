@@ -23,6 +23,30 @@ public sealed class JtdxVisibleRowModel
 
     public long Version { get; private set; }
     public IReadOnlyList<JtdxVisibleRow> Rows => _rows;
+    public bool HasKnownClear { get; private set; }
+    public bool UsesClearedPaneOrigin { get; private set; }
+    private long _clearGeneration;
+
+    public void ResetForContext(long generation, bool bandChanged)
+    {
+        _clearGeneration = generation;
+        HasKnownClear = bandChanged;
+        UsesClearedPaneOrigin = false;
+        _rows.Clear();
+        Version++;
+    }
+
+    public bool CanLocateRows(JtdxBandActivityGridCalibration calibration) =>
+        _rows.Count >= calibration.SafeVisibleFullRowCount || (HasKnownClear && calibration.NewestRowsAtBottom);
+
+    public double RowCentreYRelative(JtdxVisibleRow row, JtdxBandActivityGridCalibration calibration)
+    {
+        // The calibrated first FULL row excludes the top row of the scrolled
+        // pane. Following a known clear, that top row is present and counted.
+        var origin = calibration.FirstFullRowCentreYRelative
+            - (UsesClearedPaneOrigin && calibration.IgnoredPartialTopRow ? calibration.RowHeight : 0);
+        return origin + row.ScreenRowIndex * calibration.RowHeight;
+    }
 
     public void Rebuild(IReadOnlyList<DecodeMessage> decodeHistory, JtdxBandActivityGridCalibration calibration)
     {
@@ -31,6 +55,7 @@ public sealed class JtdxVisibleRowModel
 
         var safeRowCount = JtdxBandActivityGridCalibration.NormalizeRowCount(calibration.SafeVisibleFullRowCount);
         var indexedDecodes = decodeHistory
+            .Where(decode => !HasKnownClear || decode.RadioContextGeneration == _clearGeneration)
             .Select((decode, index) => new { Decode = decode, Index = index })
             .ToList();
         var orderedDecodes = calibration.NewestRowsAtBottom
@@ -67,6 +92,8 @@ public sealed class JtdxVisibleRowModel
             previousCycle = cycle;
         }
 
+        UsesClearedPaneOrigin = HasKnownClear && calibration.NewestRowsAtBottom
+            && fullVisualRows.Count <= safeRowCount;
         var visible = calibration.NewestRowsAtBottom
             ? fullVisualRows.Skip(Math.Max(0, fullVisualRows.Count - safeRowCount)).ToList()
             : fullVisualRows.Take(safeRowCount).ToList();

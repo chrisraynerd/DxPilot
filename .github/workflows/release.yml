@@ -24,6 +24,15 @@ jobs:
       - name: Restore
         run: dotnet restore JtdxAutoResume.V3.csproj
 
+      - name: Verify release version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content JtdxAutoResume.V3.csproj
+          $version = $project.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ($env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Release tag does not match the application version $version."
+          }
+
       - name: Run setup wizard smoke tests
         run: dotnet run -c Release --project Tests\SetupWizard.SmokeTests\SetupWizard.SmokeTests.csproj
 
@@ -32,6 +41,15 @@ jobs:
 
       - name: Run map smoke tests
         run: dotnet run -c Release --project Tests\Map.SmokeTests\Map.SmokeTests.csproj
+
+      - name: Run receive-only Scavenger smoke tests
+        run: dotnet run -c Release --project Tests\Scavenger.SmokeTests\Scavenger.SmokeTests.csproj
+
+      - name: Run Achievements smoke tests
+        run: dotnet run -c Release --project Tests\Achievements.SmokeTests\Achievements.SmokeTests.csproj
+
+      - name: Verify layout and unchanged protected logic
+        run: dotnet run -c Release --project Tests\Presentation.SmokeTests\Presentation.SmokeTests.csproj
 
       - name: Shut down build servers
         run: dotnet build-server shutdown
@@ -72,8 +90,13 @@ jobs:
           }
           Copy-Item -LiteralPath $manualPdf.FullName `
             -Destination "$env:RUNNER_TEMP\dxpilot-publish\DX-Pilot-User-Manual.pdf" -Force
+          foreach ($guide in @('Layout-Preview-Guide.md', 'Scavenger-Preview-Guide.md', 'Achievements-Preview-Guide.md', "Release-$env:GITHUB_REF_NAME.md")) {
+            Copy-Item -LiteralPath "manuals\$guide" -Destination "$env:RUNNER_TEMP\dxpilot-publish\$guide"
+          }
           $zip = "artifacts\DXPilot-for-JTDX-$env:GITHUB_REF_NAME-win-x64.zip"
           Compress-Archive -Path "$env:RUNNER_TEMP\dxpilot-publish\*" -DestinationPath $zip -Force
+          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $(Split-Path -Leaf $zip)" | Set-Content -LiteralPath "$zip.sha256" -Encoding ascii
           "RELEASE_ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Create GitHub Release
@@ -87,6 +110,6 @@ jobs:
           $manualDocx = Get-ChildItem -LiteralPath manuals -Filter "DX_Pilot_for_JTDX_User_Manual_*.docx" -File |
             Sort-Object Name -Descending |
             Select-Object -First 1
-          gh release create $env:GITHUB_REF_NAME $env:RELEASE_ZIP $manualPdf.FullName $manualDocx.FullName `
+          gh release create $env:GITHUB_REF_NAME $env:RELEASE_ZIP "$env:RELEASE_ZIP.sha256" $manualPdf.FullName $manualDocx.FullName `
             --title "DX Pilot for JTDX $env:GITHUB_REF_NAME" `
-            --generate-notes
+            --notes-file "manuals/Release-$env:GITHUB_REF_NAME.md" --verify-tag --latest

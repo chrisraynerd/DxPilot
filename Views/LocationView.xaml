@@ -20,9 +20,7 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="LOCATION HUNT" Style="{StaticResource SectionEyebrow}"
-                               VerticalAlignment="Center" Margin="0,0,10,0" />
-                    <TextBlock Text="Choose where DX Pilot should hunt" FontSize="17"
+                    <TextBlock Text="Location Hunt" FontSize="18"
                                FontWeight="SemiBold" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding Location.Status}" Foreground="{StaticResource AppTextMuted}"
                                VerticalAlignment="Center" Margin="14,0,0,0"
@@ -30,8 +28,10 @@
                 </StackPanel>
 
                 <Expander Grid.Column="1"
-                          Header="{Binding Location.SelectedAreasDisplay, StringFormat=Choose regions - {0}}"
                           IsExpanded="False" Margin="12,0,0,0" HorizontalAlignment="Right">
+                    <Expander.Header>
+                        <TextBlock><Run Text="Hunt preferences · " /><Run Text="{Binding Location.SelectedAreasDisplay, Mode=OneWay}" /></TextBlock>
+                    </Expander.Header>
                     <Border BorderBrush="{StaticResource AppBorder}" BorderThickness="1" CornerRadius="4"
                             Background="White" Padding="10" Margin="0,6,0,0" MaxWidth="980">
                         <DockPanel>
@@ -80,40 +80,6 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <Border Grid.Row="2" Grid.ColumnSpan="2" BorderBrush="{StaticResource AppBorder}"
-                        BorderThickness="0,1,0,0" Margin="0,4,0,0" Padding="0,7,0,0">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1.2*" />
-                            <ColumnDefinition Width="1.8*" />
-                            <ColumnDefinition Width="2.5*" />
-                            <ColumnDefinition Width="1.5*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="MODE" Style="{StaticResource SectionEyebrow}" />
-                            <TextBlock Text="{Binding CurrentTargetStatus.OperatingMode}" FontWeight="SemiBold" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="LOCKED TARGET" Style="{StaticResource SectionEyebrow}" />
-                            <TextBlock Text="{Binding CurrentTargetStatus.SelectedTargetDisplay}"
-                                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="2">
-                            <TextBlock Text="CALLING / QSO SEQUENCE" Style="{StaticResource SectionEyebrow}" />
-                            <TextBlock Text="{Binding CurrentTargetStatus.AttemptCounterLabel}" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding CurrentTargetStatus.PlainStatusMessage}"
-                                       Foreground="{StaticResource AppTextMuted}"
-                                       TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="3">
-                            <TextBlock Text="TX / JTDX" Style="{StaticResource SectionEyebrow}" />
-                            <TextBlock Text="{Binding CurrentTargetStatus.TxGateStatus}"
-                                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="{Binding CurrentTargetStatus.ActualJtdxDxCall, StringFormat=JTDX target: {0}}"
-                                       Foreground="{StaticResource AppTextMuted}" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
             </Grid>
         </Border>
 

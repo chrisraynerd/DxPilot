@@ -2,6 +2,9 @@ namespace JtdxAutoResume.V3.Models;
 
 public sealed class AchievementDxccRow
 {
+    // State rows share the read-only totals and band presentation, not DXCC identity.
+    public string StateCode { get; init; } = "";
+    public IReadOnlyList<AchievementBandCell> BandCells { get; init; } = AchievementBandCell.Build([]);
     public string DxccNumber { get; init; } = "";
     public string EntityName { get; init; } = "";
     public int? ClubLogRank { get; init; }

@@ -22,6 +22,24 @@ public sealed class AchievementsViewModel : ObservableObject
     private int _neededEntities;
     private int _profileQsoCount;
     private DateTime _lastRefreshed;
+    private int _selectedAreaIndex;
+    private IReadOnlyList<AchievementDxccRow> _allStateRows = [];
+    public ObservableCollection<AchievementDxccRow> StateRows { get; } = new();
+    public int SelectedAreaIndex
+    {
+        get => _selectedAreaIndex;
+        set
+        {
+            if (!SetProperty(ref _selectedAreaIndex, value)) return;
+            UpdateTotals();
+            OnPropertyChanged(nameof(VisibleSummary));
+            OnPropertyChanged(nameof(ListDescription));
+        }
+    }
+    public string ListDescription => SelectedAreaIndex == 1 ? "of the 50 USA states" : "of the current DXCC list";
+    public string StateDataSummary { get; private set; } = "";
+    public string LogbookHealthSummary { get; private set; } = "Refresh Achievements to inspect the loaded logbook.";
+    public string CallsignCreditsSummary { get; private set; } = "";
 
     public Func<string, LotwUserActivity?>? LotwActivityLookup { get; set; }
 
@@ -76,14 +94,16 @@ public sealed class AchievementsViewModel : ObservableObject
     public DateTime LastRefreshed { get => _lastRefreshed; private set { if (SetProperty(ref _lastRefreshed, value)) OnPropertyChanged(nameof(LastRefreshedDisplay)); } }
     public string LastRefreshedDisplay => LastRefreshed == DateTime.MinValue ? "Not refreshed" : $"Refreshed {LastRefreshed:dd MMM yyyy HH:mm:ss}";
     public string ProgressDisplay => TotalEntities == 0 ? "0%" : $"{LotwConfirmedEntities * 100d / TotalEntities:0.0}%";
-    public string VisibleSummary => $"Showing {DxccRows.Count:N0} of {TotalEntities:N0} current DXCC entities";
+    public string VisibleSummary => SelectedAreaIndex == 1
+        ? $"Showing {StateRows.Count:N0} of 50 USA states"
+        : $"Showing {DxccRows.Count:N0} of {_allRows.Count:N0} current DXCC entities";
     public string ProfileSummary
     {
         get
         {
             var label = Profiles.FirstOrDefault(profile => profile.Key.Equals(SelectedProfileKey, StringComparison.OrdinalIgnoreCase))?.DisplayLabel
                 ?? SelectedProfileKey;
-            return $"Display only: {label}. This selection does not change Wanted Sniper, DX Assist or TX behaviour.";
+            return $"Using global profile: {label}. This page only displays your logbook achievements.";
         }
     }
 
@@ -102,16 +122,12 @@ public sealed class AchievementsViewModel : ObservableObject
         _resolver = resolver;
         _rarityService = rarityService;
 
-        var previousProfile = SelectedProfileKey;
         Profiles.Clear();
         foreach (var profile in profiles)
             Profiles.Add(profile);
 
-        var selected = Profiles.Any(profile => profile.Key.Equals(previousProfile, StringComparison.OrdinalIgnoreCase))
-            ? previousProfile
-            : Profiles.Any(profile => profile.Key.Equals(defaultProfileKey, StringComparison.OrdinalIgnoreCase))
-                ? defaultProfileKey
-                : StationCallsignIdentity.AllCallsignsKey;
+        var selected = Profiles.Any(profile => profile.Key.Equals(defaultProfileKey, StringComparison.OrdinalIgnoreCase))
+            ? defaultProfileKey : StationCallsignIdentity.AllCallsignsKey;
         _selectedProfileKey = selected;
         OnPropertyChanged(nameof(SelectedProfileKey));
         Refresh();
@@ -123,7 +139,9 @@ public sealed class AchievementsViewModel : ObservableObject
         var profileDisplay = profile?.DisplayLabel ?? SelectedProfileKey;
         var qsos = _resolver == null
             ? Array.Empty<AchievementQsoDetail>()
-            : _collator.BuildQsoDetails(row.DxccNumber, _profileQsos, _entities, _resolver);
+            : string.IsNullOrEmpty(row.StateCode)
+                ? _collator.BuildQsoDetails(row.DxccNumber, _profileQsos, _entities, _resolver)
+                : DxccAchievementCollator.BuildDetails(_profileQsos.Where(q => StateAchievementCollator.StateCode(q) == row.StateCode));
         if (LotwActivityLookup != null)
         {
             foreach (var qso in qsos)
@@ -154,10 +172,19 @@ public sealed class AchievementsViewModel : ObservableObject
             : _allQsos.Where(qso => StationCallsignIdentity.Matches(qso.StationCallsign, SelectedProfileKey)).ToList();
         var rows = _collator.Build(_profileQsos, _history, _entities, _resolver, _rarityService);
         _allRows = rows;
-        TotalEntities = rows.Count;
-        LotwConfirmedEntities = rows.Count(row => row.StatusKey == "LotwConfirmed");
-        WorkedUnconfirmedEntities = rows.Count(row => row.StatusKey == "WorkedUnconfirmed");
-        NeededEntities = rows.Count(row => row.StatusKey == "Needed");
+        _allStateRows = StateAchievementCollator.Build(_profileQsos);
+        var unassigned = _allQsos.Count(q => string.IsNullOrWhiteSpace(q.StationCallsign));
+        var missingGrids = _profileQsos.Count(q => string.IsNullOrWhiteSpace(q.Grid));
+        LogbookHealthSummary = $"Loaded merged logbook: {_allQsos.Count:N0} unique QSOs · {unassigned:N0} without your station callsign. "
+            + $"Selected profile: {_profileQsos.Count:N0} QSOs · {missingGrids:N0} without a grid. "
+            + "These are data checks, not changes to achievement credit. LoTW status is from the loaded ADIF, not a live LoTW check.";
+        CallsignCreditsSummary = string.Join(" · ", Profiles.Where(p => !p.IsAllCallsigns).Select(p => $"{p.DisplayLabel}: {p.QsoCount:N0} QSOs"));
+        OnPropertyChanged(nameof(LogbookHealthSummary));
+        OnPropertyChanged(nameof(CallsignCreditsSummary));
+        var missingStates = _profileQsos.Count(q => WasStateEligibility.IsEligible(q) && string.IsNullOrEmpty(StateAchievementCollator.StateCode(q)));
+        StateDataSummary = $"50 states, including Alaska and Hawaii. {missingStates:N0} US QSOs without a valid 50-state ADIF code are excluded. States are not guessed from callsigns.";
+        OnPropertyChanged(nameof(StateDataSummary));
+        UpdateTotals();
         ProfileQsoCount = _profileQsos.Count;
         LastRefreshed = DateTime.Now;
         OnPropertyChanged(nameof(ProgressDisplay));
@@ -167,6 +194,16 @@ public sealed class AchievementsViewModel : ObservableObject
 
     private IReadOnlyList<AchievementDxccRow> _allRows = Array.Empty<AchievementDxccRow>();
 
+    private void UpdateTotals()
+    {
+        var rows = SelectedAreaIndex == 1 ? _allStateRows : _allRows;
+        TotalEntities = rows.Count;
+        LotwConfirmedEntities = rows.Count(row => row.StatusKey == "LotwConfirmed");
+        WorkedUnconfirmedEntities = rows.Count(row => row.StatusKey == "WorkedUnconfirmed");
+        NeededEntities = rows.Count(row => row.StatusKey == "Needed");
+        OnPropertyChanged(nameof(ProgressDisplay));
+    }
+
     private void ApplyVisibleFilter()
     {
         var search = SearchText.Trim();
@@ -174,6 +211,9 @@ public sealed class AchievementsViewModel : ObservableObject
         DxccRows.Clear();
         foreach (var row in filtered)
             DxccRows.Add(row);
+        StateRows.Clear();
+        foreach (var row in _allStateRows.Where(row => MatchesStatus(row) && MatchesSearch(row, search)))
+            StateRows.Add(row);
         OnPropertyChanged(nameof(VisibleSummary));
     }
 
@@ -193,6 +233,7 @@ public sealed class AchievementsViewModel : ObservableObject
         return string.IsNullOrWhiteSpace(search)
             || row.EntityName.Contains(search, StringComparison.OrdinalIgnoreCase)
             || row.DxccNumber.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || row.StateCode.Contains(search, StringComparison.OrdinalIgnoreCase)
             || row.DifficultyBand.Contains(search, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -1,33 +1,34 @@
 <UserControl x:Class="JtdxAutoResume.V3.Views.SettingsView"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <ScrollViewer Margin="0,12,0,0" VerticalScrollBarVisibility="Auto">
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Background="{StaticResource AppCanvas}">
+ <DockPanel Margin="0,4,0,0">
+  <Border DockPanel.Dock="Top" Style="{StaticResource PanelBorder}" Padding="12,9" Margin="0,0,0,8">
+   <StackPanel>
+    <DockPanel>
+     <WrapPanel DockPanel.Dock="Right">
+      <Button Content="Run Setup Wizard" Command="{Binding OpenSetupWizardCommand}" />
 
-            <Border Grid.ColumnSpan="2" Style="{StaticResource PanelBorder}" Margin="0,0,0,12" Background="#E0F2FE">
-                <DockPanel>
-                    <Button DockPanel.Dock="Right" Content="Run Setup Wizard" Command="{Binding OpenSetupWizardCommand}"
-                            Background="#0284C7" BorderBrush="#0369A1" Foreground="White" FontWeight="SemiBold" Margin="16,0,0,0" />
-                    <StackPanel>
-                        <TextBlock Text="Setup Wizard" FontSize="17" FontWeight="SemiBold" Foreground="#0C4A6E" />
-                        <TextBlock Text="Configure station details, JTDX and companion-program ports, log files, Enable TX safety, and Band Activity grid calibration."
-                                   TextWrapping="Wrap" Foreground="#075985" Margin="0,4,0,0" />
-                    </StackPanel>
-                </DockPanel>
-            </Border>
+                        <Button Content="Save Settings" Command="{Binding SaveSettingsCommand}" />
+                        <Button Content="Export Settings" Command="{Binding ExportSettingsCommand}" />
+                        <Button Content="Import Settings" Command="{Binding ImportSettingsCommand}" />
 
-            <Border Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource PanelBorder}" Margin="0,0,0,12"
-                    Background="#EFF6FF" BorderBrush="#93C5FD">
-                <Grid>
+     </WrapPanel>
+     <TextBlock Text="Settings" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+    </DockPanel>
+    <WrapPanel Margin="0,8,0,0">
+     <TextBlock Text="Find a setting" VerticalAlignment="Center" Margin="0,0,10,0" />
+     <TextBox x:Name="SettingsSearchBox" Width="290" Margin="0,0,8,0" TextChanged="SettingsSearch_Changed"
+              ToolTip="Search labels such as LoTW, ADIF, callsign, grid, port or suppression. Searching also reveals matching advanced sections." />
+     <Button Content="Clear" MinWidth="60" Padding="8,4" Click="ClearSearch_Click" />
+     <CheckBox x:Name="ShowAdvancedSettings" Content="Show advanced settings" VerticalAlignment="Center" Margin="8,0,12,0" Click="AdvancedSettings_Click" />
+     <TextBlock x:Name="SettingsSearchSummary" Foreground="{StaticResource AppTextMuted}" VerticalAlignment="Center" />
+    </WrapPanel>
+   </StackPanel>
+  </Border>
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+   <StackPanel x:Name="SettingsSections">
+    <Expander Header="Confirmation rules" Tag="Everyday" IsExpanded="True" Margin="0,0,0,8" Padding="10" Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="1">
+     <StackPanel Margin="8,12,8,4"><Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -70,94 +71,10 @@
                                       SelectedValue="{Binding Settings.Settings.IotaConfirmationMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
                     </UniformGrid>
-                </Grid>
-            </Border>
-
-            <Border Grid.Row="2" Style="{StaticResource PanelBorder}" Margin="0,0,12,0">
-                <StackPanel>
-                    <TextBlock Text="Automation Coordinates" FontWeight="SemiBold" Margin="0,0,0,12" />
-                    <UniformGrid Columns="2">
-                        <TextBlock Text="Enable TX X" />
-                        <TextBox Text="{Binding Settings.Settings.EnableTxX, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Enable TX Y" />
-                        <TextBox Text="{Binding Settings.Settings.EnableTxY, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="CQ/TX6 X" />
-                        <TextBox Text="{Binding Settings.Settings.CqTx6X, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="CQ/TX6 Y" />
-                        <TextBox Text="{Binding Settings.Settings.CqTx6Y, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="RX gate X" />
-                        <TextBox Text="{Binding Settings.Settings.RxX, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="RX gate Y" />
-                        <TextBox Text="{Binding Settings.Settings.RxY, UpdateSourceTrigger=PropertyChanged}" />
-                    </UniformGrid>
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,18">
-                        <Button Content="Pick Enable TX" Command="{Binding PickEnableCommand}" />
-                        <Button Content="Pick CQ/TX6" Command="{Binding PickCqCommand}" />
-                        <Button Content="Pick RX Gate" Command="{Binding PickRxCommand}" />
-                    </StackPanel>
-
-                    <TextBlock Text="Pixel Detection" FontWeight="SemiBold" Margin="0,0,0,12" />
-                    <UniformGrid Columns="2">
-                        <TextBlock Text="Enable TX off RGB" />
-                        <TextBox Text="{Binding Settings.EnableTxOffRgbText, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Enable TX on RGB" />
-                        <TextBox Text="{Binding Settings.Settings.EnableTxOnRgb, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="RX green RGB" />
-                        <TextBox Text="{Binding Settings.RxGreenRgbText, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Box radius" />
-                        <TextBox Text="{Binding Settings.Settings.BoxRadius, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Tolerance" />
-                        <TextBox Text="{Binding Settings.Settings.Tolerance, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="RX tolerance" />
-                        <TextBox Text="{Binding Settings.Settings.RxTolerance, UpdateSourceTrigger=PropertyChanged}" />
-                    </UniformGrid>
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button Content="Pick TX Grey" Command="{Binding PickEnableColorCommand}" />
-                        <Button Content="Pick RX Green" Command="{Binding PickRxColorCommand}" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <Border Grid.Row="2" Grid.Column="1" Style="{StaticResource PanelBorder}">
-                <StackPanel>
-                    <TextBlock Text="Runtime" FontWeight="SemiBold" Margin="0,0,0,12" />
-                    <UniformGrid Columns="2">
-                        <TextBlock Text="Auto hunt enabled" />
-                        <CheckBox IsChecked="{Binding Settings.Settings.AutoHuntEnabled, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Poll interval ms" />
-                        <TextBox Text="{Binding Settings.Settings.IntervalMs, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Cooldown ms" />
-                        <TextBox Text="{Binding Settings.Settings.CooldownMs, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Min grey percent" />
-                        <TextBox Text="{Binding Settings.Settings.MinGreyPercent, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Max red percent" />
-                        <TextBox Text="{Binding Settings.Settings.MaxRedPercent, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Min RX green percent" />
-                        <TextBox Text="{Binding Settings.Settings.MinGreenPercent, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Max call attempts" />
-                        <TextBox Text="{Binding Settings.Settings.MaxCallAttempts, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Max report attempts" />
-                        <TextBox Text="{Binding Settings.Settings.MaxReportAttempts, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Max TX mismatch cycles" />
-                        <TextBox Text="{Binding Settings.Settings.MaxTransmitMismatchCycles, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Completion grace cycles" />
-                        <TextBox Text="{Binding Settings.Settings.CompletionGraceCycles, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Suppress failed min" />
-                        <TextBox Text="{Binding Settings.Settings.SuppressFailedTargetMinutes, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Recover replies from recently called stations"
-                                   ToolTip="Allows a fresh directed reply to reclaim control only when DX Pilot called that station recently and the current target has not replied." />
-                        <CheckBox IsChecked="{Binding Settings.Settings.RecoverLateReplies, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Late-reply window min"
-                                   ToolTip="How long a genuinely called station remains eligible for late-reply recovery. Values are limited to 1–15 minutes." />
-                        <TextBox Text="{Binding Settings.Settings.LateReplyRecoveryMinutes, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Reply retry sec" />
-                        <TextBox Text="{Binding Settings.Settings.ReplyRetrySeconds, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Reply confirm sec" />
-                        <TextBox Text="{Binding Settings.Settings.ReplyConfirmSeconds, UpdateSourceTrigger=PropertyChanged}" />
-                    </UniformGrid>
-
-                    <TextBlock Text="JTDX UDP" FontWeight="SemiBold" Margin="0,18,0,12" />
-                    <UniformGrid Columns="2">
+                </Grid></StackPanel>
+    </Expander>
+    <Expander Header="Station and JTDX connection" Tag="Everyday" IsExpanded="False" Margin="0,0,0,8" Padding="10" Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="1">
+     <StackPanel Margin="8,12,8,4"><UniformGrid Columns="2">
                         <TextBlock Text="Listen port" />
                         <TextBox Text="{Binding Settings.Settings.UdpListenPort, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Reply fallback port" />
@@ -176,10 +93,10 @@
                         <TextBox Text="{Binding Settings.Settings.UdpForwardPort, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Country file path" />
                         <TextBox Text="{Binding Settings.Settings.CountryFilePath, UpdateSourceTrigger=PropertyChanged}" />
-                    </UniformGrid>
-
-                    <TextBlock Text="ADIF Logs" FontWeight="SemiBold" Margin="0,18,0,12" />
-                    <UniformGrid Columns="2">
+                    </UniformGrid></StackPanel>
+    </Expander>
+    <Expander Header="Logbooks and ADIF" Tag="Everyday" IsExpanded="False" Margin="0,0,0,8" Padding="10" Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="1">
+     <StackPanel Margin="8,12,8,4"><UniformGrid Columns="2">
                         <TextBlock Text="Full ADIF path" />
                         <TextBox Text="{Binding Settings.Settings.FullAdifPath, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Auto-load full ADIF" />
@@ -199,10 +116,10 @@
                         <Button Content="Browse JTDX ALL.TXT" Command="{Binding BrowseAllTxtCommand}" />
                     </WrapPanel>
                     <TextBlock Text="{Binding AdifDiagnostics}" TextWrapping="Wrap" Foreground="#263645" Margin="0,10,0,0" />
-                    <TextBlock Text="{Binding AllTxtDiagnostics}" TextWrapping="Wrap" Foreground="#263645" Margin="0,6,0,0" />
-
-                    <TextBlock Text="DX Hunter Ranking" FontWeight="SemiBold" Margin="0,18,0,12" />
-                    <UniformGrid Columns="2">
+                    <TextBlock Text="{Binding AllTxtDiagnostics}" TextWrapping="Wrap" Foreground="#263645" Margin="0,6,0,0" /></StackPanel>
+    </Expander>
+    <Expander Header="Hunting preferences" Tag="Everyday" IsExpanded="False" Margin="0,0,0,8" Padding="10" Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="1">
+     <StackPanel Margin="8,12,8,4"><UniformGrid Columns="2">
                         <TextBlock Text="Hunting mode" />
                         <TextBox Text="{Binding Settings.Settings.HuntingMode, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Allow unconfirmed DXCC override" />
@@ -240,15 +157,51 @@
                         <TextBlock Text="DXCC rarity CSV path" />
                         <TextBox Text="{Binding Settings.Settings.DxccRarityFilePath, UpdateSourceTrigger=PropertyChanged}" />
                     </UniformGrid>
-                    <TextBlock Text="{Binding RarityDiagnostics}" TextWrapping="Wrap" Foreground="#263645" Margin="0,10,0,0" />
-
-                    <TextBlock Text="LoTW Station Directory" FontWeight="SemiBold" Margin="0,18,0,6" />
-                    <TextBlock Text="DX Pilot automatically downloads ARRL's LoTW activity directory and refreshes it weekly. A gold star beside a callsign means that callsign appears in the directory; hover over the star to see its last upload date. This is display information only and never changes targeting."
+                    <TextBlock Text="{Binding RarityDiagnostics}" TextWrapping="Wrap" Foreground="#263645" Margin="0,10,0,0" /></StackPanel>
+    </Expander>
+    <Expander Header="Calling and recovery" Tag="Everyday" IsExpanded="False" Margin="0,0,0,8" Padding="10" Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="1">
+     <StackPanel Margin="8,12,8,4"><UniformGrid Columns="2">
+                        <TextBlock Text="Auto hunt enabled" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.AutoHuntEnabled, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Poll interval ms" />
+                        <TextBox Text="{Binding Settings.Settings.IntervalMs, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Cooldown ms" />
+                        <TextBox Text="{Binding Settings.Settings.CooldownMs, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Min grey percent" />
+                        <TextBox Text="{Binding Settings.Settings.MinGreyPercent, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Max red percent" />
+                        <TextBox Text="{Binding Settings.Settings.MaxRedPercent, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Min RX green percent" />
+                        <TextBox Text="{Binding Settings.Settings.MinGreenPercent, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Max call attempts" />
+                        <TextBox Text="{Binding Settings.Settings.MaxCallAttempts, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Max report attempts" />
+                        <TextBox Text="{Binding Settings.Settings.MaxReportAttempts, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Max TX mismatch cycles" />
+                        <TextBox Text="{Binding Settings.Settings.MaxTransmitMismatchCycles, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Completion grace cycles" />
+                        <TextBox Text="{Binding Settings.Settings.CompletionGraceCycles, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Suppress failed min" />
+                        <TextBox Text="{Binding Settings.Settings.SuppressFailedTargetMinutes, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Recover replies from recently called stations"
+                                   ToolTip="Allows a fresh directed reply to reclaim control only when DX Pilot called that station recently and the current target has not replied." />
+                        <CheckBox IsChecked="{Binding Settings.Settings.RecoverLateReplies, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Late-reply window min"
+                                   ToolTip="How long a genuinely called station remains eligible for late-reply recovery. Values are limited to 1–15 minutes." />
+                        <TextBox Text="{Binding Settings.Settings.LateReplyRecoveryMinutes, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Reply retry sec" />
+                        <TextBox Text="{Binding Settings.Settings.ReplyRetrySeconds, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Reply confirm sec" />
+                        <TextBox Text="{Binding Settings.Settings.ReplyConfirmSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                    </UniformGrid></StackPanel>
+    </Expander>
+    <Expander Header="LoTW station directory" Tag="Everyday" IsExpanded="False" Margin="0,0,0,8" Padding="10" Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="1">
+     <StackPanel Margin="8,12,8,4"><TextBlock Text="DX Pilot automatically downloads ARRL's LoTW activity directory and refreshes it weekly. A gold star identifies a listed LoTW user, not confirmation of your QSO. Hover over the star to see the station's last upload date."
                                TextWrapping="Wrap" Foreground="#526577" />
-                    <TextBlock Text="{Binding LotwDirectoryStatus}" TextWrapping="Wrap" Foreground="#263645" Margin="0,5,0,0" />
-
-                    <TextBlock Text="QRZ Callsign Lookup" FontWeight="SemiBold" Margin="0,18,0,12" />
-                    <UniformGrid Columns="2">
+                    <TextBlock Text="{Binding LotwDirectoryStatus}" TextWrapping="Wrap" Foreground="#263645" Margin="0,5,0,0" /></StackPanel>
+    </Expander>
+    <Expander Header="QRZ lookup and location data" Tag="Everyday" IsExpanded="False" Margin="0,0,0,8" Padding="10" Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="1">
+     <StackPanel Margin="8,12,8,4"><UniformGrid Columns="2">
                         <TextBlock Text="Enable QRZ lookup" />
                         <CheckBox IsChecked="{Binding Settings.Settings.EnableQrzCallsignLookup, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="QRZ username" />
@@ -284,10 +237,44 @@
                         <Button Content="Test QRZ Connection" Command="{Binding TestQrzConnectionCommand}" />
                         <Button Content="Clear QRZ Cache" Command="{Binding ClearQrzCacheCommand}" />
                     </WrapPanel>
-                    <TextBox Text="{Binding QrzStatus}" IsReadOnly="True" TextWrapping="Wrap" MinHeight="52" Margin="0,8,0,0" />
-
-                    <TextBlock Text="JTDX Band Activity GUI Selection" FontWeight="SemiBold" Margin="0,18,0,12" />
-                    <UniformGrid Columns="2">
+                    <TextBox Text="{Binding QrzStatus}" IsReadOnly="True" TextWrapping="Wrap" MinHeight="52" Margin="0,8,0,0" /></StackPanel>
+    </Expander>
+    <Expander Header="Session history" Tag="Everyday" IsExpanded="False" Margin="0,0,0,8" Padding="10" Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="1">
+     <StackPanel Margin="8,12,8,4"><UniformGrid Columns="2">
+                        <TextBlock Text="Enable session DX history" />
+                        <CheckBox IsChecked="{Binding Settings.Settings.EnableSessionDxHistory, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Rare-country rank threshold" />
+                        <TextBox Text="{Binding Settings.Settings.RareDxccRankThreshold, UpdateSourceTrigger=PropertyChanged}" />
+                    </UniformGrid>
+                    <TextBlock Text="Current Session retains everything heard or acted on across every band and mode until DX Pilot closes or you choose Clear session. Full Archive remains permanent. Records are kept separately per callsign, band and mode."
+                               TextWrapping="Wrap" Foreground="#526577" Margin="0,6,0,0" /></StackPanel>
+    </Expander>
+    <Expander Header="Settings backup and transfer" Tag="Everyday" IsExpanded="False" Margin="0,0,0,8" Padding="10" Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="1">
+     <StackPanel Margin="8,12,8,4">
+                    <TextBlock Text="{Binding SettingsTransferStatus}" TextWrapping="Wrap" Foreground="#526577" Margin="0,8,0,0" />
+                    <TextBlock Text="Exports include the complete DX Pilot configuration and scheduler, but deliberately exclude the QRZ password. Import validates the file and backs up the current configuration before replacement." TextWrapping="Wrap" Foreground="#526577" Margin="0,6,0,0" />
+                    </StackPanel>
+    </Expander>
+    <Expander Header="JTDX control mapping" Tag="Advanced" IsExpanded="False" Margin="0,0,0,8" Padding="10" Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="1">
+     <StackPanel Margin="8,12,8,4"><UniformGrid Columns="2">
+                        <TextBlock Text="Enable TX X" />
+                        <TextBox Text="{Binding Settings.Settings.EnableTxX, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Enable TX Y" />
+                        <TextBox Text="{Binding Settings.Settings.EnableTxY, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="CQ/TX6 X" />
+                        <TextBox Text="{Binding Settings.Settings.CqTx6X, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="CQ/TX6 Y" />
+                        <TextBox Text="{Binding Settings.Settings.CqTx6Y, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="RX gate X" />
+                        <TextBox Text="{Binding Settings.Settings.RxX, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="RX gate Y" />
+                        <TextBox Text="{Binding Settings.Settings.RxY, UpdateSourceTrigger=PropertyChanged}" />
+                    </UniformGrid>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,18">
+                        <Button Content="Pick Enable TX" Command="{Binding PickEnableCommand}" />
+                        <Button Content="Pick CQ/TX6" Command="{Binding PickCqCommand}" />
+                        <Button Content="Pick RX Gate" Command="{Binding PickRxCommand}" />
+                    </StackPanel><UniformGrid Columns="2">
                         <TextBlock Text="GUI selection enabled" />
                         <CheckBox IsChecked="{Binding Settings.Settings.JtdxGuiSelectionEnabled, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="JTDX window title contains" />
@@ -318,23 +305,33 @@
                     <TextBox Text="{Binding DxAssist.GuiSelectionStatus, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MinHeight="52" Margin="0,8,0,0" />
                     <TextBlock TextWrapping="Wrap" Foreground="#9A3412" Margin="0,8,0,0">
                         <Run Text="Enter the number of complete safe Band Activity rows, then manually align the movable grid. The same row count is used for every displayed JTDX row and double-click calculation. Do not resize JTDX afterwards." />
-                    </TextBlock>
-
-                    <TextBlock Text="Session History" FontWeight="SemiBold" Margin="0,18,0,12" />
-                    <UniformGrid Columns="2">
-                        <TextBlock Text="Enable session DX history" />
-                        <CheckBox IsChecked="{Binding Settings.Settings.EnableSessionDxHistory, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Text="Rare-country rank threshold" />
-                        <TextBox Text="{Binding Settings.Settings.RareDxccRankThreshold, UpdateSourceTrigger=PropertyChanged}" />
+                    </TextBlock></StackPanel>
+    </Expander>
+    <Expander Header="Pixel detection" Tag="Advanced" IsExpanded="False" Margin="0,0,0,8" Padding="10" Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="1">
+     <StackPanel Margin="8,12,8,4"><UniformGrid Columns="2">
+                        <TextBlock Text="Enable TX off RGB" />
+                        <TextBox Text="{Binding Settings.EnableTxOffRgbText, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Enable TX on RGB" />
+                        <TextBox Text="{Binding Settings.Settings.EnableTxOnRgb, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="RX green RGB" />
+                        <TextBox Text="{Binding Settings.RxGreenRgbText, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Box radius" />
+                        <TextBox Text="{Binding Settings.Settings.BoxRadius, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="Tolerance" />
+                        <TextBox Text="{Binding Settings.Settings.Tolerance, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Text="RX tolerance" />
+                        <TextBox Text="{Binding Settings.Settings.RxTolerance, UpdateSourceTrigger=PropertyChanged}" />
                     </UniformGrid>
-                    <TextBlock Text="Current Session retains everything heard or acted on across every band and mode until DX Pilot closes or you choose Clear session. Full Archive remains permanent. Records are kept separately per callsign, band and mode."
-                               TextWrapping="Wrap" Foreground="#526577" Margin="0,6,0,0" />
-
-                    <TextBlock Text="DXCC Resolver Diagnostics" FontWeight="SemiBold" Margin="0,18,0,12" />
-                    <TextBlock Text="{Binding ResolverDiagnostics}" TextWrapping="Wrap" Foreground="#263645" />
-
-                    <TextBlock Text="Worked Status Lookup" FontWeight="SemiBold" Margin="0,18,0,12" />
-                    <UniformGrid Columns="2">
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="Pick TX Grey" Command="{Binding PickEnableColorCommand}" />
+                        <Button Content="Pick RX Green" Command="{Binding PickRxColorCommand}" />
+                    </StackPanel></StackPanel>
+    </Expander>
+    <Expander Header="Country resolver diagnostics" Tag="Advanced" IsExpanded="False" Margin="0,0,0,8" Padding="10" Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="1">
+     <StackPanel Margin="8,12,8,4"><TextBlock Text="{Binding ResolverDiagnostics}" TextWrapping="Wrap" Foreground="#263645" /></StackPanel>
+    </Expander>
+    <Expander Header="Worked-status lookup" Tag="Advanced" IsExpanded="False" Margin="0,0,0,8" Padding="10" Background="White" BorderBrush="{StaticResource AppBorder}" BorderThickness="1">
+     <StackPanel Margin="8,12,8,4"><UniformGrid Columns="2">
                         <TextBlock Text="Callsign" />
                         <TextBox Text="{Binding DiagnosticCallsign, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Grid" />
@@ -345,19 +342,10 @@
                         <TextBox Text="{Binding DiagnosticIota, UpdateSourceTrigger=PropertyChanged}" />
                     </UniformGrid>
                     <Button Content="Run Lookup" Command="{Binding RunDiagnosticLookupCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
-                    <TextBox Text="{Binding DiagnosticLookupResult}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="170" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" />
-
-                    <TextBlock Text="Settings Backup and Transfer" FontWeight="SemiBold" Margin="0,18,0,8" />
-                    <WrapPanel>
-                        <Button Content="Save Settings" Command="{Binding SaveSettingsCommand}" />
-                        <Button Content="Export Settings" Command="{Binding ExportSettingsCommand}" />
-                        <Button Content="Import Settings" Command="{Binding ImportSettingsCommand}" />
-                    </WrapPanel>
-                    <TextBlock Text="{Binding SettingsTransferStatus}" TextWrapping="Wrap" Foreground="#526577" Margin="0,8,0,0" />
-                    <TextBlock Text="Exports include the complete DX Pilot configuration and scheduler, but deliberately exclude the QRZ password. Import validates the file and backs up the current configuration before replacement." TextWrapping="Wrap" Foreground="#526577" Margin="0,6,0,0" />
-                    <TextBlock Text="UDP Reply depends on JTDX/WSJT-X accepting UDP requests; Enable TX recovery remains mouse/pixel based." TextWrapping="Wrap" Foreground="#526577" Margin="0,18,0,0" />
-                </StackPanel>
-            </Border>
-        </Grid>
-    </ScrollViewer>
+                    <TextBox Text="{Binding DiagnosticLookupResult}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="170" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0" /></StackPanel>
+    </Expander>
+    <TextBlock x:Name="SettingsNoMatches" Text="No matching settings. Try a shorter term, such as grid, LoTW or port." Visibility="Collapsed" Margin="12" TextWrapping="Wrap" />
+   </StackPanel>
+  </ScrollViewer>
+ </DockPanel>
 </UserControl>

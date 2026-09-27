@@ -7,25 +7,12 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Border Style="{StaticResource PanelBorder}" Margin="0,0,0,12">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.ColumnSpan="2" Margin="0,0,0,11">
-                    <TextBlock Text="DX ASSIST" Style="{StaticResource SectionEyebrow}" />
-                    <TextBlock Text="Best DX opportunities on the current band" Style="{StaticResource WorkspaceTitle}" Margin="0,2,0,0" />
-                    <TextBlock Text="Live candidates are ranked from the current JTDX radio context. New DXCC remains absolute priority."
-                               Foreground="{StaticResource AppTextMuted}" Margin="0,3,0,0" />
-                </StackPanel>
-                <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <CheckBox Content="Auto-select best target" IsChecked="{Binding DxAssist.AutoSelectBestCq}" VerticalAlignment="Center" />
+        <Border Style="{StaticResource PanelBorder}" Padding="12,9" Margin="0,0,0,8">
+            <StackPanel>
+                <TextBlock Text="DX Assist" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock Text="Ranked opportunities on this band. New DXCC remains the first priority." Foreground="{StaticResource AppTextMuted}" Margin="0,3,0,6" />
+                <Expander Header="Hunt preferences">
+                    <WrapPanel Margin="0,9,0,0">                    <CheckBox Content="Auto-select best target" IsChecked="{Binding DxAssist.AutoSelectBestCq}" VerticalAlignment="Center" />
                     <ToggleButton Content="Give new grids priority"
                                   IsChecked="{Binding PrioritizeNewGridsInDxAssist, Mode=TwoWay}"
                                   VerticalAlignment="Center"
@@ -33,25 +20,9 @@
                                   Padding="10,4"
                                   ToolTip="When enabled, a globally new grid ranks below needed DXCC but above normal DX ranking. If no new grid is available, DX Assist continues with normal ranking." />
                     <TextBlock Text="{Binding LogbookStatus}" VerticalAlignment="Center" Foreground="#526577" ToolTip="{Binding AdifDiagnostics}" />
-                </StackPanel>
-                <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
-                    <Button Content="Test Grid Selection" Command="{Binding TestGuiSelectionCommand}" MinWidth="190" />
-                </StackPanel>
-                <Border Grid.Row="2" Grid.ColumnSpan="2" BorderBrush="{StaticResource AppBorder}" BorderThickness="0,1,0,0" Margin="0,10,0,0" Padding="0,9,0,0">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1.2*" />
-                            <ColumnDefinition Width="2*" />
-                            <ColumnDefinition Width="2*" />
-                            <ColumnDefinition Width="1.5*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="{Binding CurrentTargetStatus.OperatingMode}" FontWeight="SemiBold" />
-                        <TextBlock Grid.Column="1" Text="{Binding CurrentTargetStatus.SelectedTargetDisplay}" FontWeight="SemiBold" />
-                        <TextBlock Grid.Column="2" Text="{Binding CurrentTargetStatus.PlainStatusMessage}" TextWrapping="Wrap" />
-                        <TextBlock Grid.Column="3" Text="{Binding CurrentTargetStatus.TxGateStatus}" TextWrapping="Wrap" />
-                    </Grid>
-                </Border>
-            </Grid>
+</WrapPanel>
+                </Expander>
+            </StackPanel>
         </Border>
 
         <Grid x:Name="DxAssistContentGrid" Grid.Row="1">
@@ -64,7 +35,8 @@
             <Border Grid.Column="0" Style="{StaticResource PanelBorder}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Text="TOP OBSERVED OPPORTUNITY" Style="{StaticResource SectionEyebrow}" />
+                        <TextBlock Text="BEST OBSERVED OPPORTUNITY" Style="{StaticResource SectionEyebrow}" />
+                        <TextBlock Text="Ranked suggestion · active target is shown in the header." Foreground="{StaticResource AppTextMuted}" TextWrapping="Wrap" Margin="0,4,0,0" />
                         <TextBlock Text="{Binding DxAssist.BestTarget.Callsign, TargetNullValue=None}" FontSize="34" FontWeight="Bold" Foreground="#183B56" Margin="0,8,0,0" />
                         <TextBlock Text="{Binding DxAssist.BestTarget.Decode.EntityName}" FontSize="16" Foreground="#263645" />
                         <Border Background="#EAF2FF" BorderBrush="#C7D9F9" BorderThickness="1" CornerRadius="5" Padding="8,4" HorizontalAlignment="Left" Margin="0,7,0,0">
@@ -73,6 +45,8 @@
                         <TextBlock Text="{Binding DxAssist.TargetSourceText}" TextWrapping="Wrap" Foreground="#526577" Margin="0,6,0,0" />
                         <TextBlock Text="{Binding DxAssist.TargetSourceRowText}" TextWrapping="Wrap" Foreground="#9A3412" FontWeight="SemiBold" Margin="0,2,0,0" />
                         <TextBlock Text="{Binding DxAssist.WantedReasonText}" TextWrapping="Wrap" Foreground="#263645" Margin="0,2,0,14" />
+                        <Expander Header="Technical target details" IsExpanded="False" FontWeight="SemiBold" Margin="0,5,0,0">
+                            <StackPanel Margin="0,9,0,0">
                         <TextBlock Text="{Binding DxAssist.BestCandidateText}" TextWrapping="Wrap" Foreground="#263645" Margin="0,2,0,0" />
                         <TextBlock Text="{Binding DxAssist.SelectedIntendedTargetText}" TextWrapping="Wrap" Foreground="#263645" Margin="0,2,0,0" />
                         <TextBlock Text="{Binding DxAssist.ActiveLockedTargetText}" TextWrapping="Wrap" Foreground="#263645" Margin="0,2,0,0" />
@@ -91,8 +65,7 @@
                         <TextBlock Text="{Binding DxAssist.LastMyTx}" TextWrapping="Wrap" Foreground="#526577" Margin="0,3,0,0" />
                         <TextBlock Text="{Binding DxAssist.LastStageChange}" TextWrapping="Wrap" Foreground="#526577" Margin="0,3,0,12" />
 
-                        <Expander Header="Technical target details" IsExpanded="False" FontWeight="SemiBold" Margin="0,5,0,0">
-                            <StackPanel Margin="0,9,0,0">
+<Button Content="Test Grid Selection" Command="{Binding TestGuiSelectionCommand}" HorizontalAlignment="Left" Margin="0,0,0,10" />
                                 <TextBlock Text="SAFETY AND RECOVERY" Style="{StaticResource SectionEyebrow}" />
                                 <TextBlock Text="{Binding DxAssist.TxVerificationText}" TextWrapping="Wrap" Margin="0,5,0,0" />
                                 <TextBlock Text="{Binding DxAssist.RecoveryModeText}" TextWrapping="Wrap" Margin="0,3,0,0" />

@@ -63,8 +63,8 @@ public sealed class JtdxGuiGridSelector
             if (!WindowMatchesCalibration(window, calibration))
                 return Fail(result, SelectionFailureReason.JtdxWindowNotFullScreen, $"JTDX was resized: current {window.Width}x{window.Height}, calibrated {calibration.JtdxWindowWidth}x{calibration.JtdxWindowHeight}. Realign the {calibration.SafeVisibleFullRowCount}-row grid before GUI selection.");
 
-            if (visibleRows.Rows.Count < calibration.SafeVisibleFullRowCount)
-                return Fail(result, SelectionFailureReason.NotCurrentVisibleRow, $"JTDX grid model is still filling ({visibleRows.Rows.Count}/{calibration.SafeVisibleFullRowCount} rows). Wait until the Band Activity pane has filled before grid-clicking.");
+            if (!visibleRows.CanLocateRows(calibration))
+                return Fail(result, SelectionFailureReason.NotCurrentVisibleRow, "Row origin is unknown: DX Pilot joined an existing pane without observing a band change. A confirmed band change establishes the top row immediately.");
 
             var settledModelVersion = visibleRows.Version;
             var row = visibleRows.FindDecode(target);
@@ -84,7 +84,7 @@ public sealed class JtdxGuiGridSelector
                 return Fail(result, SelectionFailureReason.DecodeBatchChangedBeforeClick, "A newer UDP decode changed the row model during final selection.");
 
             var clickX = window.Left + calibration.MessageClickXRelative;
-            var clickY = (int)Math.Round(window.Top + calibration.FirstFullRowCentreYRelative + row.ScreenRowIndex * calibration.RowHeight);
+            var clickY = (int)Math.Round(window.Top + visibleRows.RowCentreYRelative(row, calibration));
             result.ScreenRowIndex = row.ScreenRowIndex;
             result.ClickX = clickX;
             result.ClickY = clickY;

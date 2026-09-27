@@ -12,9 +12,14 @@ public sealed class DxccAchievementCollator
     {
         var entityByNumber = BuildEntityNumberMap(entities);
         var entityNumberByName = BuildEntityNameMap(entities);
-        return qsos
+        return BuildDetails(qsos
             .Where(qso => ResolveDxccNumber(qso, entityByNumber, entityNumberByName, resolver)
-                .Equals(dxccNumber, StringComparison.OrdinalIgnoreCase))
+                .Equals(dxccNumber, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public static IReadOnlyList<AchievementQsoDetail> BuildDetails(IEnumerable<AdifQso> qsos)
+    {
+        return qsos
             .OrderByDescending(qso => qso.QsoDate ?? DateTime.MinValue)
             .ThenByDescending(qso => qso.TimeOn, StringComparer.OrdinalIgnoreCase)
             .Select(qso => new AchievementQsoDetail
@@ -102,6 +107,7 @@ public sealed class DxccAchievementCollator
         return new AchievementDxccRow
         {
             DxccNumber = entity.DxccNumber,
+            BandCells = AchievementBandCell.Build(qsos),
             EntityName = entity.EntityName,
             ClubLogRank = rarity.ClubLogRank,
             UKDesirability = rarity.UKDesirability,

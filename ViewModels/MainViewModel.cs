@@ -15,7 +15,7 @@ using Microsoft.Win32;
 
 namespace JtdxAutoResume.V3.ViewModels;
 
-public sealed class MainViewModel : ObservableObject, IDisposable
+public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
     private enum HuntState
     {
@@ -371,6 +371,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SessionHistory.LoadArchive(_sessionArchiveStore.Load(out var archiveWarning));
         Scheduler = new SchedulerViewModel();
         BandAnalysis = new BandAnalysisViewModel(Settings.Settings);
+        Scavenger = new ScavengerViewModel(() => Settings.Settings, BandAnalysis.Bands);
+        Scavenger.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(ScavengerViewModel.WantedDxcc) or nameof(ScavengerViewModel.WantedGrids)
+                or nameof(ScavengerViewModel.WantedStates) or nameof(ScavengerViewModel.IncludeBand)
+                or nameof(ScavengerViewModel.IncludeMode) or nameof(ScavengerViewModel.IncludeBandMode))
+                RequestNextBestTargetsUpdate();
+        };
+        StartScavengerCommand = new RelayCommand(StartScavenger);
         RestoreLatestPskReporterMap();
         RefreshBandAnalysisTrends();
         DxAssist.AutoSelectBestCq = Settings.Settings.AutoSelectBestCq;
@@ -567,6 +576,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public bool CanChangeAchievementProfile => !_autoResume.IsRunning
+        && !_scavengerStarting && !_scavengerMoving
+        && !_bandAnalysisOperationInProgress
         && !_callNowSession.IsOneShot
         && _huntState == HuntState.Idle
         && !BandAnalysis.IsRunning;
@@ -927,12 +938,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             _lastDecodePacketAt = DateTime.Now;
             if (!PrepareDecodeForCurrentRadioContext(decode))
+            {
+                // A rejected transition packet may nevertheless occupy a row
+                // in JTDX. Do not use a top anchor with an incomplete row stream.
+                if (_visibleRowModel.HasKnownClear)
+                {
+                    _visibleRowModel.ResetForContext(_radioContextGeneration, false);
+                    AddAction("JTDX row origin is uncertain after a transition decode was discarded; top-anchored clicking disabled for this visit.");
+                }
                 return;
+            }
 
             PrepareDecodeLocationFields(decode);
             _targetScorer.EnrichDecode(decode, _logbook, _adifMergeResult.Indexes, Settings.Settings);
             ApplyLotwUserActivity(DecodeTargetCall(decode), decode);
             ObserveConditionsSearchDecode(decode);
+            ObserveScavengerDecode(decode);
             ObserveBandSurveyDecode(decode);
             RecordLastHeard(decode);
             decode.IsPermanentlySuppressed = IsPermanentlySuppressed(DecodeTargetCall(decode));
@@ -1173,7 +1194,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (_lockedTarget != null)
             ClearLockedTarget($"Radio context changed from {previousDisplay} to {_radioContext.Display}; active target released without suppression.");
 
-        ClearLiveRadioTables();
+        ClearLiveRadioTables(bandChanged);
         if (bandChanged)
             Map.ClearForBandChange(previous.BandDisplay, _radioContext.BandDisplay);
         RadioContextStatus = $"Changed from {previousDisplay} to {_radioContext.Display}. Waiting for the first complete decode batch.";
@@ -1263,16 +1284,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CurrentDialFrequency));
     }
 
-    private void ClearLiveRadioTables()
+    private void ClearLiveRadioTables(bool bandChanged = false)
     {
         _candidateRefreshTimer.Stop();
         _decodeHistory.Clear();
+        Scavenger.ClearOpportunities();
         _lastHeardUtcByCall.Clear();
         _displayRankByCall.Clear();
         _failedReplySources.Clear();
         _forceGuiSelectionSources.Clear();
         _guiSelectionClickCounts.Clear();
         _guiSelectionLastClickAt.Clear();
+        _visibleRowModel.ResetForContext(_radioContextGeneration, bandChanged);
         _visibleRowModel.Rebuild(Array.Empty<DecodeMessage>(), JtdxBandActivityGridCalibration.FromSettings(Settings.Settings));
         Map.SetContactableCallsigns(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
@@ -1628,8 +1651,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private bool PersistentNewDxccLockApplies()
     {
-        return Settings.Settings.KeepCallingNewDxccUntilStale
-            && _lockedTarget != null
+        return _lockedTarget != null
+            && (_operatingMode == HuntingOperatingMode.Scavenger ? IsScavengerProtectedDxcc(_lockedTarget.Decode) : Settings.Settings.KeepCallingNewDxccUntilStale)
             && _huntState is HuntState.Calling or HuntState.InQso
             && IsUnconfirmedDxccStatus(_lockedTarget.Ranking.DxccStatus);
     }
@@ -1682,12 +1705,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string CallAttemptProgressText()
     {
         return KeepCallingActiveNewDxccUntilStale()
-            ? $"{_callAttemptCount} (until stale)"
+            ? _operatingMode == HuntingOperatingMode.Scavenger
+                ? $"{_callAttemptCount} (until stale / {Scavenger.MaxCallingMinutes}m limit)"
+                : $"{_callAttemptCount} (until stale)"
             : $"{_callAttemptCount}/{Math.Max(1, Settings.Settings.MaxCallAttempts)}";
     }
 
     private void RefreshModeIndicators()
     {
+        OnPropertyChanged(nameof(IsScavengerActive));
+        OnPropertyChanged(nameof(CanConfigureScavenger));
         OnPropertyChanged(nameof(IsDxAssistActive));
         OnPropertyChanged(nameof(IsWantedSniperActive));
         OnPropertyChanged(nameof(IsLocationHuntActive));
@@ -1728,6 +1755,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private bool RejectHuntingWhileBandSurveyRuns()
     {
+        if (_scavengerMoving || _scavengerStarting)
+        {
+            Dashboard.OverallStatus = "Stop Scavenger and wait for the band movement to finish before changing modes.";
+            return true;
+        }
         if (!BandAnalysis.IsRunning)
             return false;
 
@@ -1742,6 +1774,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (RejectHuntingWhileBandSurveyRuns())
             return;
         PromoteManualCallNowToAutomation("DX Assist");
+        StopScavengerSearch();
         _operatingMode = HuntingOperatingMode.DxAssist;
         RefreshModeIndicators();
         AddAction("Mode selected: DX Assist. Wanted Sniper and Location Hunt stopped.");
@@ -1753,6 +1786,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (RejectHuntingWhileBandSurveyRuns())
             return;
         PromoteManualCallNowToAutomation("Wanted Sniper");
+        StopScavengerSearch();
         _operatingMode = HuntingOperatingMode.WantedSniper;
         RefreshModeIndicators();
         AddAction("Mode selected: Wanted Sniper active. DX Assist and Location Hunt paused.");
@@ -1764,6 +1798,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (RejectHuntingWhileBandSurveyRuns())
             return;
         PromoteManualCallNowToAutomation("Location Hunt");
+        StopScavengerSearch();
         _operatingMode = HuntingOperatingMode.LocationHunt;
         RefreshModeIndicators();
         AddAction($"Mode selected: Location Hunt active ({Location.SelectedAreasDisplay}). DX Assist and Wanted Sniper paused.");
@@ -1772,6 +1807,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task StartAutoResumeAsync()
     {
+        var scavengerStart = _operatingMode == HuntingOperatingMode.Scavenger;
+        var scavengerToken = _scavengerCancellation?.Token ?? CancellationToken.None;
         SaveAll();
         LoadAdifSources();
         StartAdifWatcher();
@@ -1781,21 +1818,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             CaptureJtdxWindow(resetGrid: false, source: "DX Pilot start");
         if (!await RestoreStableTargetAcquisitionAfterPskAsync(
                 "Before starting normal hunting",
-                CancellationToken.None))
+                scavengerStart ? scavengerToken : CancellationToken.None))
         {
             Dashboard.OverallStatus = BandAnalysis.PskProbeStatus;
             RefreshModeIndicators();
             return;
         }
-        _autoResume.Start(Settings.Settings, Scheduler.ScheduleItems);
+        if (scavengerStart) scavengerToken.ThrowIfCancellationRequested();
+        _autoResume.Start(Settings.Settings, scavengerStart ? [] : Scheduler.ScheduleItems);
         AddAction(_operatingMode switch
         {
+            HuntingOperatingMode.Scavenger => "Start mode: Scavenger. Receive-only band search; Band Analysis disabled.",
             HuntingOperatingMode.WantedSniper => "Start mode: Wanted Sniper active; other hunting paused.",
             HuntingOperatingMode.LocationHunt => $"Start mode: Location Hunt active ({Location.SelectedAreasDisplay}); other hunting paused.",
             _ => "Start mode: DX Assist."
         });
         _huntTimer.Start();
         await HuntTickAsync();
+        if (scavengerStart) scavengerToken.ThrowIfCancellationRequested();
         if (_operatingMode == HuntingOperatingMode.DxAssist)
         {
             ArmEnableTxForSelectedTarget("Start DX Pilot");
@@ -1806,6 +1846,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
         Dashboard.OverallStatus = _operatingMode switch
         {
+            HuntingOperatingMode.Scavenger => "Scavenger is searching for selected wanted targets.",
             HuntingOperatingMode.WantedSniper => "Wanted Sniper is active; other hunting is paused.",
             HuntingOperatingMode.LocationHunt => $"Location Hunt is active: {Location.SelectedAreasDisplay}.",
             _ => "DX Assist is running."
@@ -1815,6 +1856,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async void StopAll()
     {
+        StopScavengerSearch();
         _bandSurveyCancellation?.Cancel();
         // An explicit Stop All ends DX Pilot's ownership of every station from
         // the preceding hunting session. A later restart must not reclaim a
@@ -1833,6 +1875,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async void StopUdp()
     {
+        StopScavengerSearch();
         _bandSurveyCancellation?.Cancel();
         _udpListener.Stop();
         if (_autoResume.IsRunning)
@@ -1926,6 +1969,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Settings.Settings.AutoLoadFullAdifOnStartup = true;
             _settingsService.SaveSettings(Settings.Settings);
             LoadAdifSources();
+            RefreshAchievements();
             AddAction($"Full ADIF path saved: {dialog.FileName}");
             SelectBestTarget();
         }
@@ -2317,6 +2361,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ExpireSuppressedTargets();
         UpdateNextBestTargets();
         CompleteRadioContextSettlingIfReady();
+        if (_operatingMode == HuntingOperatingMode.Scavenger)
+        {
+            if (_lockedTarget != null && HasFreshLiveQso(_lockedTarget.Callsign))
+                CompleteLockedTarget($"QSO released: ADIF confirmed {_lockedTarget.Callsign}.");
+            await ScavengerTickAsync();
+            UpdateHuntStateDisplay();
+            return;
+        }
         if (!RadioContextReadyForSelection())
         {
             EnsureEnableTxOff("Radio context is settling");
@@ -2926,6 +2978,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         bool confirmedTransmitMismatch = false,
         bool preserveLockOnFailure = false)
     {
+        if (_operatingMode == HuntingOperatingMode.Scavenger && ScavengerCallingLimitReached(target))
+            return; // Do not re-arm an unanswered call during its final reply window.
         if (_guiSelectionSafetyBarrierActive)
         {
             AddAction($"Selection of {target.Callsign} blocked while DX Pilot waits for fresh UDP confirmation that Enable TX is off after a failed GUI row selection.");
@@ -3269,6 +3323,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task LockAndReplyAsync(DxTarget target, string source, string wantedReason, string sourceBlock)
     {
+        if (_operatingMode == HuntingOperatingMode.Scavenger
+            && (_scavengerMoving || GetScavengerNeed(target.Decode) == null
+                || !source.Equals("Scavenger", StringComparison.Ordinal)))
+        {
+            AddAction($"Scavenger rejected {source} selection of {target.Callsign}; only its filtered search may acquire a target.");
+            return;
+        }
         if (BandAnalysis.IsRunning)
         {
             AddAction($"{source} target {target.Callsign} ignored because receive-only Band Analysis is running.");
@@ -3279,6 +3340,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var manualSelection = source.Contains("Manual", StringComparison.OrdinalIgnoreCase);
         var newDxccPriority = target.Decode.IsNewDxcc;
         var automaticAnalysisNeedsHandover = BandAnalysis.ConditionsSearchEnabled
+            && _operatingMode != HuntingOperatingMode.Scavenger
             && _autoResume.IsRunning
             && !_callNowSession.IsOneShot
             && !manualSelection
@@ -3389,6 +3451,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void ArmEnableTxForSelectedTarget(string source)
     {
         if (_lockedTarget == null)
+            return;
+        if (_operatingMode == HuntingOperatingMode.Scavenger && ScavengerCallingLimitReached(_lockedTarget))
             return;
 
         if (_guiSelectionSafetyBarrierActive
@@ -3674,6 +3738,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (_lockedTarget != null)
         {
             RememberRecentCallAttempt(_lockedTarget);
+            if (IsScavengerActive && IsScavengerProtectedDxcc(_lockedTarget.Decode))
+                _scavengerTargetRest.RecordAttempt(_lockedTarget.Callsign, _lastCallAttemptAt);
             RecordConditionsCallAttempt(_lockedTarget.Callsign);
         }
         TrackOpportunityAttempt(_lockedTarget);
@@ -3846,6 +3912,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ? $"Reply source failed: {failed.Decode.RawText}. Candidate {failed.Callsign} remains eligible if heard again, or if this exact row remains visible after one receive period."
             : $"Unsafe GUI reply source quarantined: {failed.Decode.RawText}. This exact row cannot be reused; {failed.Callsign} remains eligible from a newer decode.");
         ClearLockedTarget($"No usable confirmed reply from current source for {failed.Callsign}; retargeting.");
+        if (_operatingMode == HuntingOperatingMode.Scavenger)
+        {
+            EnsureEnableTxOff("Scavenger waiting for a safe fresh source for its protected target");
+            return;
+        }
 
         if (CurrentWantedSniperMode() == WantedSniperMode.Active)
         {
@@ -4455,10 +4526,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             _txVerificationState = "Wrong target - active QSO progress";
             AddAction($"Wrong target active QSO progress detected from {observedCall}; {Settings.Settings.WrongTargetActiveQsoPolicy}.");
-            if (!Settings.Settings.AcceptIncomingCalls)
+            if (!Settings.Settings.AcceptIncomingCalls || _operatingMode == HuntingOperatingMode.Scavenger)
             {
                 _lastCorrectiveAction = $"Rejected incoming/wrong-target QSO progress from {observedCall}";
-                AddAction($"Incoming/wrong-target QSO from {observedCall} ignored because Accept incoming calls is off.");
+                AddAction($"Incoming/wrong-target QSO from {observedCall} ignored because incoming adoption is disabled for this mode/settings.");
                 await ForceLockedTargetCorrectionAsync(status, expectedCall, $"incoming/wrong-target QSO {observedCall}");
             }
             else if (Settings.Settings.WrongTargetActiveQsoPolicy.Equals("AdoptAndMonitor", StringComparison.OrdinalIgnoreCase))
@@ -4792,6 +4863,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private bool TryQueueLateReplyRecovery(DecodeMessage decode)
     {
+        if (_operatingMode == HuntingOperatingMode.Scavenger) return false;
         if (!Settings.Settings.RecoverLateReplies
             || !_autoResume.IsRunning
             || BandAnalysis.IsRunning
@@ -5397,7 +5469,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         // Passive monitoring must never create an automation-owned QSO lock.
         // Inbound adoption is available only while a hunting/CALL NOW session
         // is actively authorised to control JTDX.
-        if (!_autoResume.IsRunning || !Settings.Settings.AcceptIncomingCalls)
+        if (!_autoResume.IsRunning || !Settings.Settings.AcceptIncomingCalls || _operatingMode == HuntingOperatingMode.Scavenger)
             return;
 
         if (_huntState != HuntState.Idle || !IsInboundReplyToMe(decode.RawText, out var inboundCall))
@@ -5554,6 +5626,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var completesManualCallNow = _callNowSession.IsOneShot;
         var adifConfirmed = reason.Contains("ADIF confirmed", StringComparison.OrdinalIgnoreCase)
             || reason.Contains("newly logged", StringComparison.OrdinalIgnoreCase);
+        if (_operatingMode == HuntingOperatingMode.Scavenger)
+            CompleteScavengerTarget(successfullyLogged: adifConfirmed);
         if (_lockedTarget != null)
         {
             ConsumeRecentCallAttempt(_lockedTarget.Callsign);
@@ -6024,6 +6098,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Wanted.WantedStates.Clear();
         Wanted.WantedBandMode.Clear();
         RebuildCombinedAdifIndex($"Achievement profile changed to {SelectedAchievementProfileKey}");
+        RefreshAchievements();
 
         _rebuildingWantedScopes = true;
         try
@@ -6280,6 +6355,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 : _operatingMode switch
                 {
                     HuntingOperatingMode.WantedSniper => "Wanted Sniper Active",
+                    HuntingOperatingMode.Scavenger => "Scavenger Active",
                     HuntingOperatingMode.LocationHunt => $"Location Hunt: {Location.SelectedAreasDisplay}",
                     _ => "DX Assist"
                 };
@@ -6366,6 +6442,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             HuntState.InQso when _qsoStage == QsoStage.CompletionPending => "Completion pending",
             HuntState.InQso when PersistentNewDxccLockApplies() => "New DXCC protected",
             HuntState.InQso => "QSO in progress",
+            _ when IsScavengerActive => Scavenger.Phase,
             _ => _autoResume.IsRunning ? "Idle" : "Stopped"
         };
     }
@@ -6434,7 +6511,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return $"Final call to {target.Callsign} completed; TX is held off while JTDX finishes the reply decode.";
         if (_huntState == HuntState.Calling)
             return KeepCallingActiveNewDxccUntilStale()
-                ? $"Calling New DXCC {target.Callsign} until it goes stale - call attempt {_callAttemptCount}."
+                ? _operatingMode == HuntingOperatingMode.Scavenger
+                    ? $"Calling {target.Callsign} - attempt {CallAttemptProgressText()}."
+                    : $"Calling New DXCC {target.Callsign} until it goes stale - call attempt {_callAttemptCount}."
                 : $"Calling {target.Callsign} - call attempt {CallAttemptProgressText()}.";
         if (_huntState == HuntState.InQso)
             return _qsoStage == QsoStage.CompletionPending
@@ -6506,6 +6585,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         UpdateUniversalStationFields(allRows);
         UpdateLocationPanels();
+        RefreshScavengerOpportunities();
     }
 
     private void UpdateSharedDisplayRanks(IReadOnlyList<DxTarget> ranked)
@@ -7997,6 +8077,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             HuntingOperatingMode.WantedSniper => "Wanted Sniper",
             HuntingOperatingMode.LocationHunt => "Location Hunt",
+            HuntingOperatingMode.Scavenger => "Scavenger",
             _ => "DX Assist"
         };
     }
@@ -8409,6 +8490,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool CanCallNow(object? row)
     {
         return !BandAnalysis.IsRunning
+            && !IsScavengerActive && !_scavengerMoving && !_scavengerStarting
             && RadioContextReadyForSelection()
             && row is not MapStationViewModel { IsContactable: false }
             && !string.IsNullOrWhiteSpace(RowCallsign(row));
@@ -8448,6 +8530,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task CallNowAsync(object? row)
     {
+        if (IsScavengerActive || _scavengerMoving || _scavengerStarting)
+        {
+            Scavenger.Status = "Stop Scavenger before making a manual CALL NOW selection.";
+            return;
+        }
         var call = RowCallsign(row);
         if (string.IsNullOrWhiteSpace(call))
             return;
@@ -8690,7 +8777,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private DecodeMessage? FindFreshCallableDecodeForLockedTarget(DxTarget target)
     {
-        var maxAge = Settings.Settings.KeepCallingNewDxccUntilStale
+        var maxAge = (_operatingMode == HuntingOperatingMode.Scavenger ? IsScavengerProtectedDxcc(target.Decode) : Settings.Settings.KeepCallingNewDxccUntilStale)
             && IsUnconfirmedDxccStatus(target.Ranking.DxccStatus)
                 ? NewDxccStaleSeconds()
                 : NormalStaleSeconds();
@@ -8834,7 +8921,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (target == null)
             return false;
 
-        var persistentNewDxcc = Settings.Settings.KeepCallingNewDxccUntilStale
+        var persistentNewDxcc = (_operatingMode == HuntingOperatingMode.Scavenger ? IsScavengerProtectedDxcc(target.Decode) : Settings.Settings.KeepCallingNewDxccUntilStale)
             && IsUnconfirmedDxccStatus(target.Ranking.DxccStatus);
         var maxAge = persistentNewDxcc ? NewDxccStaleSeconds() : NormalStaleSeconds();
         return target.Decode.ReceivedAt >= DateTime.Now.AddSeconds(-maxAge);
@@ -9058,6 +9145,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task EvaluateConditionsSearchAsync()
     {
+        if (_operatingMode == HuntingOperatingMode.Scavenger)
+        {
+            _conditionsProductivityHandoverRequested = _conditionsSafeHandoverRequested = false;
+            foreach (var indicator in BandAnalysis.ConditionsIndicators)
+                indicator.Update(100, "Scavenger uses receive-only rounds, not Band Analysis.", active: false);
+            BandAnalysis.AutomaticStatus = "Band Analysis is disabled during Scavenger.";
+            return;
+        }
         BandAnalysis.SaveTo(Settings.Settings);
         if (_conditionsEvaluationRunning || BandAnalysis.IsRunning || _bandAnalysisOperationInProgress)
             return;
@@ -9756,6 +9851,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task TestSelectedBandMovementAsync()
     {
+        if (RejectSurveyDuringScavenger()) return;
         if (_bandAnalysisOperationInProgress || BandAnalysis.IsRunning)
         {
             BandAnalysis.Status = "A band movement or survey is already in progress.";
@@ -9805,6 +9901,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task MoveToPskSurveyBandAsync(object? parameter)
     {
+        if (RejectSurveyDuringScavenger()) return;
         var band = parameter?.ToString()?.Trim() ?? "";
         var row = BandAnalysis.Bands.FirstOrDefault(item => item.Band.Equals(band, StringComparison.OrdinalIgnoreCase));
         if (row == null)
@@ -9857,6 +9954,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task StartBandSurveyAsync()
     {
+        if (RejectSurveyDuringScavenger()) return;
         if (_bandAnalysisOperationInProgress || BandAnalysis.IsRunning)
         {
             BandAnalysis.Status = "A band movement or survey is already in progress.";
@@ -9876,6 +9974,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task StartPskPropagationSurveyAsync()
     {
+        if (RejectSurveyDuringScavenger()) return;
         if (_bandAnalysisOperationInProgress || BandAnalysis.IsRunning)
         {
             BandAnalysis.PskProbeStatus = "A band movement or survey is already in progress.";
@@ -11340,16 +11439,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var relativeY = (Settings.Settings.JtdxBandButtonStripTop + Settings.Settings.JtdxBandButtonStripBottom) / 2d;
         var clickX = window.Left + (int)Math.Round(relativeX);
         var clickY = window.Top + (int)Math.Round(relativeY);
+        var movementOwner = IsScavengerActive ? "Scavenger" : "Band Analysis";
         for (var attempt = 1; attempt <= 2; attempt++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var clickedAt = DateTime.Now;
             row.MovementStatus = attempt == 1
                 ? $"Clicked {clickX},{clickY}"
                 : $"Retrying {clickX},{clickY}";
             _clicker.MoveClickRestore(clickX, clickY);
             AddAction(attempt == 1
-                ? $"Band Analysis requested {row.Band} using button {row.ButtonLabel} at {clickX},{clickY}; awaiting fresh JTDX UDP confirmation."
-                : $"Band Analysis retried the same mapped {row.Band} button once because JTDX still reported {CurrentReportedBand()}.");
+                ? $"{movementOwner} requested {row.Band} using button {row.ButtonLabel} at {clickX},{clickY}; awaiting fresh JTDX UDP confirmation."
+                : $"{movementOwner} retried the same mapped {row.Band} button once because JTDX still reported {CurrentReportedBand()}.");
 
             var timeoutAt = DateTime.Now.AddSeconds(attempt == 1 ? 8 : 10);
             while (DateTime.Now < timeoutAt)
@@ -11843,6 +11944,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        StopScavengerSearch();
         if (_disposed)
             return;
         _disposed = true;
@@ -11944,10 +12046,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         var calibration = JtdxBandActivityGridCalibration.FromSettings(Settings.Settings);
         var previewRows = new JtdxVisibleRowModel();
+        previewRows.ResetForContext(_radioContextGeneration, _visibleRowModel.HasKnownClear);
         previewRows.Rebuild(_decodeHistory, calibration);
-        if (previewRows.Rows.Count < calibration.SafeVisibleFullRowCount)
+        if (!previewRows.CanLocateRows(calibration))
         {
-            var fillMessage = $"Test GUI selection skipped: JTDX grid model is still filling ({previewRows.Rows.Count}/{calibration.SafeVisibleFullRowCount} rows). Wait until Band Activity has filled before testing grid clicks.";
+            var fillMessage = "Test GUI selection skipped: pane origin is unknown. Change band to establish the top row; a full grid is not required after that.";
             AddAction(fillMessage);
             DxAssist.GuiSelectionStatus = fillMessage;
             return;
@@ -11969,7 +12072,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             var window = _jtdxWindowLocator.FindMainWindow(Settings.Settings.JtdxWindowTitleMatch);
             var clickX = window == null ? 0 : window.Left + calibration.MessageClickXRelative;
-            var clickY = window == null ? 0 : (int)Math.Round(window.Top + calibration.FirstFullRowCentreYRelative + previewRow.ScreenRowIndex * calibration.RowHeight);
+            var clickY = window == null ? 0 : (int)Math.Round(window.Top + previewRows.RowCentreYRelative(previewRow, calibration));
             AddAction($"Test Grid Selection starting now: raw '{target.Decode.RawText}', expected {target.Callsign}, row {previewRow.ScreenRowIndex}, click {clickX},{clickY}. Overlay will close before click.");
         }
         else

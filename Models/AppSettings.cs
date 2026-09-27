@@ -5,6 +5,17 @@ namespace JtdxAutoResume.V3.Models;
 
 public sealed class AppSettings
 {
+    public int ScavengerListenMinutes { get; set; } = 1;
+    public int ScavengerDeadSkipRounds { get; set; } = 4;
+    public int ScavengerQuietSkipRounds { get; set; } = 2;
+    public int ScavengerMaxCallingMinutes { get; set; } = 10;
+    public int ScavengerTargetRestRounds { get; set; } = 2;
+    public bool ScavengerWantedDxcc { get; set; } = true;
+    public bool ScavengerWantedGrids { get; set; }
+    public bool ScavengerWantedStates { get; set; }
+    public bool ScavengerIncludeBand { get; set; }
+    public bool ScavengerIncludeMode { get; set; }
+    public bool ScavengerIncludeBandMode { get; set; }
     public bool SetupWizardCompleted { get; set; }
     public int DownstreamLoggerPort { get; set; } = 2236;
     public DateTime EnableTxCalibrationDate { get; set; } = DateTime.MinValue;
