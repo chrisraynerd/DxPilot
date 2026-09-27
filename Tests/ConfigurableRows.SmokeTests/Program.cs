@@ -1453,6 +1453,7 @@ if (selectedHistory.WantedReasonDisplay != "New grid EM22"
 
 var sourceRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 var mainWindowXaml = File.ReadAllText(Path.Combine(sourceRoot, "MainWindow.xaml"));
+var operatingHeaderXaml = File.ReadAllText(Path.Combine(sourceRoot, "Views", "OperatingHeader.xaml"));
 var locationViewXaml = File.ReadAllText(Path.Combine(sourceRoot, "Views", "LocationView.xaml"));
 var locationViewCode = File.ReadAllText(Path.Combine(sourceRoot, "Views", "LocationView.xaml.cs"));
 var achievementsViewXaml = File.ReadAllText(Path.Combine(sourceRoot, "Views", "AchievementsView.xaml"));
@@ -1463,13 +1464,14 @@ if (!mainWindowXaml.Contains("<TabItem Header=\"Achievements\">", StringComparis
         >= mainWindowXaml.IndexOf("<TabItem Header=\"Band Analysis\">", StringComparison.Ordinal)
     || !achievementsViewXaml.Contains("SelectedAchievementProfileDisplayLabel", StringComparison.Ordinal)
     || achievementsViewXaml.Contains("Achievements.SelectedProfileKey", StringComparison.Ordinal)
-    || !mainWindowXaml.Contains("<views:AchievementProfileSelector", StringComparison.Ordinal)
+    || !mainWindowXaml.Contains("<views:OperatingHeader", StringComparison.Ordinal)
+    || !operatingHeaderXaml.Contains("<views:AchievementProfileSelector", StringComparison.Ordinal)
     || !achievementsViewXaml.Contains("RefreshAchievementsCommand", StringComparison.Ordinal)
     || !achievementsViewXaml.Contains("Header=\"Decodes seen\"", StringComparison.Ordinal)
     || !achievementsViewXaml.Contains("Header=\"Unique calls\"", StringComparison.Ordinal)
     || !achievementsViewXaml.Contains("MouseDoubleClick=\"AchievementsGrid_MouseDoubleClick\"", StringComparison.Ordinal)
-    || !achievementsViewXaml.Contains("Header=\"Unconfirmed QSOs\"", StringComparison.Ordinal)
-    || !achievementsViewXaml.Contains("Header=\"LoTW QSOs\"", StringComparison.Ordinal)
+    || !achievementsViewXaml.Contains("SortMemberPath=\"UnconfirmedQsoCount\"", StringComparison.Ordinal)
+    || !achievementsViewXaml.Contains("SortMemberPath=\"LotwConfirmedQsoCount\"", StringComparison.Ordinal)
     || achievementsViewXaml.Contains("CALL NOW", StringComparison.Ordinal)
     || achievementsViewXaml.Contains("StartWantedSniperCommand", StringComparison.Ordinal))
 {
@@ -1480,9 +1482,10 @@ if (!locationViewXaml.Contains("Columns=\"{Binding Location.PanelColumnCount}\""
     || !locationViewXaml.Contains("ColumnHeaderHeight=\"28\"", StringComparison.Ordinal)
     || !locationViewXaml.Contains("ItemsSource=\"{Binding Location.Panels}\"", StringComparison.Ordinal)
     || !locationViewXaml.Contains("Text=\"{Binding Candidates.Count}\"", StringComparison.Ordinal)
-    || !locationViewXaml.Contains("CurrentTargetStatus.SelectedTargetDisplay", StringComparison.Ordinal)
-    || !locationViewXaml.Contains("CurrentTargetStatus.AttemptCounterLabel", StringComparison.Ordinal)
-    || !locationViewXaml.Contains("CurrentTargetStatus.TxGateStatus", StringComparison.Ordinal)
+    || !mainWindowXaml.Contains("<views:OperatingHeader", StringComparison.Ordinal)
+    || !operatingHeaderXaml.Contains("CurrentTargetStatus.SelectedTargetDisplay", StringComparison.Ordinal)
+    || !operatingHeaderXaml.Contains("CurrentTargetStatus.AttemptCounterLabel", StringComparison.Ordinal)
+    || !operatingHeaderXaml.Contains("CurrentTargetStatus.TxGateStatus", StringComparison.Ordinal)
     || !locationViewCode.Contains("container.BringIntoView()", StringComparison.Ordinal)
     || !locationViewCode.Contains("LocationPanelsScrollViewer.ScrollToTop()", StringComparison.Ordinal))
 {
@@ -1516,7 +1519,7 @@ var inboundAdoptionMethodEnd = inboundAdoptionMethodStart < 0
 var stoppedInboundAdoptionGate = inboundAdoptionMethodStart < 0
     ? -1
     : mainViewModelSource.IndexOf(
-        "if (!_autoResume.IsRunning || !Settings.Settings.AcceptIncomingCalls)",
+        "if (!_autoResume.IsRunning || !Settings.Settings.AcceptIncomingCalls || _operatingMode == HuntingOperatingMode.Scavenger)",
         inboundAdoptionMethodStart,
         StringComparison.Ordinal);
 if (inboundAdoptionMethodStart < 0
@@ -1545,8 +1548,9 @@ if (compactStripCount != 7
     failures.Add("The compact global countdown strip was not shared across all seven non-Live-Monitor workspaces using the existing live Band Analysis indicators.");
 }
 if (!mainWindowXaml.Contains("AppNavigationTabControlStyle", StringComparison.Ordinal)
-    || !mainWindowXaml.Contains("CurrentTargetStatus.SelectedTargetDisplay", StringComparison.Ordinal)
-    || !mainWindowXaml.Contains("CurrentTargetStatus.TxGateStatus", StringComparison.Ordinal))
+    || !mainWindowXaml.Contains("<views:OperatingHeader", StringComparison.Ordinal)
+    || !operatingHeaderXaml.Contains("CurrentTargetStatus.SelectedTargetDisplay", StringComparison.Ordinal)
+    || !operatingHeaderXaml.Contains("CurrentTargetStatus.TxGateStatus", StringComparison.Ordinal))
 {
     failures.Add("The presentation-only application shell did not retain persistent target/TX state or the designed workspace navigation.");
 }

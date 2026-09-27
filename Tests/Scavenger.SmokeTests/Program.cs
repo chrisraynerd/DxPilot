@@ -290,6 +290,24 @@ internal static class Program
         settings.AcceptIncomingCalls = true;
         Call(vm, "TryAdoptInboundQso", decode);
         Check(Get(vm, "_lockedTarget") == null, "Accept incoming QSOs cannot override Scavenger's exclusive target selection.");
+        // Check actual stopped behaviour independently of the source-text guard.
+        // This fixture has no running services and never loads operator settings.
+        var previousHuntState = Get(vm, "_huntState");
+        var previousOwnCall = settings.MyCallsign;
+        settings.MyCallsign = "G1CEC";
+        Set(auto, "_cts", null);
+        Set(vm, "_operatingMode", HuntingOperatingMode.WantedSniper);
+        EnumField(vm, "_huntState", "Idle");
+        Call(vm, "TryAdoptInboundQso", new DecodeMessage
+        {
+            RawText = "G1CEC K1ABC -12", Callsign = "K1ABC", ContactableCall = "K1ABC",
+            Band = "20m", Mode = "FT8", ReceivedAt = DateTime.Now
+        });
+        Check(Get(vm, "_lockedTarget") == null, "Stopped monitor-only mode must not adopt even a genuine inbound reply with incoming QSOs enabled.");
+        settings.MyCallsign = previousOwnCall;
+        Set(vm, "_huntState", previousHuntState);
+        Set(vm, "_operatingMode", HuntingOperatingMode.Scavenger);
+        Set(auto, "_cts", fakeRunning);
         var analysis = new BandAnalysisViewModel(settings);
         Set(vm, "<BandAnalysis>k__BackingField", analysis);
         Set(vm, "_conditionsProductivityHandoverRequested", true);
