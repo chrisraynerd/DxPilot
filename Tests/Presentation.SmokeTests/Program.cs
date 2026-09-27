@@ -27,11 +27,17 @@ internal static class Program
   foreach (var entry in JsonSerializer.Deserialize<ProtectedFile[]>(File.ReadAllText(Path.Combine(testRoot, "ProtectedLogicHashes.json")))!)
   {
    var bytes = File.ReadAllBytes(Path.Combine(_root, entry.Path));
-   // Git checkouts can use LF or CRLF. Accept only this mechanical difference;
-   // the original protected-content hashes stay unchanged.
-   var source = System.Text.Encoding.UTF8.GetString(bytes).Replace("\r\n", "\n");
-   Check(new[] { bytes, System.Text.Encoding.UTF8.GetBytes(source), System.Text.Encoding.UTF8.GetBytes(source.Replace("\n", "\r\n")) }
-    .Any(content => Convert.ToHexString(SHA256.HashData(content)) == entry.Hash), $"Presentation update changed protected logic: {entry.Path}");
+   // The baseline was canonically rehashed only after all 111 original byte hashes
+   // were verified. Git may normalise a mixed-LF/CRLF local file on checkout.
+   // Ignore line-ending representation, but no other content or whitespace.
+   string ProtectedHash(string source) => Convert.ToHexString(SHA256.HashData(
+    System.Text.Encoding.UTF8.GetBytes(source.Replace("\r\n", "\n"))));
+   var source = System.Text.Encoding.UTF8.GetString(bytes);
+   Check(ProtectedHash(source) == entry.Hash, $"Presentation update changed protected logic: {entry.Path}");
+   Check(ProtectedHash(source.Replace("\r\n", "\n").Replace("\n", "\r\n")) == entry.Hash,
+    $"Protected-content check must be independent of Windows checkout line endings: {entry.Path}");
+   Check(ProtectedHash(source + "// changed behaviour") != entry.Hash,
+    $"Protected-content check must detect non-newline edits: {entry.Path}");
   }
   var before = JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(testRoot, "OriginalBindings.json")))!;
   var settingsSource = File.ReadAllText(Path.Combine(_root, "Views", "SettingsView.xaml"));
